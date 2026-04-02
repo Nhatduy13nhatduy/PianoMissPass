@@ -51,6 +51,18 @@ dotnet tool run dotnet-ef database update --project ..\PianoMissPass.Infrastruct
 dotnet run
 ```
 
+Sample data seeding:
+
+- By default, sample data is seeded automatically in Development mode.
+- You can force it on/off with `SeedData__Enabled=true|false` in `be/.env`.
+- Seeder is idempotent (safe to run multiple times without duplicating records).
+
+Default sample users:
+
+- Admin: `admin@pianomisspass.local` / `Password123!`
+- User: `artist@pianomisspass.local` / `Password123!`
+- User: `listener@pianomisspass.local` / `Password123!`
+
 Swagger UI:
 
 - https://localhost:xxxx/swagger
@@ -65,6 +77,12 @@ Public endpoints:
 - POST /api/auth/revoke
 - POST /api/auth/verify-email
 - POST /api/auth/resend-verification
+- POST /api/auth/forgot-password
+- POST /api/auth/reset-password
+
+Authenticated endpoint:
+
+- POST /api/auth/change-password
 
 Admin endpoints:
 
@@ -77,6 +95,8 @@ Use returned accessToken in Swagger Authorize:
 Swagger includes example payloads for:
 
 - register/login/refresh/revoke
+- forgot-password/reset-password
+- change-password
 - admin role update
 
 Email verification flow:
@@ -85,6 +105,9 @@ Email verification flow:
 2. Server sends 6-digit code via SMTP email.
 3. Call `/api/auth/verify-email` with email + code.
 4. Login is allowed only after email verification.
+
+For Gmail SMTP, set `Email__From` and `Email__SmtpUser` to your Gmail address, use `smtp.gmail.com` on port `587`, and put a Gmail App Password in `Email__SmtpPass`.
+Do not use your normal Gmail password for SMTP.
 
 Anti-spam limits for verification code:
 
@@ -105,7 +128,7 @@ Authorization policies:
 - /api/users
 - /api/songs
 - /api/sheets
-- /api/sheetassets
+- /api/dataassets
 - /api/instruments
 - /api/usersheetpoints
 - /api/usersheetlikes
@@ -120,6 +143,17 @@ All database tables from your schema are mapped in EF Core model and initial mig
 Refresh token and role support are included in Infrastructure migrations.
 
 ## List endpoints: pagination, search, sort
+
+Songs endpoint variants:
+
+- `/api/songs` and `/api/songs/{id}` return the simple song payload (`SongDto`).
+- `/api/songs/detail` and `/api/songs/detail/{id}` return the detailed payload (`SongDetailDto`) including:
+	- `sheets`
+	- `dataAssets`
+	- `genres`
+	- `instruments`
+	- `userSheetLikes`
+	- `userSheetPoints`
 
 List endpoints now share the following query parameters:
 

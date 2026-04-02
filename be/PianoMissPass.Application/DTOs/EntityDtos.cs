@@ -39,9 +39,42 @@ public class SongDto
     public int ArtistId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Composer { get; set; }
+    public string? ImageUrl { get; set; }
     public int PlayCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class SongDetailDto
+{
+    public int Id { get; set; }
+    public int ArtistId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Composer { get; set; }
+    public int PlayCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? ImageUrl { get; set; }
+    public IReadOnlyList<GenreDto> Genres { get; set; } = Array.Empty<GenreDto>();
+    public IReadOnlyList<InstrumentDto> Instruments { get; set; } = Array.Empty<InstrumentDto>();
+    public IReadOnlyList<SongDetailSheetDto> Sheets { get; set; } = Array.Empty<SongDetailSheetDto>();
+}
+
+public class SongDetailSheetDto
+{
+    public int Id { get; set; }
+    public int SongId { get; set; }
+    public int InstrumentId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? LeftData { get; set; }
+    public string? RightData { get; set; }
+    public int LikeCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public InstrumentDto? Instrument { get; set; }
+    public IReadOnlyList<DataAssetDto> DataAssets { get; set; } = Array.Empty<DataAssetDto>();
+    public IReadOnlyList<UserSheetLikeDto> UserSheetLikes { get; set; } = Array.Empty<UserSheetLikeDto>();
+    public IReadOnlyList<UserSheetPointDto> UserSheetPoints { get; set; } = Array.Empty<UserSheetPointDto>();
 }
 
 public class SongRequestDto
@@ -55,6 +88,9 @@ public class SongRequestDto
     [StringLength(255)]
     public string? Composer { get; set; }
 
+    [StringLength(500)]
+    public string? ImageUrl { get; set; }
+
     [Range(0, int.MaxValue)]
     public int PlayCount { get; set; }
 }
@@ -65,6 +101,8 @@ public class SheetDto
     public int SongId { get; set; }
     public int InstrumentId { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? LeftData { get; set; }
+    public string? RightData { get; set; }
     public int LikeCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -81,26 +119,34 @@ public class SheetRequestDto
     [Required, StringLength(255)]
     public string Name { get; set; } = string.Empty;
 
+    [StringLength(4000)]
+    public string? LeftData { get; set; }
+
+    [StringLength(4000)]
+    public string? RightData { get; set; }
+
     [Range(0, int.MaxValue)]
     public int LikeCount { get; set; }
 }
 
-public class SheetAssetDto
+public class DataAssetDto
 {
     public int Id { get; set; }
-    public int SheetId { get; set; }
-    public string AssetType { get; set; } = string.Empty;
+    public int? SheetId { get; set; }
+    public int? SongId { get; set; }
+    public int? UserId { get; set; }
+    public DataAssetType AssetType { get; set; }
     public string Url { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
 }
 
-public class SheetAssetRequestDto
+public class DataAssetRequestDto
 {
-    [Required]
-    public int SheetId { get; set; }
+    public int? SheetId { get; set; }
+    public int? SongId { get; set; }
+    public int? UserId { get; set; }
 
-    [Required, StringLength(100)]
-    public string AssetType { get; set; } = string.Empty;
+    public DataAssetType AssetType { get; set; } = DataAssetType.File;
 
     [Required, StringLength(500)]
     public string Url { get; set; } = string.Empty;

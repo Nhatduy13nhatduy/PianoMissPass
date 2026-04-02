@@ -25,7 +25,7 @@ public class UsersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<PagedResultDto<UserDto>>> GetAll([FromQuery] UserListQueryDto query)
     {
-        var usersQuery = _db.Users.AsNoTracking().AsQueryable();
+        var usersQuery = _db.Users.AsNoTracking().Include(x => x.DataAssets).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -62,7 +62,10 @@ public class UsersController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<UserDto>> GetById(int id)
     {
-        var user = await _db.Users.FindAsync(id);
+        var user = await _db.Users
+            .AsNoTracking()
+            .Include(x => x.DataAssets)
+            .FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
         {
             return NotFound();
@@ -79,7 +82,6 @@ public class UsersController : ControllerBase
             UserName = request.UserName,
             Email = request.Email,
             Password = _passwordHasher.Hash(request.Password),
-            AvatarUrl = request.AvatarUrl,
             Role = request.Role
         };
 
@@ -89,6 +91,18 @@ public class UsersController : ControllerBase
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(request.AvatarUrl))
+        {
+            _db.DataAssets.Add(new DataAsset
+            {
+                UserId = user.Id,
+                AssetType = DataAssetType.ImageAvatar,
+                Url = request.AvatarUrl,
+                DisplayOrder = 1
+            });
+            await _db.SaveChangesAsync();
+        }
 
         return CreatedAtAction(nameof(GetById), new { id = user.Id }, user.ToDto());
     }
@@ -105,9 +119,35 @@ public class UsersController : ControllerBase
         user.UserName = request.UserName;
         user.Email = request.Email;
         user.Password = _passwordHasher.Hash(request.Password);
-        user.AvatarUrl = request.AvatarUrl;
         user.Role = request.Role;
         user.UpdatedAt = DateTime.UtcNow;
+
+        var existingAvatar = await _db.DataAssets
+            .Where(x => x.UserId == user.Id && x.AssetType == DataAssetType.ImageAvatar)
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(request.AvatarUrl))
+        {
+            if (existingAvatar is not null)
+            {
+                _db.DataAssets.Remove(existingAvatar);
+            }
+        }
+        else if (existingAvatar is null)
+        {
+            _db.DataAssets.Add(new DataAsset
+            {
+                UserId = user.Id,
+                AssetType = DataAssetType.ImageAvatar,
+                Url = request.AvatarUrl,
+                DisplayOrder = 1
+            });
+        }
+        else
+        {
+            existingAvatar.Url = request.AvatarUrl;
+        }
 
         await _db.SaveChangesAsync();
         return NoContent();

@@ -87,6 +87,8 @@ public class SheetsController : ControllerBase
             SongId = request.SongId,
             InstrumentId = request.InstrumentId,
             Name = request.Name,
+            LeftData = request.LeftData,
+            RightData = request.RightData,
             LikeCount = request.LikeCount
         };
 
@@ -119,6 +121,8 @@ public class SheetsController : ControllerBase
         sheet.SongId = request.SongId;
         sheet.InstrumentId = request.InstrumentId;
         sheet.Name = request.Name;
+        sheet.LeftData = request.LeftData;
+        sheet.RightData = request.RightData;
         sheet.LikeCount = request.LikeCount;
         sheet.UpdatedAt = DateTime.UtcNow;
 

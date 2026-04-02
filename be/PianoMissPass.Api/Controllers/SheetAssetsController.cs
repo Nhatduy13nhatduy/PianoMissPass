@@ -10,59 +10,63 @@ namespace PianoMissPass.Api.Controllers;
 [Authorize(Policy = "UserOrAdmin")]
 [ApiController]
 [Route("api/[controller]")]
-public class SheetAssetsController : ControllerBase
+public class DataAssetsController : ControllerBase
 {
     private readonly AppDbContext _db;
 
-    public SheetAssetsController(AppDbContext db)
+    public DataAssetsController(AppDbContext db)
     {
         _db = db;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<SheetAssetDto>>> GetAll()
+    public async Task<ActionResult<IEnumerable<DataAssetDto>>> GetAll()
     {
-        var items = await _db.SheetAssets.OrderBy(x => x.DisplayOrder).ToListAsync();
+        var items = await _db.DataAssets.OrderBy(x => x.DisplayOrder).ToListAsync();
         return Ok(items.Select(x => x.ToDto()));
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<SheetAssetDto>> GetById(int id)
+    public async Task<ActionResult<DataAssetDto>> GetById(int id)
     {
-        var item = await _db.SheetAssets.FindAsync(id);
+        var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
         return Ok(item.ToDto());
     }
 
     [HttpPost]
-    public async Task<ActionResult<SheetAssetDto>> Create([FromBody] SheetAssetRequestDto request)
+    public async Task<ActionResult<DataAssetDto>> Create([FromBody] DataAssetRequestDto request)
     {
-        var sheetExists = await _db.Sheets.AnyAsync(x => x.Id == request.SheetId);
-        if (!sheetExists) return BadRequest("sheetId does not exist.");
+        if (!HasSingleOwner(request)) return BadRequest("Exactly one of sheetId, songId, or userId must be provided.");
+        if (!await OwnerExistsAsync(request)) return BadRequest("Referenced owner does not exist.");
 
-        var item = new SheetAsset
+        var item = new DataAsset
         {
             SheetId = request.SheetId,
+            SongId = request.SongId,
+            UserId = request.UserId,
             AssetType = request.AssetType,
             Url = request.Url,
             DisplayOrder = request.DisplayOrder
         };
 
-        _db.SheetAssets.Add(item);
+        _db.DataAssets.Add(item);
         await _db.SaveChangesAsync();
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] SheetAssetRequestDto request)
+    public async Task<IActionResult> Update(int id, [FromBody] DataAssetRequestDto request)
     {
-        var item = await _db.SheetAssets.FindAsync(id);
+        var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
 
-        var sheetExists = await _db.Sheets.AnyAsync(x => x.Id == request.SheetId);
-        if (!sheetExists) return BadRequest("sheetId does not exist.");
+        if (!HasSingleOwner(request)) return BadRequest("Exactly one of sheetId, songId, or userId must be provided.");
+        if (!await OwnerExistsAsync(request)) return BadRequest("Referenced owner does not exist.");
 
         item.SheetId = request.SheetId;
+        item.SongId = request.SongId;
+        item.UserId = request.UserId;
         item.AssetType = request.AssetType;
         item.Url = request.Url;
         item.DisplayOrder = request.DisplayOrder;
@@ -74,12 +78,41 @@ public class SheetAssetsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var item = await _db.SheetAssets.FindAsync(id);
+        var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
 
-        _db.SheetAssets.Remove(item);
+        _db.DataAssets.Remove(item);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    private static bool HasSingleOwner(DataAssetRequestDto request)
+    {
+        var ownerCount = 0;
+        if (request.SheetId.HasValue) ownerCount++;
+        if (request.SongId.HasValue) ownerCount++;
+        if (request.UserId.HasValue) ownerCount++;
+        return ownerCount == 1;
+    }
+
+    private async Task<bool> OwnerExistsAsync(DataAssetRequestDto request)
+    {
+        if (request.SheetId.HasValue)
+        {
+            return await _db.Sheets.AnyAsync(x => x.Id == request.SheetId.Value);
+        }
+
+        if (request.SongId.HasValue)
+        {
+            return await _db.Songs.AnyAsync(x => x.Id == request.SongId.Value);
+        }
+
+        if (request.UserId.HasValue)
+        {
+            return await _db.Users.AnyAsync(x => x.Id == request.UserId.Value);
+        }
+
+        return false;
     }
 }
 

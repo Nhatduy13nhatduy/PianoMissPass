@@ -10,15 +10,21 @@ public class SwaggerExamplesOperationFilter : IOperationFilter
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
         var actionName = context.ApiDescription.ActionDescriptor.RouteValues.TryGetValue("action", out var value)
-            ? value
+            ? value ?? string.Empty
             : string.Empty;
         var controllerName = context.ApiDescription.ActionDescriptor.RouteValues.TryGetValue("controller", out var controller)
             ? controller ?? string.Empty
             : string.Empty;
 
-        if (string.Equals(actionName, "GetAll", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(actionName, "GetAll", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(actionName, "GetAllDetail", StringComparison.OrdinalIgnoreCase))
         {
             ApplySortQueryMetadata(operation, controllerName);
+        }
+
+        if (string.Equals(controllerName, "Songs", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySongsOperationMetadata(operation, actionName);
         }
 
         switch (actionName)
@@ -57,6 +63,27 @@ public class SwaggerExamplesOperationFilter : IOperationFilter
                 SetRequestExample(operation, new OpenApiObject
                 {
                     ["refreshToken"] = new OpenApiString("refresh_token_value")
+                });
+                break;
+            case "ForgotPassword":
+                SetRequestExample(operation, new OpenApiObject
+                {
+                    ["email"] = new OpenApiString("user@example.com")
+                });
+                break;
+            case "ResetPassword":
+                SetRequestExample(operation, new OpenApiObject
+                {
+                    ["email"] = new OpenApiString("user@example.com"),
+                    ["code"] = new OpenApiString("123456"),
+                    ["newPassword"] = new OpenApiString("NewPassword123!")
+                });
+                break;
+            case "ChangePassword":
+                SetRequestExample(operation, new OpenApiObject
+                {
+                    ["currentPassword"] = new OpenApiString("OldPassword123!"),
+                    ["newPassword"] = new OpenApiString("NewPassword123!")
                 });
                 break;
             case "UpdateRole":
@@ -116,6 +143,29 @@ public class SwaggerExamplesOperationFilter : IOperationFilter
             .Select(x => (IOpenApiAny)new OpenApiString(x))
             .ToList();
         sortParameter.Example = new OpenApiString("updated_desc");
+    }
+
+    private static void ApplySongsOperationMetadata(OpenApiOperation operation, string actionName)
+    {
+        switch (actionName)
+        {
+            case "GetAll":
+                operation.Summary = "Get songs (simple)";
+                operation.Description = "Returns paged songs with the simple SongDto payload (no nested sheets/genres).";
+                break;
+            case "GetById":
+                operation.Summary = "Get song by id (simple)";
+                operation.Description = "Returns a single song using the simple SongDto payload.";
+                break;
+            case "GetAllDetail":
+                operation.Summary = "Get songs (detail)";
+                operation.Description = "Returns paged songs with SongDetailDto including sheets, dataAssets, genres, instruments, userSheetLikes, and userSheetPoints.";
+                break;
+            case "GetByIdDetail":
+                operation.Summary = "Get song by id (detail)";
+                operation.Description = "Returns one SongDetailDto including sheets, dataAssets, genres, instruments, userSheetLikes, and userSheetPoints.";
+                break;
+        }
     }
 
     private static void SetRequestExample(OpenApiOperation operation, OpenApiObject example)

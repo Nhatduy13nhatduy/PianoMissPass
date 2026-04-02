@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PianoMissPass.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eaaf9a937428ff8775b5904aa1ba8e3daba3e50a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+50dc699f1ad8dd2d33fba34e41d7a698fad651d8")]
 [assembly: System.Reflection.AssemblyProductAttribute("PianoMissPass.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PianoMissPass.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

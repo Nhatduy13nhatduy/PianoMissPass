@@ -6,11 +6,22 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PianoMissPass.Application;
 using PianoMissPass.Infrastructure;
+using PianoMissPass.Infrastructure.Data;
 using PianoMissPass.Api.Middleware;
 using PianoMissPass.Api.Swagger;
 using DotNetEnv;
 
-Env.Load(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env"));
+var envCandidates = new[]
+{
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".env"),
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env")
+};
+
+var envPath = envCandidates.FirstOrDefault(File.Exists);
+if (!string.IsNullOrWhiteSpace(envPath))
+{
+    Env.Load(envPath);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -75,6 +86,12 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+var seedEnabled = builder.Configuration.GetValue<bool?>("SeedData:Enabled") ?? app.Environment.IsDevelopment();
+if (seedEnabled)
+{
+    await SampleDataSeeder.SeedAsync(app.Services);
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

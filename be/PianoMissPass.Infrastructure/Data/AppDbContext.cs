@@ -11,10 +11,11 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
+    public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<Sheet> Sheets => Set<Sheet>();
-    public DbSet<SheetAsset> SheetAssets => Set<SheetAsset>();
+    public DbSet<DataAsset> DataAssets => Set<DataAsset>();
     public DbSet<Instrument> Instruments => Set<Instrument>();
     public DbSet<UserSheetPoint> UserSheetPoints => Set<UserSheetPoint>();
     public DbSet<UserSheetLike> UserSheetLikes => Set<UserSheetLike>();
@@ -35,7 +36,6 @@ public class AppDbContext : DbContext
             entity.Property(x => x.IsEmailVerified).HasDefaultValue(false);
             entity.Property(x => x.VerificationFailedAttempts).HasDefaultValue(0);
             entity.Property(x => x.Password).HasMaxLength(255).IsRequired();
-            entity.Property(x => x.AvatarUrl).HasMaxLength(500);
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20).HasDefaultValue(UserRole.User);
             entity.HasIndex(x => x.Email).IsUnique();
         });
@@ -53,6 +53,21 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+            modelBuilder.Entity<PasswordResetCode>(entity =>
+            {
+                entity.ToTable("PasswordResetCode");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.CodeHash).HasMaxLength(128).IsRequired();
+                entity.Property(x => x.CodeSalt).HasMaxLength(64).IsRequired();
+                entity.Property(x => x.FailedAttempts).HasDefaultValue(0);
+                entity.HasIndex(x => x.UserId);
+
+                entity.HasOne(x => x.User)
+                .WithMany(x => x.PasswordResetCodes)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            });
 
         modelBuilder.Entity<RefreshToken>(entity =>
         {
@@ -86,6 +101,8 @@ public class AppDbContext : DbContext
             entity.ToTable("Sheet");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.LeftData).HasMaxLength(4000);
+            entity.Property(x => x.RightData).HasMaxLength(4000);
             entity.Property(x => x.LikeCount).HasDefaultValue(0);
 
             entity.HasOne(x => x.Song)
@@ -99,16 +116,34 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<SheetAsset>(entity =>
+        modelBuilder.Entity<DataAsset>(entity =>
         {
-            entity.ToTable("SheetAsset");
+            entity.ToTable("DataAsset");
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.AssetType).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.AssetType)
+                .HasConversion(
+                    x => DataAssetTypeConverter.ToStorageValue(x),
+                    x => DataAssetTypeConverter.FromStorageValue(x))
+                .HasMaxLength(100)
+                .IsRequired();
             entity.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            entity.HasIndex(x => x.SheetId);
+            entity.HasIndex(x => x.SongId);
+            entity.HasIndex(x => x.UserId);
 
             entity.HasOne(x => x.Sheet)
-                .WithMany(x => x.Assets)
+                .WithMany(x => x.DataAssets)
                 .HasForeignKey(x => x.SheetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Song)
+                .WithMany(x => x.DataAssets)
+                .HasForeignKey(x => x.SongId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.DataAssets)
+                .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -58,3 +58,30 @@ public class ResendVerificationCodeRequestDto
     public string Email { get; set; } = string.Empty;
 }
 
+public class ChangePasswordRequestDto
+{
+    [Required, StringLength(255)]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required, MinLength(6), StringLength(255)]
+    public string NewPassword { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordRequestDto
+{
+    [Required, EmailAddress, StringLength(255)]
+    public string Email { get; set; } = string.Empty;
+}
+
+public class ResetPasswordRequestDto
+{
+    [Required, EmailAddress, StringLength(255)]
+    public string Email { get; set; } = string.Empty;
+
+    [Required, StringLength(6, MinimumLength = 6)]
+    public string Code { get; set; } = string.Empty;
+
+    [Required, MinLength(6), StringLength(255)]
+    public string NewPassword { get; set; } = string.Empty;
+}
+

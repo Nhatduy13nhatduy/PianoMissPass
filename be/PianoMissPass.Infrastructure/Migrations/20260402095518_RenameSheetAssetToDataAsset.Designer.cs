@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PianoMissPass.Infrastructure.Data;
@@ -11,9 +12,11 @@ using PianoMissPass.Infrastructure.Data;
 namespace PianoMissPass.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260402095518_RenameSheetAssetToDataAsset")]
+    partial class RenameSheetAssetToDataAsset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -38,10 +41,7 @@ namespace PianoMissPass.Infrastructure.Migrations
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("SheetId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SongId")
+                    b.Property<int>("SheetId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Url")
@@ -49,16 +49,9 @@ namespace PianoMissPass.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("SheetId");
-
-                    b.HasIndex("SongId");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("DataAsset", (string)null);
                 });
@@ -343,6 +336,10 @@ namespace PianoMissPass.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("PlayCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -370,6 +367,10 @@ namespace PianoMissPass.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -488,23 +489,10 @@ namespace PianoMissPass.Infrastructure.Migrations
                     b.HasOne("PianoMissPass.Domain.Entities.Sheet", "Sheet")
                         .WithMany("DataAssets")
                         .HasForeignKey("SheetId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("PianoMissPass.Domain.Entities.Song", "Song")
-                        .WithMany("DataAssets")
-                        .HasForeignKey("SongId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("PianoMissPass.Domain.Entities.User", "User")
-                        .WithMany("DataAssets")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Sheet");
-
-                    b.Navigation("Song");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("PianoMissPass.Domain.Entities.EmailVerificationCode", b =>
@@ -702,8 +690,6 @@ namespace PianoMissPass.Infrastructure.Migrations
 
             modelBuilder.Entity("PianoMissPass.Domain.Entities.Song", b =>
                 {
-                    b.Navigation("DataAssets");
-
                     b.Navigation("FavoriteByUsers");
 
                     b.Navigation("GenreSongs");
@@ -715,8 +701,6 @@ namespace PianoMissPass.Infrastructure.Migrations
 
             modelBuilder.Entity("PianoMissPass.Domain.Entities.User", b =>
                 {
-                    b.Navigation("DataAssets");
-
                     b.Navigation("EmailVerificationCodes");
 
                     b.Navigation("FavoriteSongs");
