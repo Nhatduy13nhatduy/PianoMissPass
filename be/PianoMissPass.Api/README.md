@@ -19,9 +19,22 @@ Solution structure:
 
 At folder `be`:
 
+Windows note: Docker Desktop must be running before this command.
+
+Local config is stored in `be/.env`. The API and Docker Compose both read from it.
+
+If you already started Postgres before and later changed the password or connection string, reset the named volume first:
+
+```powershell
+docker compose down -v
+```
+
 ```powershell
 docker compose up -d
 ```
+
+The first init password comes from `be/docker-compose.yml`, so if the existing volume was created with a different password, you must remove the volume or use that old password in `appsettings.json`.
+For local development, prefer updating `be/.env` instead of editing `appsettings.json` directly.
 
 ## 2) Run migration
 
@@ -51,9 +64,18 @@ Public endpoints:
 - POST /api/auth/refresh
 - POST /api/auth/revoke
 
+Admin endpoints:
+
+- PATCH /api/users/{id}/role
+
 Use returned accessToken in Swagger Authorize:
 
 - Bearer {token}
+
+Swagger includes example payloads for:
+
+- register/login/refresh/revoke
+- admin role update
 
 Most resource endpoints require JWT authentication.
 
@@ -70,7 +92,9 @@ Configured in `appsettings.json`:
 - Port=5432
 - Database=PianoMissPassDb
 - Username=postgres
-- Password=postgres
+- Password=Duy13112002
+
+You can override these values through `be/.env` using keys like `ConnectionStrings__DefaultConnection` and `Jwt__Secret`.
 
 Update this if your local PostgreSQL credentials are different.
 

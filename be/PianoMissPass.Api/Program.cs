@@ -1,11 +1,16 @@
 using System.Text;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PianoMissPass.Application;
 using PianoMissPass.Infrastructure;
 using PianoMissPass.Api.Middleware;
+using PianoMissPass.Api.Swagger;
+using DotNetEnv;
+
+Env.Load(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".env"));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +44,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
     options.AddPolicy("UserOrAdmin", policy => policy.RequireRole("User", "Admin"));
 });
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -62,10 +70,8 @@ builder.Services.AddSwaggerGen(options =>
     };
 
     options.AddSecurityDefinition("Bearer", securityScheme);
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        { securityScheme, Array.Empty<string>() }
-    });
+    options.OperationFilter<SwaggerAuthorizeOperationFilter>();
+    options.OperationFilter<SwaggerExamplesOperationFilter>();
 });
 
 var app = builder.Build();

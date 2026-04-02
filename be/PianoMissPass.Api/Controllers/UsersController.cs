@@ -96,6 +96,22 @@ public class UsersController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    [HttpPatch("{id:int}/role")]
+    public async Task<ActionResult<UserDto>> UpdateRole(int id, [FromBody] UpdateUserRoleRequestDto request)
+    {
+        var user = await _db.Users.FindAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        user.Role = request.Role;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(user.ToDto());
+    }
 }
 
 
