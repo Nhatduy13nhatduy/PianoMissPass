@@ -13,3 +13,4 @@ C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Application\obj\D
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Application\obj\Debug\net9.0\refint\PianoMissPass.Application.dll
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Application\obj\Debug\net9.0\PianoMissPass.Application.pdb
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Application\obj\Debug\net9.0\ref\PianoMissPass.Application.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Application\obj\Debug\net9.0\PianoMissPass.Application.sourcelink.json

@@ -17,3 +17,4 @@ C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Infrastructure\ob
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Infrastructure\obj\Debug\net9.0\ref\PianoMissPass.Infrastructure.dll
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Infrastructure\bin\Debug\net9.0\PianoMissPass.Infrastructure.runtimeconfig.json
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Infrastructure\obj\Debug\net9.0\PianoMissPass.Infrastructure.genruntimeconfig.cache
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Infrastructure\obj\Debug\net9.0\PianoMissPass.Infrastructure.sourcelink.json
