@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<EmailVerificationCode> EmailVerificationCodes => Set<EmailVerificationCode>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<Sheet> Sheets => Set<Sheet>();
@@ -31,10 +32,26 @@ public class AppDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.UserName).HasMaxLength(255).IsRequired();
             entity.Property(x => x.Email).HasMaxLength(255).IsRequired();
+            entity.Property(x => x.IsEmailVerified).HasDefaultValue(false);
+            entity.Property(x => x.VerificationFailedAttempts).HasDefaultValue(0);
             entity.Property(x => x.Password).HasMaxLength(255).IsRequired();
             entity.Property(x => x.AvatarUrl).HasMaxLength(500);
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(20).HasDefaultValue(UserRole.User);
             entity.HasIndex(x => x.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<EmailVerificationCode>(entity =>
+        {
+            entity.ToTable("EmailVerificationCode");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CodeHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.CodeSalt).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.UserId);
+
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.EmailVerificationCodes)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>

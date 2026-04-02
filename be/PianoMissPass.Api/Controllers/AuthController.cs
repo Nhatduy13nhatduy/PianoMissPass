@@ -47,5 +47,21 @@ public class AuthController : ControllerBase
         await _authService.RevokeRefreshTokenAsync(request, cancellationToken);
         return NoContent();
     }
+
+    [HttpPost("verify-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequestDto request, CancellationToken cancellationToken)
+    {
+        await _authService.VerifyEmailAsync(request, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("resend-verification")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationCodeRequestDto request, CancellationToken cancellationToken)
+    {
+        await _authService.ResendVerificationCodeAsync(request, cancellationToken);
+        return NoContent();
+    }
 }
 

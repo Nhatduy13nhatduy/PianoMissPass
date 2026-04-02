@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PianoMissPass.Infrastructure.Data;
@@ -11,9 +12,11 @@ using PianoMissPass.Infrastructure.Data;
 namespace PianoMissPass.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260402060555_SecureVerificationCodeStorage")]
+    partial class SecureVerificationCodeStorage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -347,17 +350,6 @@ namespace PianoMissPass.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
-
-                    b.Property<int>("VerificationFailedAttempts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<DateTime?>("VerificationFailedWindowStartAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("VerificationLockedUntilAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

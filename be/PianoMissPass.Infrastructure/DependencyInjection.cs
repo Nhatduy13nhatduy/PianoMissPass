@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PianoMissPass.Application.Abstractions;
 using PianoMissPass.Infrastructure.Data;
+using PianoMissPass.Infrastructure.Email;
 using PianoMissPass.Infrastructure.Security;
 using PianoMissPass.Infrastructure.Services;
 
@@ -17,6 +18,7 @@ public static class DependencyInjection
 
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IAuthService, AuthService>();
 
         return services;

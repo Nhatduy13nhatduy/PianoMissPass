@@ -63,6 +63,8 @@ Public endpoints:
 - POST /api/auth/login
 - POST /api/auth/refresh
 - POST /api/auth/revoke
+- POST /api/auth/verify-email
+- POST /api/auth/resend-verification
 
 Admin endpoints:
 
@@ -77,26 +79,26 @@ Swagger includes example payloads for:
 - register/login/refresh/revoke
 - admin role update
 
+Email verification flow:
+
+1. Register account.
+2. Server sends 6-digit code via SMTP email.
+3. Call `/api/auth/verify-email` with email + code.
+4. Login is allowed only after email verification.
+
+Anti-spam limits for verification code:
+
+- Resend cooldown: 60 seconds between requests.
+- Rate limit: maximum 5 codes per account per hour.
+- Verification code is stored as salted hash in database (not plain text).
+- Brute-force lock: if OTP is entered incorrectly 5 times within 10 minutes, verification is locked for 10 minutes.
+
 Most resource endpoints require JWT authentication.
 
 Authorization policies:
 
 - AdminOnly: requires role Admin.
 - UserOrAdmin: requires role User or Admin.
-
-## Default connection string
-
-Configured in `appsettings.json`:
-
-- Host=localhost
-- Port=5432
-- Database=PianoMissPassDb
-- Username=postgres
-- Password=Duy13112002
-
-You can override these values through `be/.env` using keys like `ConnectionStrings__DefaultConnection` and `Jwt__Secret`.
-
-Update this if your local PostgreSQL credentials are different.
 
 ## Implemented API controllers
 
@@ -116,3 +118,44 @@ Update this if your local PostgreSQL credentials are different.
 
 All database tables from your schema are mapped in EF Core model and initial migration.
 Refresh token and role support are included in Infrastructure migrations.
+
+## List endpoints: pagination, search, sort
+
+List endpoints now share the following query parameters:
+
+- `page`: current page, starting from `1`.
+- `pageSize`: number of records per page, default `10`, maximum `100`.
+- `search`: endpoint-specific search string.
+- `sort`: sorting key.
+
+List endpoints return paged responses in the following shape:
+
+- `items`: data for the current page.
+- `page`: current page number.
+- `pageSize`: number of records per page.
+- `totalItems`: total number of records after filtering.
+- `totalPages`: total number of pages.
+
+### Sort keys by endpoint
+
+| Endpoint | Sort keys |
+| --- | --- |
+| `/api/songs` | `title_asc`, `title_desc`, `updated_asc`, `updated_desc`, `play_asc`, `play_desc` |
+| `/api/sheets` | `title_asc`, `title_desc`, `updated_asc`, `updated_desc`, `like_asc`, `like_desc` |
+| `/api/users` | `title_asc`, `title_desc`, `updated_asc`, `updated_desc` |
+| `/api/playlists` | `title_asc`, `title_desc`, `updated_asc`, `updated_desc` |
+
+### Search behavior
+
+- `/api/songs`: search by `title` or `composer`
+- `/api/sheets`: search by `name`
+- `/api/users`: search by `userName` or `email`
+- `/api/playlists`: search by `name`
+
+### Example
+
+```http
+GET /api/songs?page=1&pageSize=20&search=river&sort=play_desc
+```
+
+This returns page 1 with 20 songs per page, filters records related to `river`, and sorts by play count descending.

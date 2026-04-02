@@ -43,3 +43,18 @@ public class RefreshTokenRequestDto
     public string RefreshToken { get; set; } = string.Empty;
 }
 
+public class VerifyEmailRequestDto
+{
+    [Required, EmailAddress, StringLength(255)]
+    public string Email { get; set; } = string.Empty;
+
+    [Required, StringLength(6, MinimumLength = 6)]
+    public string Code { get; set; } = string.Empty;
+}
+
+public class ResendVerificationCodeRequestDto
+{
+    [Required, EmailAddress, StringLength(255)]
+    public string Email { get; set; } = string.Empty;
+}
+

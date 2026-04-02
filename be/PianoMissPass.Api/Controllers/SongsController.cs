@@ -20,13 +20,43 @@ public class SongsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<SongDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<SongDto>>> GetAll([FromQuery] SongListQueryDto query)
     {
-        var songs = await _db.Songs
-            .OrderByDescending(x => x.CreatedAt)
+        var songsQuery = _db.Songs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            songsQuery = songsQuery.Where(x => x.Title.Contains(search) || (x.Composer != null && x.Composer.Contains(search)));
+        }
+
+        songsQuery = (query.Sort ?? "updated_desc").ToLowerInvariant() switch
+        {
+            "title_asc" => songsQuery.OrderBy(x => x.Title),
+            "title_desc" => songsQuery.OrderByDescending(x => x.Title),
+            "updated_asc" => songsQuery.OrderBy(x => x.UpdatedAt),
+            "updated_desc" => songsQuery.OrderByDescending(x => x.UpdatedAt),
+            "play_asc" => songsQuery.OrderBy(x => x.PlayCount),
+            "play_desc" => songsQuery.OrderByDescending(x => x.PlayCount),
+            _ => songsQuery.OrderByDescending(x => x.UpdatedAt)
+        };
+
+        var totalItems = await songsQuery.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalItems / (double)query.PageSize);
+
+        var songs = await songsQuery
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
             .ToListAsync();
 
-        return Ok(songs.Select(x => x.ToDto()));
+        return Ok(new PagedResultDto<SongDto>
+        {
+            Items = songs.Select(x => x.ToDto()).ToList(),
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
+        });
     }
 
     [HttpGet("{id:int}")]

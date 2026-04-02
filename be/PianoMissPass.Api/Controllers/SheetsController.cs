@@ -20,13 +20,43 @@ public class SheetsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<SheetDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<SheetDto>>> GetAll([FromQuery] SheetListQueryDto query)
     {
-        var sheets = await _db.Sheets
-            .OrderByDescending(x => x.CreatedAt)
+        var sheetsQuery = _db.Sheets.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            sheetsQuery = sheetsQuery.Where(x => x.Name.Contains(search));
+        }
+
+        sheetsQuery = (query.Sort ?? "updated_desc").ToLowerInvariant() switch
+        {
+            "title_asc" => sheetsQuery.OrderBy(x => x.Name),
+            "title_desc" => sheetsQuery.OrderByDescending(x => x.Name),
+            "updated_asc" => sheetsQuery.OrderBy(x => x.UpdatedAt),
+            "updated_desc" => sheetsQuery.OrderByDescending(x => x.UpdatedAt),
+            "like_asc" => sheetsQuery.OrderBy(x => x.LikeCount),
+            "like_desc" => sheetsQuery.OrderByDescending(x => x.LikeCount),
+            _ => sheetsQuery.OrderByDescending(x => x.UpdatedAt)
+        };
+
+        var totalItems = await sheetsQuery.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalItems / (double)query.PageSize);
+
+        var sheets = await sheetsQuery
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
             .ToListAsync();
 
-        return Ok(sheets.Select(x => x.ToDto()));
+        return Ok(new PagedResultDto<SheetDto>
+        {
+            Items = sheets.Select(x => x.ToDto()).ToList(),
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
+        });
     }
 
     [HttpGet("{id:int}")]

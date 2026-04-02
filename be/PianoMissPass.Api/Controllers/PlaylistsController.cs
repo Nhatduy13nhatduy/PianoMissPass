@@ -20,13 +20,40 @@ public class PlaylistsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<PlaylistDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<PlaylistDto>>> GetAll([FromQuery] PlaylistListQueryDto query)
     {
-        var playlists = await _db.Playlists
-            .OrderByDescending(x => x.CreatedAt)
+        var playlistsQuery = _db.Playlists.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            playlistsQuery = playlistsQuery.Where(x => x.Name.Contains(search));
+        }
+
+        playlistsQuery = (query.Sort ?? "updated_desc").ToLowerInvariant() switch
+        {
+            "title_asc" => playlistsQuery.OrderBy(x => x.Name),
+            "title_desc" => playlistsQuery.OrderByDescending(x => x.Name),
+            "updated_asc" => playlistsQuery.OrderBy(x => x.UpdatedAt),
+            "updated_desc" => playlistsQuery.OrderByDescending(x => x.UpdatedAt),
+            _ => playlistsQuery.OrderByDescending(x => x.UpdatedAt)
+        };
+
+        var totalItems = await playlistsQuery.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalItems / (double)query.PageSize);
+        var playlists = await playlistsQuery
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
             .ToListAsync();
 
-        return Ok(playlists.Select(x => x.ToDto()));
+        return Ok(new PagedResultDto<PlaylistDto>
+        {
+            Items = playlists.Select(x => x.ToDto()).ToList(),
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
+        });
     }
 
     [HttpGet("{id:int}")]

@@ -11,6 +11,10 @@ public class User
     public int Id { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public bool IsEmailVerified { get; set; }
+    public int VerificationFailedAttempts { get; set; }
+    public DateTime? VerificationFailedWindowStartAt { get; set; }
+    public DateTime? VerificationLockedUntilAt { get; set; }
     public string Password { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public UserRole Role { get; set; } = UserRole.User;
@@ -23,6 +27,20 @@ public class User
     public ICollection<UserFavoriteSong> FavoriteSongs { get; set; } = new List<UserFavoriteSong>();
     public ICollection<Playlist> Playlists { get; set; } = new List<Playlist>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<EmailVerificationCode> EmailVerificationCodes { get; set; } = new List<EmailVerificationCode>();
+}
+
+public class EmailVerificationCode
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public string CodeHash { get; set; } = string.Empty;
+    public string CodeSalt { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UsedAt { get; set; }
+
+    public User? User { get; set; }
 }
 
 public class RefreshToken

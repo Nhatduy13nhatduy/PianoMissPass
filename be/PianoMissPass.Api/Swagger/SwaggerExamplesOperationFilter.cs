@@ -12,6 +12,14 @@ public class SwaggerExamplesOperationFilter : IOperationFilter
         var actionName = context.ApiDescription.ActionDescriptor.RouteValues.TryGetValue("action", out var value)
             ? value
             : string.Empty;
+        var controllerName = context.ApiDescription.ActionDescriptor.RouteValues.TryGetValue("controller", out var controller)
+            ? controller ?? string.Empty
+            : string.Empty;
+
+        if (string.Equals(actionName, "GetAll", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySortQueryMetadata(operation, controllerName);
+        }
 
         switch (actionName)
         {
@@ -68,6 +76,46 @@ public class SwaggerExamplesOperationFilter : IOperationFilter
                 });
                 break;
         }
+    }
+
+    private static void ApplySortQueryMetadata(OpenApiOperation operation, string controllerName)
+    {
+        string[] allowedSortKeys;
+        string description;
+
+        switch (controllerName)
+        {
+            case "Songs":
+                allowedSortKeys = ["title_asc", "title_desc", "updated_asc", "updated_desc", "play_asc", "play_desc"];
+                description = "Sort key. Allowed values: title_asc, title_desc, updated_asc, updated_desc, play_asc, play_desc.";
+                break;
+            case "Sheets":
+                allowedSortKeys = ["title_asc", "title_desc", "updated_asc", "updated_desc", "like_asc", "like_desc"];
+                description = "Sort key. Allowed values: title_asc, title_desc, updated_asc, updated_desc, like_asc, like_desc.";
+                break;
+            case "Users":
+            case "Playlists":
+                allowedSortKeys = ["title_asc", "title_desc", "updated_asc", "updated_desc"];
+                description = "Sort key. Allowed values: title_asc, title_desc, updated_asc, updated_desc.";
+                break;
+            default:
+                return;
+        }
+
+        var sortParameter = operation.Parameters.FirstOrDefault(x =>
+            string.Equals(x.Name, "sort", StringComparison.OrdinalIgnoreCase));
+
+        if (sortParameter is null)
+        {
+            return;
+        }
+
+        sortParameter.Description = description;
+        sortParameter.Schema ??= new OpenApiSchema { Type = "string" };
+        sortParameter.Schema.Enum = allowedSortKeys
+            .Select(x => (IOpenApiAny)new OpenApiString(x))
+            .ToList();
+        sortParameter.Example = new OpenApiString("updated_desc");
     }
 
     private static void SetRequestExample(OpenApiOperation operation, OpenApiObject example)

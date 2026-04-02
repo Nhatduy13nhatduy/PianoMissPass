@@ -23,10 +23,40 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<UserDto>>> GetAll([FromQuery] UserListQueryDto query)
     {
-        var users = await _db.Users.OrderByDescending(x => x.CreatedAt).ToListAsync();
-        return Ok(users.Select(x => x.ToDto()));
+        var usersQuery = _db.Users.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            usersQuery = usersQuery.Where(x => x.UserName.Contains(search) || x.Email.Contains(search));
+        }
+
+        usersQuery = (query.Sort ?? "updated_desc").ToLowerInvariant() switch
+        {
+            "title_asc" => usersQuery.OrderBy(x => x.UserName),
+            "title_desc" => usersQuery.OrderByDescending(x => x.UserName),
+            "updated_asc" => usersQuery.OrderBy(x => x.UpdatedAt),
+            "updated_desc" => usersQuery.OrderByDescending(x => x.UpdatedAt),
+            _ => usersQuery.OrderByDescending(x => x.UpdatedAt)
+        };
+
+        var totalItems = await usersQuery.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalItems / (double)query.PageSize);
+        var users = await usersQuery
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync();
+
+        return Ok(new PagedResultDto<UserDto>
+        {
+            Items = users.Select(x => x.ToDto()).ToList(),
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalItems = totalItems,
+            TotalPages = totalPages
+        });
     }
 
     [HttpGet("{id:int}")]
