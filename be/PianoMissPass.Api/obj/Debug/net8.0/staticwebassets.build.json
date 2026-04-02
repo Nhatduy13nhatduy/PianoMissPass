@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "fVUaj0tHcE01m0JcLQ08umMsEkc+J8kawQgV/tOtjoU=",
+  "Source": "PianoMissPass.Api",
+  "BasePath": "_content/PianoMissPass.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

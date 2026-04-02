@@ -1,0 +1,11 @@
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\bin\Debug\net9.0\PianoMissPass.Domain.deps.json
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\bin\Debug\net9.0\PianoMissPass.Domain.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\bin\Debug\net9.0\PianoMissPass.Domain.pdb
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.AssemblyInfoInputs.cache
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.AssemblyInfo.cs
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.csproj.CoreCompileInputs.cache
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\refint\PianoMissPass.Domain.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\PianoMissPass.Domain.pdb
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Domain\obj\Debug\net9.0\ref\PianoMissPass.Domain.dll

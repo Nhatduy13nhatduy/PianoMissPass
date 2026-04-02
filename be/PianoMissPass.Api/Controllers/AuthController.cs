@@ -1,0 +1,46 @@
+using Microsoft.AspNetCore.Mvc;
+using PianoMissPass.Application.Abstractions;
+using PianoMissPass.Application.DTOs;
+
+namespace PianoMissPass.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
+    {
+        _authService = authService;
+    }
+
+    [HttpPost("register")]
+    public async Task<ActionResult<AuthResponseDto>> Register([FromBody] RegisterRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.RegisterAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AuthResponseDto>> Login([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.LoginAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("refresh")]
+    public async Task<ActionResult<AuthResponseDto>> Refresh([FromBody] RefreshTokenRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.RefreshAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("revoke")]
+    public async Task<IActionResult> Revoke([FromBody] RefreshTokenRequestDto request, CancellationToken cancellationToken)
+    {
+        await _authService.RevokeRefreshTokenAsync(request, cancellationToken);
+        return NoContent();
+    }
+}
+
