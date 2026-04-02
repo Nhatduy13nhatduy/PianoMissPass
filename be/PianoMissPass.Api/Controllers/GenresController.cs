@@ -26,8 +26,8 @@ public class GenresController : ControllerBase
         return Ok(items.Select(x => x.ToDto()));
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<GenreDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<GenreDto>> GetById(string id)
     {
         var item = await _db.Genres.FindAsync(id);
         if (item is null) return NotFound();
@@ -43,8 +43,8 @@ public class GenresController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] GenreRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] GenreRequestDto request)
     {
         var item = await _db.Genres.FindAsync(id);
         if (item is null) return NotFound();
@@ -54,8 +54,8 @@ public class GenresController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var item = await _db.Genres.FindAsync(id);
         if (item is null) return NotFound();

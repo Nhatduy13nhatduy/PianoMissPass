@@ -27,7 +27,7 @@ public class UserSheetLikesController : ControllerBase
     }
 
     [HttpGet("{userId:int}/{sheetId:int}")]
-    public async Task<ActionResult<UserSheetLikeDto>> GetById(int userId, int sheetId)
+    public async Task<ActionResult<UserSheetLikeDto>> GetById(string userId, string sheetId)
     {
         var item = await _db.UserSheetLikes.FindAsync(userId, sheetId);
         if (item is null) return NotFound();
@@ -57,7 +57,7 @@ public class UserSheetLikesController : ControllerBase
     }
 
     [HttpDelete("{userId:int}/{sheetId:int}")]
-    public async Task<IActionResult> Delete(int userId, int sheetId)
+    public async Task<IActionResult> Delete(string userId, string sheetId)
     {
         var item = await _db.UserSheetLikes.FindAsync(userId, sheetId);
         if (item is null) return NotFound();

@@ -59,8 +59,8 @@ public class SheetsController : ControllerBase
         });
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<SheetDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<SheetDto>> GetById(string id)
     {
         var sheet = await _db.Sheets.FirstOrDefaultAsync(x => x.Id == id);
 
@@ -102,8 +102,8 @@ public class SheetsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = sheet.Id }, sheet.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] SheetRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] SheetRequestDto request)
     {
         var sheet = await _db.Sheets.FindAsync(id);
         if (sheet is null)
@@ -130,8 +130,8 @@ public class SheetsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var sheet = await _db.Sheets.FindAsync(id);
         if (sheet is null)

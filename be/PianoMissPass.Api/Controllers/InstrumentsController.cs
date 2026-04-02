@@ -26,8 +26,8 @@ public class InstrumentsController : ControllerBase
         return Ok(items.Select(x => x.ToDto()));
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<InstrumentDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<InstrumentDto>> GetById(string id)
     {
         var item = await _db.Instruments.FindAsync(id);
         if (item is null) return NotFound();
@@ -43,8 +43,8 @@ public class InstrumentsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] InstrumentRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] InstrumentRequestDto request)
     {
         var item = await _db.Instruments.FindAsync(id);
         if (item is null) return NotFound();
@@ -54,8 +54,8 @@ public class InstrumentsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var item = await _db.Instruments.FindAsync(id);
         if (item is null) return NotFound();

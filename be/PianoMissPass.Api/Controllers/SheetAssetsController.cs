@@ -29,8 +29,8 @@ public class DataAssetsController : ControllerBase
         return Ok(items.Select(x => x.ToDto()));
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<DataAssetDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<DataAssetDto>> GetById(string id)
     {
         var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
@@ -99,8 +99,8 @@ public class DataAssetsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] DataAssetRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] DataAssetRequestDto request)
     {
         var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
@@ -120,8 +120,8 @@ public class DataAssetsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var item = await _db.DataAssets.FindAsync(id);
         if (item is null) return NotFound();
@@ -135,27 +135,27 @@ public class DataAssetsController : ControllerBase
     private static bool HasSingleOwner(DataAssetRequestDto request)
     {
         var ownerCount = 0;
-        if (request.SheetId.HasValue) ownerCount++;
-        if (request.SongId.HasValue) ownerCount++;
-        if (request.UserId.HasValue) ownerCount++;
+        if (!string.IsNullOrWhiteSpace(request.SheetId)) ownerCount++;
+        if (!string.IsNullOrWhiteSpace(request.SongId)) ownerCount++;
+        if (!string.IsNullOrWhiteSpace(request.UserId)) ownerCount++;
         return ownerCount == 1;
     }
 
     private async Task<bool> OwnerExistsAsync(DataAssetRequestDto request)
     {
-        if (request.SheetId.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.SheetId))
         {
-            return await _db.Sheets.AnyAsync(x => x.Id == request.SheetId.Value);
+            return await _db.Sheets.AnyAsync(x => x.Id == request.SheetId);
         }
 
-        if (request.SongId.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.SongId))
         {
-            return await _db.Songs.AnyAsync(x => x.Id == request.SongId.Value);
+            return await _db.Songs.AnyAsync(x => x.Id == request.SongId);
         }
 
-        if (request.UserId.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.UserId))
         {
-            return await _db.Users.AnyAsync(x => x.Id == request.UserId.Value);
+            return await _db.Users.AnyAsync(x => x.Id == request.UserId);
         }
 
         return false;
@@ -163,9 +163,9 @@ public class DataAssetsController : ControllerBase
 
     public class DataAssetUploadForm
     {
-        public int? SheetId { get; set; }
-        public int? SongId { get; set; }
-        public int? UserId { get; set; }
+        public string? SheetId { get; set; }
+        public string? SongId { get; set; }
+        public string? UserId { get; set; }
         public DataAssetType AssetType { get; set; } = DataAssetType.File;
         public int DisplayOrder { get; set; }
         public IFormFile? File { get; set; }

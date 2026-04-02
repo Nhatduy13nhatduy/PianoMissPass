@@ -43,7 +43,7 @@ public static class DataAssetTypeConverter
 
 public class User
 {
-    public int Id { get; set; }
+    public string Id { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public bool IsEmailVerified { get; set; }
@@ -68,8 +68,8 @@ public class User
 
 public class EmailVerificationCode
 {
-    public int Id { get; set; }
-    public int UserId { get; set; }
+    public string Id { get; set; }
+    public string UserId { get; set; }
     public string CodeHash { get; set; } = string.Empty;
     public string CodeSalt { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
@@ -81,8 +81,8 @@ public class EmailVerificationCode
 
 public class RefreshToken
 {
-    public int Id { get; set; }
-    public int UserId { get; set; }
+    public string Id { get; set; }
+    public string UserId { get; set; }
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -93,8 +93,8 @@ public class RefreshToken
 
 public class PasswordResetCode
 {
-    public int Id { get; set; }
-    public int UserId { get; set; }
+    public string Id { get; set; }
+    public string UserId { get; set; }
     public string CodeHash { get; set; } = string.Empty;
     public string CodeSalt { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
@@ -107,8 +107,8 @@ public class PasswordResetCode
 
 public class Song
 {
-    public int Id { get; set; }
-    public int ArtistId { get; set; }
+    public string Id { get; set; }
+    public string ArtistId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Composer { get; set; }
     public int PlayCount { get; set; }
@@ -125,9 +125,9 @@ public class Song
 
 public class Sheet
 {
-    public int Id { get; set; }
-    public int SongId { get; set; }
-    public int InstrumentId { get; set; }
+    public string Id { get; set; }
+    public string SongId { get; set; }
+    public string InstrumentId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? LeftData { get; set; }
     public string? RightData { get; set; }
@@ -144,10 +144,10 @@ public class Sheet
 
 public class DataAsset
 {
-    public int Id { get; set; }
-    public int? SheetId { get; set; }
-    public int? SongId { get; set; }
-    public int? UserId { get; set; }
+    public string Id { get; set; }
+    public string? SheetId { get; set; }
+    public string? SongId { get; set; }
+    public string? UserId { get; set; }
     public DataAssetType AssetType { get; set; } = DataAssetType.File;
     public string Url { get; set; } = string.Empty;
     public string? PublicId { get; set; }
@@ -160,7 +160,7 @@ public class DataAsset
 
 public class Instrument
 {
-    public int Id { get; set; }
+    public string Id { get; set; }
     public string Name { get; set; } = string.Empty;
 
     public ICollection<Sheet> Sheets { get; set; } = new List<Sheet>();
@@ -168,9 +168,9 @@ public class Instrument
 
 public class UserSheetPoint
 {
-    public int Id { get; set; }
-    public int SheetId { get; set; }
-    public int PlayerId { get; set; }
+    public string Id { get; set; }
+    public string SheetId { get; set; }
+    public string PlayerId { get; set; }
     public int Point { get; set; }
 
     public Sheet? Sheet { get; set; }
@@ -179,8 +179,8 @@ public class UserSheetPoint
 
 public class UserSheetLike
 {
-    public int UserId { get; set; }
-    public int SheetId { get; set; }
+    public string UserId { get; set; }
+    public string SheetId { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public User? User { get; set; }
@@ -189,7 +189,7 @@ public class UserSheetLike
 
 public class Genre
 {
-    public int Id { get; set; }
+    public string Id { get; set; }
     public string Name { get; set; } = string.Empty;
 
     public ICollection<GenreSong> GenreSongs { get; set; } = new List<GenreSong>();
@@ -197,8 +197,8 @@ public class Genre
 
 public class GenreSong
 {
-    public int GenreId { get; set; }
-    public int SongId { get; set; }
+    public string GenreId { get; set; }
+    public string SongId { get; set; }
 
     public Genre? Genre { get; set; }
     public Song? Song { get; set; }
@@ -206,8 +206,8 @@ public class GenreSong
 
 public class UserFavoriteSong
 {
-    public int UserId { get; set; }
-    public int SongId { get; set; }
+    public string UserId { get; set; }
+    public string SongId { get; set; }
 
     public User? User { get; set; }
     public Song? Song { get; set; }
@@ -215,8 +215,8 @@ public class UserFavoriteSong
 
 public class Playlist
 {
-    public int Id { get; set; }
-    public int UserId { get; set; }
+    public string Id { get; set; }
+    public string UserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -227,8 +227,8 @@ public class Playlist
 
 public class PlaylistSong
 {
-    public int PlaylistId { get; set; }
-    public int SongId { get; set; }
+    public string PlaylistId { get; set; }
+    public string SongId { get; set; }
     public int DisplayOrder { get; set; }
 
     public Playlist? Playlist { get; set; }

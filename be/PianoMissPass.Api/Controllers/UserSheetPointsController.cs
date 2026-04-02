@@ -26,8 +26,8 @@ public class UserSheetPointsController : ControllerBase
         return Ok(items.Select(x => x.ToDto()));
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<UserSheetPointDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<UserSheetPointDto>> GetById(string id)
     {
         var item = await _db.UserSheetPoints.FindAsync(id);
         if (item is null) return NotFound();
@@ -56,8 +56,8 @@ public class UserSheetPointsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UserSheetPointRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] UserSheetPointRequestDto request)
     {
         var item = await _db.UserSheetPoints.FindAsync(id);
         if (item is null) return NotFound();
@@ -77,8 +77,8 @@ public class UserSheetPointsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var item = await _db.UserSheetPoints.FindAsync(id);
         if (item is null) return NotFound();

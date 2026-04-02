@@ -65,8 +65,8 @@ public class SongsController : ControllerBase
         });
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<SongDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<SongDto>> GetById(string id)
     {
         var song = await _db.Songs
             .AsNoTracking()
@@ -81,8 +81,8 @@ public class SongsController : ControllerBase
         return Ok(song.ToDto());
     }
 
-    [HttpGet("detail/{id:int}")]
-    public async Task<ActionResult<SongDetailDto>> GetByIdDetail(int id)
+    [HttpGet("detail/{id}")]
+    public async Task<ActionResult<SongDetailDto>> GetByIdDetail(string id)
     {
         var song = await _db.Songs
             .AsNoTracking()
@@ -192,8 +192,8 @@ public class SongsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = song.Id }, song.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] SongRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] SongRequestDto request)
     {
         var song = await _db.Songs.FindAsync(id);
         if (song is null)
@@ -244,8 +244,8 @@ public class SongsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var song = await _db.Songs.FindAsync(id);
         if (song is null)

@@ -167,7 +167,7 @@ public class AuthService : IAuthService
         await CreateAndSendVerificationCodeAsync(user, enforceCooldown: true, cancellationToken);
     }
 
-    public async Task ChangePasswordAsync(int userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default)
+    public async Task ChangePasswordAsync(string userId, ChangePasswordRequestDto request, CancellationToken cancellationToken = default)
     {
         var user = await _db.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
         if (user is null)
@@ -333,7 +333,7 @@ public class AuthService : IAuthService
         return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
     }
 
-    private async Task<string?> GetUserAvatarUrlAsync(int userId, CancellationToken cancellationToken)
+    private async Task<string?> GetUserAvatarUrlAsync(string userId, CancellationToken cancellationToken)
     {
         return await _db.DataAssets
             .Where(x => x.UserId == userId && x.AssetType == DataAssetType.ImageAvatar)

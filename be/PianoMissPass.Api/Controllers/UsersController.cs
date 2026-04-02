@@ -59,8 +59,8 @@ public class UsersController : ControllerBase
         });
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<UserDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<UserDto>> GetById(string id)
     {
         var user = await _db.Users
             .AsNoTracking()
@@ -107,8 +107,8 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = user.Id }, user.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UserUpdateRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] UserUpdateRequestDto request)
     {
         var user = await _db.Users.FindAsync(id);
         if (user is null)
@@ -153,8 +153,8 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var user = await _db.Users.FindAsync(id);
         if (user is null)
@@ -167,8 +167,8 @@ public class UsersController : ControllerBase
         return NoContent();
     }
 
-    [HttpPatch("{id:int}/role")]
-    public async Task<ActionResult<UserDto>> UpdateRole(int id, [FromBody] UpdateUserRoleRequestDto request)
+    [HttpPatch("{id}/role")]
+    public async Task<ActionResult<UserDto>> UpdateRole(string id, [FromBody] UpdateUserRoleRequestDto request)
     {
         var user = await _db.Users.FindAsync(id);
         if (user is null)

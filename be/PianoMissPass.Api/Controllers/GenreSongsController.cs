@@ -27,7 +27,7 @@ public class GenreSongsController : ControllerBase
     }
 
     [HttpGet("{genreId:int}/{songId:int}")]
-    public async Task<ActionResult<GenreSongDto>> GetById(int genreId, int songId)
+    public async Task<ActionResult<GenreSongDto>> GetById(string genreId, string songId)
     {
         var item = await _db.GenreSongs.FindAsync(genreId, songId);
         if (item is null) return NotFound();
@@ -51,7 +51,7 @@ public class GenreSongsController : ControllerBase
     }
 
     [HttpDelete("{genreId:int}/{songId:int}")]
-    public async Task<IActionResult> Delete(int genreId, int songId)
+    public async Task<IActionResult> Delete(string genreId, string songId)
     {
         var item = await _db.GenreSongs.FindAsync(genreId, songId);
         if (item is null) return NotFound();

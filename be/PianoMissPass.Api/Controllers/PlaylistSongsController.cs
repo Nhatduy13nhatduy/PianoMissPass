@@ -27,7 +27,7 @@ public class PlaylistSongsController : ControllerBase
     }
 
     [HttpGet("{playlistId:int}/{songId:int}")]
-    public async Task<ActionResult<PlaylistSongDto>> GetById(int playlistId, int songId)
+    public async Task<ActionResult<PlaylistSongDto>> GetById(string playlistId, string songId)
     {
         var item = await _db.PlaylistSongs.FindAsync(playlistId, songId);
         if (item is null) return NotFound();
@@ -60,7 +60,7 @@ public class PlaylistSongsController : ControllerBase
     }
 
     [HttpPut("{playlistId:int}/{songId:int}")]
-    public async Task<IActionResult> Update(int playlistId, int songId, [FromBody] PlaylistSongRequestDto request)
+    public async Task<IActionResult> Update(string playlistId, string songId, [FromBody] PlaylistSongRequestDto request)
     {
         var item = await _db.PlaylistSongs.FindAsync(playlistId, songId);
         if (item is null) return NotFound();
@@ -84,7 +84,7 @@ public class PlaylistSongsController : ControllerBase
     }
 
     [HttpDelete("{playlistId:int}/{songId:int}")]
-    public async Task<IActionResult> Delete(int playlistId, int songId)
+    public async Task<IActionResult> Delete(string playlistId, string songId)
     {
         var item = await _db.PlaylistSongs.FindAsync(playlistId, songId);
         if (item is null) return NotFound();

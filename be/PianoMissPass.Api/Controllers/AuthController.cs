@@ -86,12 +86,12 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request, CancellationToken cancellationToken)
     {
         var userIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!int.TryParse(userIdRaw, out var userId))
+        if (string.IsNullOrWhiteSpace(userIdRaw))
         {
             return Unauthorized();
         }
 
-        await _authService.ChangePasswordAsync(userId, request, cancellationToken);
+        await _authService.ChangePasswordAsync(userIdRaw, request, cancellationToken);
         return NoContent();
     }
 }

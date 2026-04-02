@@ -27,7 +27,7 @@ public class UserFavoriteSongsController : ControllerBase
     }
 
     [HttpGet("{userId:int}/{songId:int}")]
-    public async Task<ActionResult<UserFavoriteSongDto>> GetById(int userId, int songId)
+    public async Task<ActionResult<UserFavoriteSongDto>> GetById(string userId, string songId)
     {
         var item = await _db.UserFavoriteSongs.FindAsync(userId, songId);
         if (item is null) return NotFound();
@@ -51,7 +51,7 @@ public class UserFavoriteSongsController : ControllerBase
     }
 
     [HttpDelete("{userId:int}/{songId:int}")]
-    public async Task<IActionResult> Delete(int userId, int songId)
+    public async Task<IActionResult> Delete(string userId, string songId)
     {
         var item = await _db.UserFavoriteSongs.FindAsync(userId, songId);
         if (item is null) return NotFound();

@@ -56,8 +56,8 @@ public class PlaylistsController : ControllerBase
         });
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<PlaylistDto>> GetById(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<PlaylistDto>> GetById(string id)
     {
         var playlist = await _db.Playlists.FirstOrDefaultAsync(x => x.Id == id);
 
@@ -94,8 +94,8 @@ public class PlaylistsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = playlist.Id }, playlist.ToDto());
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] PlaylistRequestDto request)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] PlaylistRequestDto request)
     {
         var playlist = await _db.Playlists.FindAsync(id);
         if (playlist is null)
@@ -117,8 +117,8 @@ public class PlaylistsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
     {
         var playlist = await _db.Playlists.FindAsync(id);
         if (playlist is null)

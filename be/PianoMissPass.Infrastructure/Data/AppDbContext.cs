@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using PianoMissPass.Domain.Entities;
+using System.Security.Cryptography;
 
 namespace PianoMissPass.Infrastructure.Data;
 
 public class AppDbContext : DbContext
 {
+    private const string IdAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private const int IdLength = 20;
+
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
@@ -25,12 +29,25 @@ public class AppDbContext : DbContext
     public DbSet<Playlist> Playlists => Set<Playlist>();
     public DbSet<PlaylistSong> PlaylistSongs => Set<PlaylistSong>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        EnsureStringIds();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        EnsureStringIds();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("User");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
             entity.Property(x => x.UserName).HasMaxLength(255).IsRequired();
             entity.Property(x => x.Email).HasMaxLength(255).IsRequired();
             entity.Property(x => x.IsEmailVerified).HasDefaultValue(false);
@@ -44,6 +61,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("EmailVerificationCode");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
             entity.Property(x => x.CodeHash).HasMaxLength(128).IsRequired();
             entity.Property(x => x.CodeSalt).HasMaxLength(64).IsRequired();
             entity.HasIndex(x => x.UserId);
@@ -58,6 +77,8 @@ public class AppDbContext : DbContext
             {
                 entity.ToTable("PasswordResetCode");
                 entity.HasKey(x => x.Id);
+                entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+                entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
                 entity.Property(x => x.CodeHash).HasMaxLength(128).IsRequired();
                 entity.Property(x => x.CodeSalt).HasMaxLength(64).IsRequired();
                 entity.Property(x => x.FailedAttempts).HasDefaultValue(0);
@@ -73,6 +94,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("RefreshToken");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Token).HasMaxLength(512).IsRequired();
             entity.HasIndex(x => x.Token).IsUnique();
 
@@ -86,6 +109,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("Song");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.ArtistId).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Title).HasMaxLength(255).IsRequired();
             entity.Property(x => x.Composer).HasMaxLength(255);
             entity.Property(x => x.PlayCount).HasDefaultValue(0);
@@ -100,6 +125,9 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("Sheet");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.SongId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.InstrumentId).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(255).IsRequired();
             entity.Property(x => x.LeftData).HasMaxLength(4000);
             entity.Property(x => x.RightData).HasMaxLength(4000);
@@ -120,6 +148,10 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("DataAsset");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.SheetId).HasMaxLength(32);
+            entity.Property(x => x.SongId).HasMaxLength(32);
+            entity.Property(x => x.UserId).HasMaxLength(32);
             entity.Property(x => x.AssetType)
                 .HasConversion(
                     x => DataAssetTypeConverter.ToStorageValue(x),
@@ -152,6 +184,7 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("Instrument");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
         });
 
@@ -159,6 +192,9 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("UserSheetPoint");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.SheetId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.PlayerId).HasMaxLength(32).IsRequired();
             entity.HasIndex(x => new { x.SheetId, x.PlayerId }).IsUnique();
 
             entity.HasOne(x => x.Sheet)
@@ -176,6 +212,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("UserSheetLike");
             entity.HasKey(x => new { x.UserId, x.SheetId });
+            entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.SheetId).HasMaxLength(32).IsRequired();
 
             entity.HasOne(x => x.User)
                 .WithMany(x => x.SheetLikes)
@@ -192,6 +230,7 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("Genre");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
         });
 
@@ -199,6 +238,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("GenreSong");
             entity.HasKey(x => new { x.GenreId, x.SongId });
+            entity.Property(x => x.GenreId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.SongId).HasMaxLength(32).IsRequired();
 
             entity.HasOne(x => x.Genre)
                 .WithMany(x => x.GenreSongs)
@@ -215,6 +256,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("UserFavoriteSong");
             entity.HasKey(x => new { x.UserId, x.SongId });
+            entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.SongId).HasMaxLength(32).IsRequired();
 
             entity.HasOne(x => x.User)
                 .WithMany(x => x.FavoriteSongs)
@@ -231,6 +274,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("Playlist");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasMaxLength(32).ValueGeneratedNever();
+            entity.Property(x => x.UserId).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(255).IsRequired();
 
             entity.HasOne(x => x.User)
@@ -243,6 +288,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("PlaylistSong");
             entity.HasKey(x => new { x.PlaylistId, x.SongId });
+            entity.Property(x => x.PlaylistId).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.SongId).HasMaxLength(32).IsRequired();
             entity.HasIndex(x => new { x.PlaylistId, x.DisplayOrder }).IsUnique();
 
             entity.HasOne(x => x.Playlist)
@@ -255,6 +302,44 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.SongId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+    }
+
+    private void EnsureStringIds()
+    {
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State != EntityState.Added)
+            {
+                continue;
+            }
+
+            var idProperty = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Id" && p.Metadata.ClrType == typeof(string));
+            if (idProperty is null)
+            {
+                continue;
+            }
+
+            if (idProperty.CurrentValue is string existing && !string.IsNullOrWhiteSpace(existing))
+            {
+                continue;
+            }
+
+            idProperty.CurrentValue = GenerateId();
+        }
+    }
+
+    private static string GenerateId()
+    {
+        Span<byte> buffer = stackalloc byte[IdLength];
+        RandomNumberGenerator.Fill(buffer);
+
+        Span<char> chars = stackalloc char[IdLength];
+        for (var i = 0; i < IdLength; i++)
+        {
+            chars[i] = IdAlphabet[buffer[i] % IdAlphabet.Length];
+        }
+
+        return new string(chars);
     }
 }
 
