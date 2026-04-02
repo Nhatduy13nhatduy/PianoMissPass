@@ -150,6 +150,7 @@ public class DataAsset
     public int? UserId { get; set; }
     public DataAssetType AssetType { get; set; } = DataAssetType.File;
     public string Url { get; set; } = string.Empty;
+    public string? PublicId { get; set; }
     public int DisplayOrder { get; set; }
 
     public Sheet? Sheet { get; set; }

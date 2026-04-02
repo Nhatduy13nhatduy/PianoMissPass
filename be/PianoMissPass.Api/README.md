@@ -109,6 +109,23 @@ Email verification flow:
 For Gmail SMTP, set `Email__From` and `Email__SmtpUser` to your Gmail address, use `smtp.gmail.com` on port `587`, and put a Gmail App Password in `Email__SmtpPass`.
 Do not use your normal Gmail password for SMTP.
 
+Cloudinary file upload setup (for `DataAsset`):
+
+- `Cloudinary__CloudName`
+- `Cloudinary__ApiKey`
+- `Cloudinary__ApiSecret`
+- `Cloudinary__Folder` (optional, default: `pianomisspass`)
+
+Upload endpoint:
+
+- `POST /api/dataassets/upload` (multipart/form-data)
+	- Owner: exactly one of `sheetId`, `songId`, `userId`
+	- `assetType`: enum (`ImageAvatar`, `ImageSongCover`, `Pdf`, `Audio`, `Image`, `File`)
+	- `displayOrder`
+	- `file`
+
+`POST /api/dataassets` is still supported when you already have an external URL and only want to save metadata.
+
 Anti-spam limits for verification code:
 
 - Resend cooldown: 60 seconds between requests.

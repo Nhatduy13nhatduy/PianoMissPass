@@ -6,6 +6,7 @@ using PianoMissPass.Infrastructure.Data;
 using PianoMissPass.Infrastructure.Email;
 using PianoMissPass.Infrastructure.Security;
 using PianoMissPass.Infrastructure.Services;
+using PianoMissPass.Infrastructure.Storage;
 
 namespace PianoMissPass.Infrastructure;
 
@@ -18,6 +19,7 @@ public static class DependencyInjection
 
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<ICloudStorageService, CloudinaryStorageService>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IAuthService, AuthService>();
 

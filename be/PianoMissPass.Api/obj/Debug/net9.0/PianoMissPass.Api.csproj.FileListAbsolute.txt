@@ -147,3 +147,5 @@ C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\bin\Debug\net
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\obj\Debug\net9.0\PianoMissPass.Api.sourcelink.json
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\bin\Debug\net9.0\DotNetEnv.dll
 C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\bin\Debug\net9.0\Sprache.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\bin\Debug\net9.0\CloudinaryDotNet.dll
+C:\Users\duyvi\Documents\GitHub\PianoMissPass\be\PianoMissPass.Api\bin\Debug\net9.0\Newtonsoft.Json.dll

@@ -127,6 +127,7 @@ public class AppDbContext : DbContext
                 .HasMaxLength(100)
                 .IsRequired();
             entity.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.PublicId).HasMaxLength(255);
             entity.HasIndex(x => x.SheetId);
             entity.HasIndex(x => x.SongId);
             entity.HasIndex(x => x.UserId);

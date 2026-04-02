@@ -137,6 +137,7 @@ public class DataAssetDto
     public int? UserId { get; set; }
     public DataAssetType AssetType { get; set; }
     public string Url { get; set; } = string.Empty;
+    public string? PublicId { get; set; }
     public int DisplayOrder { get; set; }
 }
 
@@ -150,6 +151,9 @@ public class DataAssetRequestDto
 
     [Required, StringLength(500)]
     public string Url { get; set; } = string.Empty;
+
+    [StringLength(255)]
+    public string? PublicId { get; set; }
 
     public int DisplayOrder { get; set; }
 }

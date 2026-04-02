@@ -112,6 +112,7 @@ public static class MappingExtensions
         UserId = entity.UserId,
         AssetType = entity.AssetType,
         Url = entity.Url,
+        PublicId = entity.PublicId,
         DisplayOrder = entity.DisplayOrder
     };
 
