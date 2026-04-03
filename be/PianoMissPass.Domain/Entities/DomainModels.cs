@@ -43,7 +43,7 @@ public static class DataAssetTypeConverter
 
 public class User
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string UserName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public bool IsEmailVerified { get; set; }
@@ -68,7 +68,7 @@ public class User
 
 public class EmailVerificationCode
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string UserId { get; set; }
     public string CodeHash { get; set; } = string.Empty;
     public string CodeSalt { get; set; } = string.Empty;
@@ -81,7 +81,7 @@ public class EmailVerificationCode
 
 public class RefreshToken
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string UserId { get; set; }
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
@@ -93,7 +93,7 @@ public class RefreshToken
 
 public class PasswordResetCode
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string UserId { get; set; }
     public string CodeHash { get; set; } = string.Empty;
     public string CodeSalt { get; set; } = string.Empty;
@@ -107,7 +107,7 @@ public class PasswordResetCode
 
 public class Song
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string ArtistId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Composer { get; set; }
@@ -125,7 +125,7 @@ public class Song
 
 public class Sheet
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string SongId { get; set; }
     public string InstrumentId { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -144,7 +144,7 @@ public class Sheet
 
 public class DataAsset
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string? SheetId { get; set; }
     public string? SongId { get; set; }
     public string? UserId { get; set; }
@@ -160,7 +160,7 @@ public class DataAsset
 
 public class Instrument
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
 
     public ICollection<Sheet> Sheets { get; set; } = new List<Sheet>();
@@ -168,7 +168,7 @@ public class Instrument
 
 public class UserSheetPoint
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string SheetId { get; set; }
     public string PlayerId { get; set; }
     public int Point { get; set; }
@@ -189,7 +189,7 @@ public class UserSheetLike
 
 public class Genre
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
 
     public ICollection<GenreSong> GenreSongs { get; set; } = new List<GenreSong>();
@@ -215,7 +215,7 @@ public class UserFavoriteSong
 
 public class Playlist
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = System.Guid.NewGuid().ToString("N");
     public string UserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }

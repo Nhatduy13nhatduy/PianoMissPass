@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "EYYa6uXyqcY=",
+  "dgSpecHash": "e+3cBxvYRBw=",
   "success": true,
-  "projectFilePath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
+  "projectFilePath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\duyvi\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.10\\microsoft.extensions.dependencyinjection.abstractions.9.0.10.nupkg.sha512"
   ],

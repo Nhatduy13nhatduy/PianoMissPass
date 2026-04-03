@@ -1,24 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj": {}
+    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj": {}
   },
   "projects": {
-    "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj": {
+    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj",
+        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj",
         "projectName": "PianoMissPass.Api",
-        "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj",
+        "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Api\\PianoMissPass.Api.csproj",
         "packagesPath": "C:\\Users\\duyvi\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Api\\obj\\",
+        "outputPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Api\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"
+          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
@@ -30,11 +26,11 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
-                "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj"
+              "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
+                "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj"
               },
-              "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
-                "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj"
+              "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj"
               }
             }
           }
@@ -97,21 +93,17 @@
         }
       }
     },
-    "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
+    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
+        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
         "projectName": "PianoMissPass.Application",
-        "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
+        "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj",
         "packagesPath": "C:\\Users\\duyvi\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\obj\\",
+        "outputPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"
+          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
@@ -123,8 +115,8 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
-                "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj"
+              "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
+                "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj"
               }
             }
           }
@@ -170,21 +162,17 @@
         }
       }
     },
-    "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
+    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj",
+        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj",
         "projectName": "PianoMissPass.Domain",
-        "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj",
+        "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj",
         "packagesPath": "C:\\Users\\duyvi\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\obj\\",
+        "outputPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"
+          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
@@ -233,21 +221,17 @@
         }
       }
     },
-    "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
+    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
+        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
         "projectName": "PianoMissPass.Infrastructure",
-        "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
+        "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\duyvi\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\obj\\",
+        "outputPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"
+          "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
@@ -259,11 +243,11 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
-                "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj"
+              "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
+                "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj"
               },
-              "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
-                "projectPath": "C:\\Users\\duyvi\\Documents\\GitHub\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj"
+              "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj": {
+                "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Domain\\PianoMissPass.Domain.csproj"
               }
             }
           }
