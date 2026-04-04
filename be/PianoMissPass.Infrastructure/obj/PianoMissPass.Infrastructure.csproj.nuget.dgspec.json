@@ -1,7 +1,7 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {}
+    "c:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {}
   },
   "projects": {
     "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Application\\PianoMissPass.Application.csproj": {
@@ -132,14 +132,14 @@
         }
       }
     },
-    "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
+    "c:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
+        "projectUniqueName": "c:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
         "projectName": "PianoMissPass.Infrastructure",
-        "projectPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
+        "projectPath": "c:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\PianoMissPass.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\duyvi\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\obj\\",
+        "outputPath": "c:\\Users\\duyvi\\Documents\\Github\\PianoMissPass\\be\\PianoMissPass.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\duyvi\\AppData\\Roaming\\NuGet\\NuGet.Config"

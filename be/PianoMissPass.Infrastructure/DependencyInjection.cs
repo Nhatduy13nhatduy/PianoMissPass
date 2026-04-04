@@ -22,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<ICloudStorageService, CloudinaryStorageService>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IMusicXmlChartService, MusicXmlChartService>();
 
         return services;
     }

@@ -16,7 +16,9 @@ class ApiRoutes {
   static const String users = '/api/users';
   static const String playlists = '/api/playlists';
   static const String dataAssets = '/api/dataassets';
+  static const String dataAssetsUploadMxl = '/api/dataassets/upload/mxl';
   static const String dataAssetsUpload = '/api/dataassets/upload';
+  static const String dataAssetsUploadMusicXml = '/api/dataassets/upload/musicxml';
   static const String genres = '/api/genres';
   static const String instruments = '/api/instruments';
   static const String userSheetPoints = '/api/usersheetpoints';

@@ -15,11 +15,16 @@ public class DataAssetsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ICloudStorageService _cloudStorageService;
+    private readonly IMusicXmlChartService _musicXmlChartService;
 
-    public DataAssetsController(AppDbContext db, ICloudStorageService cloudStorageService)
+    public DataAssetsController(
+        AppDbContext db,
+        ICloudStorageService cloudStorageService,
+        IMusicXmlChartService musicXmlChartService)
     {
         _db = db;
         _cloudStorageService = cloudStorageService;
+        _musicXmlChartService = musicXmlChartService;
     }
 
     [HttpGet]
@@ -99,6 +104,82 @@ public class DataAssetsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item.ToDto());
     }
 
+    [HttpPost("upload/mxl")]
+    [HttpPost("upload/musicxml")]
+    public async Task<ActionResult<MusicXmlUploadResultDto>> UploadMusicXml([FromForm] MusicXmlUploadForm request, CancellationToken cancellationToken)
+    {
+        if (request.File is null || request.File.Length == 0)
+        {
+            return BadRequest("file is required.");
+        }
+
+        var fileName = request.File.FileName.Trim();
+        if (!IsMxlFile(fileName))
+        {
+            return BadRequest("Only .mxl files are supported.");
+        }
+
+        var ownerRequest = new DataAssetRequestDto
+        {
+            SheetId = request.SheetId,
+            SongId = request.SongId,
+            UserId = request.UserId,
+            AssetType = DataAssetType.MusicXml,
+            Url = string.Empty,
+            DisplayOrder = request.DisplayOrder
+        };
+
+        if (!HasSingleOwner(ownerRequest)) return BadRequest("Exactly one of sheetId, songId, or userId must be provided.");
+        if (!await OwnerExistsAsync(ownerRequest)) return BadRequest("Referenced owner does not exist.");
+
+        await using var fileStream = request.File.OpenReadStream();
+        var conversion = await _musicXmlChartService.ConvertToChartAsync(fileStream, fileName, cancellationToken);
+
+        fileStream.Position = 0;
+        var xmlUpload = await _cloudStorageService.UploadAsync(fileStream, request.File.FileName, request.File.ContentType ?? "application/vnd.recordare.musicxml", cancellationToken);
+
+        var chartFileName = BuildChartFileName(fileName);
+        await using var chartStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(conversion.ChartJson));
+        var chartUpload = await _cloudStorageService.UploadAsync(chartStream, chartFileName, "application/json", cancellationToken);
+
+        var xmlAsset = new DataAsset
+        {
+            SheetId = request.SheetId,
+            SongId = request.SongId,
+            UserId = request.UserId,
+            AssetType = DataAssetType.MusicXml,
+            Url = xmlUpload.Url,
+            PublicId = xmlUpload.PublicId,
+            DisplayOrder = request.DisplayOrder
+        };
+
+        var chartAsset = new DataAsset
+        {
+            SheetId = request.SheetId,
+            SongId = request.SongId,
+            UserId = request.UserId,
+            AssetType = DataAssetType.ChartJson,
+            Url = chartUpload.Url,
+            PublicId = chartUpload.PublicId,
+            DisplayOrder = request.DisplayOrder + 1
+        };
+
+        _db.DataAssets.Add(xmlAsset);
+        _db.DataAssets.Add(chartAsset);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new MusicXmlUploadResultDto
+        {
+            MusicXmlAsset = xmlAsset.ToDto(),
+            ChartAsset = chartAsset.ToDto(),
+            NoteCount = conversion.NoteCount,
+            LaneCount = conversion.LaneCount,
+            Bpm = conversion.Bpm,
+            BeatsPerMeasure = conversion.BeatsPerMeasure,
+            BeatUnit = conversion.BeatUnit
+        });
+    }
+
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(string id, [FromBody] DataAssetRequestDto request)
     {
@@ -161,6 +242,28 @@ public class DataAssetsController : ControllerBase
         return false;
     }
 
+    private static bool IsMxlFile(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(fileName);
+        return extension.Equals(".mxl", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildChartFileName(string sourceFileName)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(sourceFileName);
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            baseName = "chart";
+        }
+
+        return $"{baseName}.chart.json";
+    }
+
     public class DataAssetUploadForm
     {
         public string? SheetId { get; set; }
@@ -169,6 +272,26 @@ public class DataAssetsController : ControllerBase
         public DataAssetType AssetType { get; set; } = DataAssetType.File;
         public int DisplayOrder { get; set; }
         public IFormFile? File { get; set; }
+    }
+
+    public class MusicXmlUploadForm
+    {
+        public string? SheetId { get; set; }
+        public string? SongId { get; set; }
+        public string? UserId { get; set; }
+        public int DisplayOrder { get; set; }
+        public IFormFile? File { get; set; }
+    }
+
+    public class MusicXmlUploadResultDto
+    {
+        public DataAssetDto MusicXmlAsset { get; set; } = new();
+        public DataAssetDto ChartAsset { get; set; } = new();
+        public int NoteCount { get; set; }
+        public int LaneCount { get; set; }
+        public double Bpm { get; set; }
+        public int BeatsPerMeasure { get; set; }
+        public int BeatUnit { get; set; }
     }
 }
 

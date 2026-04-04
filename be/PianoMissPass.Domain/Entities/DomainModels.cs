@@ -13,7 +13,9 @@ public enum DataAssetType
     Pdf = 2,
     Audio = 3,
     Image = 4,
-    File = 5
+    File = 5,
+    MusicXml = 6,
+    ChartJson = 7
 }
 
 public static class DataAssetTypeConverter
@@ -26,6 +28,8 @@ public static class DataAssetTypeConverter
         DataAssetType.Audio => "audio",
         DataAssetType.Image => "image",
         DataAssetType.File => "file",
+        DataAssetType.MusicXml => "musicxml",
+        DataAssetType.ChartJson => "chart.json",
         _ => "file"
     };
 
@@ -36,6 +40,8 @@ public static class DataAssetTypeConverter
         "pdf" => DataAssetType.Pdf,
         "audio" => DataAssetType.Audio,
         "image" => DataAssetType.Image,
+        "musicxml" => DataAssetType.MusicXml,
+        "chart.json" => DataAssetType.ChartJson,
         "file" => DataAssetType.File,
         _ => DataAssetType.File
     };

@@ -7,7 +7,7 @@ using PianoMissPass.Domain.Entities;
 
 namespace PianoMissPass.Api.Controllers;
 
-[Authorize(Policy = "AdminOnly")]
+[Authorize(Policy = "UserOrAdmin")]
 [ApiController]
 [Route("api/[controller]")]
 public class GenresController : ControllerBase
@@ -35,6 +35,7 @@ public class GenresController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<GenreDto>> Create([FromBody] GenreRequestDto request)
     {
         var item = new Genre { Name = request.Name };
@@ -44,6 +45,7 @@ public class GenresController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(string id, [FromBody] GenreRequestDto request)
     {
         var item = await _db.Genres.FindAsync(id);
@@ -55,6 +57,7 @@ public class GenresController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(string id)
     {
         var item = await _db.Genres.FindAsync(id);

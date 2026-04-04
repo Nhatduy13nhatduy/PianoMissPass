@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../game/presentation/pages/game_prototype_page.dart';
 import '../../../songs/presentation/pages/song_list_page.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
@@ -102,6 +103,18 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               )
                             : const Text('Dang nhap'),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const GamePrototypePage(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.music_note_outlined),
+                        label: const Text('Demo game voi chart mau'),
                       ),
                     ],
                   ),
