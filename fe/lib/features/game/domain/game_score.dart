@@ -121,6 +121,7 @@ class MusicNote {
     this.stemFromMxl,
     this.slurStarts = const <int>[],
     this.slurStops = const <int>[],
+    this.dotCount = 0,
   });
 
   final int midi;
@@ -137,6 +138,7 @@ class MusicNote {
   final String? stemFromMxl;
   final List<int> slurStarts;
   final List<int> slurStops;
+  final int dotCount;
 }
 
 class MusicSymbol {

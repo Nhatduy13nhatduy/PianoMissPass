@@ -232,6 +232,9 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
             note.alter?.toString(),
             note.accidental,
           );
+          final dotCount = note.raw.children
+              .where((child) => _nameEquals(child.name, 'dot'))
+              .length;
           notes.add(
             MusicNote(
               midi: midi,
@@ -248,6 +251,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               stemFromMxl: stemFromMxl,
               slurStarts: note.slurStarts,
               slurStops: note.slurStops,
+              dotCount: dotCount,
             ),
           );
         }

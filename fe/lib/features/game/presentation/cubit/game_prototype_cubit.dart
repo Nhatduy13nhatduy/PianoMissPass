@@ -15,7 +15,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   static const String sampleMxlUrl =
-      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1775445517/canon-in-d-johann-pachelbel_oumy6l.mxl';
+      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1775481958/chopin-nocturne-op-9-no-2-e-flat-major_ffwkk1.mxl';
 
   static const int hitWindowMs = 180;
   static const int missWindowMs = 220;

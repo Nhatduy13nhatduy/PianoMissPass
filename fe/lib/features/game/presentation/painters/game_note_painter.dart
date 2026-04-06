@@ -5,10 +5,18 @@ import 'package:flutter/material.dart';
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
 
+part 'game_note_painter_models.dart';
+part 'game_note_painter_paths.dart';
+part 'game_note_painter_accidentals.dart';
+part 'game_note_painter_beam.dart';
+
 class GameNotePainter {
   static const bool _enablePaintNoteDebugLog = false;
   static const double previewWindowMs = 9000;
   static const double cleanupWindowMs = 2500;
+  static const double _preRenderMeasuresRight = 1.0;
+  static const double _accidentalCollisionPaddingTuning = 1.0;
+  static const double _accidentalCollisionPaddingScale = 0.04;
   static const double notePxPerMs = NoteTiming.notePxPerMs;
   static const int _trebleBottomLineStep = 30; // E4
   static const int _bassBottomLineStep = 18; // G2
@@ -31,6 +39,9 @@ class GameNotePainter {
   }) {
     bool? previousIsTreble;
     final allNotes = <_RenderNote>[];
+    final beatMs = 60000.0 / score.bpm;
+    final measureMs = score.beatsPerMeasure * beatMs;
+    final preRenderRightPx = measureMs * notePxPerMs * _preRenderMeasuresRight;
 
     for (var i = 0; i < score.notes.length; i++) {
       final note = score.notes[i];
@@ -75,9 +86,11 @@ class GameNotePainter {
       );
     }
 
-    final beamGroupsForAnchors = _buildBeamGroups(allNotes);
+    final allBeamGroups = _buildBeamGroups(allNotes);
+    _normalizeBeamGroupStemDirections(allNotes, allBeamGroups);
+
     final beamAnchorByIndex = <int, int>{};
-    for (final group in beamGroupsForAnchors) {
+    for (final group in allBeamGroups) {
       final anchorIndex = group.last;
       final anchorTime = allNotes[anchorIndex].adjustedHitMs;
       for (final index in group) {
@@ -93,28 +106,92 @@ class GameNotePainter {
         continue;
       }
 
-      if (item.x < -30 || item.x > size.width + 30) {
+      if (item.x < -30 || item.x > size.width + preRenderRightPx) {
         continue;
       }
 
       visible.add(item);
     }
 
-    final beamGroups = _buildBeamGroups(visible);
-    _normalizeBeamGroupStemDirections(visible, beamGroups);
+    final chordLayout = _buildChordLayout(visible, spacing: lineSpacing);
+
+    final visibleIndexByScoreIndex = <int, int>{};
+    for (var i = 0; i < visible.length; i++) {
+      visibleIndexByScoreIndex[visible[i].index] = i;
+    }
+
+    final beamGroups = <_ProjectedBeamGroup>[];
+    for (final group in allBeamGroups) {
+      final projected = <int>[];
+      final projectedChordKeys = <String>{};
+      for (final allIndex in group) {
+        final scoreIndex = allNotes[allIndex].index;
+        final visibleIndex = visibleIndexByScoreIndex[scoreIndex];
+        if (visibleIndex != null) {
+          final isChordMember = chordLayout.chordMemberVisibleIndexes.contains(
+            visibleIndex,
+          );
+          final chordKey = isChordMember
+              ? chordLayout.chordKeyByVisibleIndex[visibleIndex]
+              : null;
+          if (chordKey != null && projectedChordKeys.contains(chordKey)) {
+            continue;
+          }
+          projected.add(visibleIndex);
+          if (chordKey != null) {
+            projectedChordKeys.add(chordKey);
+          }
+        }
+      }
+      if (projected.length >= 2) {
+        final lockedBeam = _buildLockedBeamGeometry(
+          allNotes,
+          group,
+          lineSpacing: lineSpacing,
+        );
+        beamGroups.add(
+          _ProjectedBeamGroup(
+            indexes: projected,
+            lockedSlope: lockedBeam.slope,
+            lockedReferenceStemTip: lockedBeam.referenceStemTip,
+          ),
+        );
+      }
+    }
 
     final beamedVisibleIndexes = <int>{};
     for (final group in beamGroups) {
-      beamedVisibleIndexes.addAll(group);
+      beamedVisibleIndexes.addAll(group.indexes);
     }
+
+    final accidentalByVisibleIndex = <int, String>{};
+    for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
+      final note = visible[visibleIndex];
+      final keyFifths = _activeKeyFifthsAt(score, note.note.hitTimeMs);
+      final accidentalToRender = _accidentalToRender(
+        note.note,
+        keyFifths: keyFifths,
+      );
+      if (accidentalToRender != null) {
+        accidentalByVisibleIndex[visibleIndex] = accidentalToRender;
+      }
+    }
+    final accidentalCenterByVisibleIndex = _layoutAccidentals(
+      visible,
+      accidentalByVisibleIndex,
+      noteHeadDxByVisibleIndex: chordLayout.headDxByVisibleIndex,
+      spacing: lineSpacing,
+    );
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final item = visible[visibleIndex];
-      final keyFifths = _activeKeyFifthsAt(score, item.note.hitTimeMs);
-      final accidentalToRender = _accidentalToRender(
-        item.note,
-        keyFifths: keyFifths,
-      );
+      final accidentalToRender = accidentalByVisibleIndex[visibleIndex];
+        final headDx = chordLayout.headDxByVisibleIndex[visibleIndex] ?? 0.0;
+      final center = Offset(item.x + headDx, item.y);
+      final effectiveStemDirection =
+          chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
+          item.stemDirection;
+      item.stemDirection = effectiveStemDirection;
       assert(() {
         if (!_enablePaintNoteDebugLog) {
           return true;
@@ -133,7 +210,7 @@ class GameNotePainter {
       }());
       _drawLedgerLines(
         canvas,
-        centerX: item.x,
+        centerX: center.dx,
         noteStep: item.noteStep,
         isTreble: item.isTreble,
         staffTop: item.isTreble ? trebleTop : bassTop,
@@ -142,27 +219,40 @@ class GameNotePainter {
 
       _drawNoteGlyph(
         canvas,
-        center: Offset(item.x, item.y),
+        center: center,
         judge: item.status,
         isActive: (item.adjustedHitMs - currentMs).abs() <= 70,
         durationType: item.durationType,
         spacing: lineSpacing,
       );
 
+      final isBeamed = beamedVisibleIndexes.contains(visibleIndex);
+      final shouldDrawStem =
+          item.durationType != _DurationType.whole &&
+          (!chordLayout.chordMemberVisibleIndexes.contains(
+                visibleIndex,
+              ) ||
+              isBeamed ||
+              chordLayout.stemAnchorVisibleIndexes.contains(
+                visibleIndex,
+              ));
+        final chordOppositeStemHeight =
+          chordLayout.stemExtraHeightByAnchorVisibleIndex[visibleIndex] ?? 0.0;
+
       item.stemTip = _drawStem(
         canvas,
-        center: Offset(item.x, item.y),
-        direction: item.stemDirection,
-        drawStem: item.durationType != _DurationType.whole,
+        center: center,
+        direction: effectiveStemDirection,
+        drawStem: shouldDrawStem,
         spacing: lineSpacing,
+        extraOppositeStemHeight: chordOppositeStemHeight,
       );
 
-      final isBeamed = beamedVisibleIndexes.contains(visibleIndex);
-      if (!isBeamed) {
+      if (!isBeamed && shouldDrawStem) {
         _drawFlags(
           canvas,
           stemTip: item.stemTip!,
-          direction: item.stemDirection,
+          direction: effectiveStemDirection,
           flagCount: _flagCountForDuration(item.durationType),
           spacing: lineSpacing,
         );
@@ -171,9 +261,22 @@ class GameNotePainter {
       _drawAccidental(
         canvas,
         accidental: accidentalToRender,
-        center: Offset(item.x - lineSpacing * 1.35, item.y),
+        center:
+            accidentalCenterByVisibleIndex[visibleIndex] ??
+            Offset(item.x - lineSpacing * 1.35, item.y),
         spacing: lineSpacing,
         color: const Color(0xFF0E1620),
+      );
+
+      _drawDots(
+        canvas,
+        center: center,
+        dotCount: item.note.dotCount,
+        noteStep: item.noteStep,
+        isTreble: item.isTreble,
+        spacing: lineSpacing,
+        judge: item.status,
+        isActive: (item.adjustedHitMs - currentMs).abs() <= 70,
       );
     }
 
@@ -185,9 +288,144 @@ class GameNotePainter {
     );
 
     for (final group in beamGroups) {
-      _drawBeamGroup(canvas, visible, group, lineSpacing: lineSpacing);
+      _drawBeamGroup(
+        canvas,
+        visible,
+        group.indexes,
+        lineSpacing: lineSpacing,
+        lockedSlope: group.lockedSlope,
+        lockedReferenceStemTip: group.lockedReferenceStemTip,
+      );
     }
   }
+
+  Map<int, Offset> _layoutAccidentals(
+    List<_RenderNote> visible,
+    Map<int, String> accidentalByVisibleIndex, {
+    required Map<int, double> noteHeadDxByVisibleIndex,
+    required double spacing,
+  }) {
+    return _notePainterLayoutAccidentals(
+      visible,
+      accidentalByVisibleIndex,
+      noteHeadDxByVisibleIndex: noteHeadDxByVisibleIndex,
+      spacing: spacing,
+    );
+  }
+
+  double _accidentalScale(double spacing) {
+    return _notePainterAccidentalScale(spacing);
+  }
+
+  _ChordLayout _buildChordLayout(
+    List<_RenderNote> visible, {
+    required double spacing,
+  }) {
+    final stemDirectionByVisibleIndex = <int, _StemDirection>{};
+    final headDxByVisibleIndex = <int, double>{};
+    final stemAnchorVisibleIndexes = <int>{};
+    final chordMemberVisibleIndexes = <int>{};
+    final chordKeyByVisibleIndex = <int, String>{};
+    final stemExtraHeightByAnchorVisibleIndex = <int, double>{};
+
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < visible.length; i++) {
+      final note = visible[i];
+      final key =
+          '${note.adjustedHitMs}-${note.isTreble ? 't' : 'b'}-${note.note.voice}';
+      groups.putIfAbsent(key, () => <int>[]).add(i);
+      chordKeyByVisibleIndex[i] = key;
+    }
+
+    for (final indexes in groups.values) {
+      if (indexes.length < 2) {
+        continue;
+      }
+
+      chordMemberVisibleIndexes.addAll(indexes);
+
+      _StemDirection stemDirection;
+      final explicitStem = indexes
+          .map((idx) => visible[idx].note.stemFromMxl)
+          .firstWhere((stem) => stem == 'up' || stem == 'down', orElse: () => null);
+      if (explicitStem == 'up') {
+        stemDirection = _StemDirection.up;
+      } else if (explicitStem == 'down') {
+        stemDirection = _StemDirection.down;
+      } else {
+        final isTreble = visible[indexes.first].isTreble;
+        final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
+        final middleLine = bottomLine + 4;
+        var minStep = visible[indexes.first].noteStep;
+        var maxStep = minStep;
+        for (final idx in indexes.skip(1)) {
+          final step = visible[idx].noteStep;
+          if (step < minStep) {
+            minStep = step;
+          }
+          if (step > maxStep) {
+            maxStep = step;
+          }
+        }
+        final highDistance = (maxStep - middleLine).abs();
+        final lowDistance = (middleLine - minStep).abs();
+        stemDirection = highDistance > lowDistance
+            ? _StemDirection.down
+            : _StemDirection.up;
+      }
+
+      for (final idx in indexes) {
+        stemDirectionByVisibleIndex[idx] = stemDirection;
+      }
+
+      final anchor = stemDirection == _StemDirection.up
+          ? indexes.reduce(
+              (a, b) => visible[a].noteStep >= visible[b].noteStep ? a : b,
+            )
+          : indexes.reduce(
+              (a, b) => visible[a].noteStep <= visible[b].noteStep ? a : b,
+            );
+      stemAnchorVisibleIndexes.add(anchor);
+
+      var minY = visible[indexes.first].y;
+      var maxY = minY;
+      for (final idx in indexes.skip(1)) {
+        final y = visible[idx].y;
+        if (y < minY) {
+          minY = y;
+        }
+        if (y > maxY) {
+          maxY = y;
+        }
+      }
+      final chordSpanHeight = (maxY - minY).abs();
+      stemExtraHeightByAnchorVisibleIndex[anchor] = chordSpanHeight;
+
+      // Temporarily disable notehead offset for adjacent chord tones.
+    }
+
+    return _ChordLayout(
+      stemDirectionByVisibleIndex: stemDirectionByVisibleIndex,
+      headDxByVisibleIndex: headDxByVisibleIndex,
+      stemAnchorVisibleIndexes: stemAnchorVisibleIndexes,
+      chordMemberVisibleIndexes: chordMemberVisibleIndexes,
+      chordKeyByVisibleIndex: chordKeyByVisibleIndex,
+      stemExtraHeightByAnchorVisibleIndex: stemExtraHeightByAnchorVisibleIndex,
+    );
+  }
+
+  _LockedBeamGeometry _buildLockedBeamGeometry(
+    List<_RenderNote> allNotes,
+    List<int> indexes, {
+    required double lineSpacing,
+  }) {
+    return _notePainterBuildLockedBeamGeometry(
+      allNotes,
+      indexes,
+      lineSpacing: lineSpacing,
+    );
+  }
+
 
   void _drawSlurs(
     Canvas canvas, {
@@ -565,47 +803,42 @@ class GameNotePainter {
     canvas.restore();
   }
 
-  Path _quarterHeadTemplate() {
-    return Path()
-      ..moveTo(27.32, 97.39)
-      ..cubicTo(23.8, 92.15, 27.58, 84.61, 35.64, 80.57)
-      ..cubicTo(43.7, 76.53, 53.15, 77.3, 56.68, 82.54)
-      ..cubicTo(60.2, 87.78, 56.42, 95.32, 48.36, 99.47)
-      ..cubicTo(40.3, 103.51, 30.85, 102.64, 27.32, 97.39)
-      ..close();
+  Path _quarterHeadTemplate() => _notePainterQuarterHeadTemplate();
+
+  Path _halfInnerTemplate() => _notePainterHalfInnerTemplate();
+
+  Path _wholeOuterTemplate() => _notePainterWholeOuterTemplate();
+
+  Path _wholeInnerTemplate() => _notePainterWholeInnerTemplate();
+
+  Path _buildLegacyFlagTemplate({required _StemDirection direction}) {
+    return _notePainterBuildLegacyFlagTemplate(direction: direction);
   }
 
-  Path _halfInnerTemplate() {
-    return Path()
-      ..moveTo(55.42, 83.19)
-      ..cubicTo(54.03, 81.01, 46.98, 82.21, 39.67, 85.93)
-      ..lineTo(39.42, 86.03)
-      ..lineTo(39.17, 86.14)
-      ..cubicTo(31.98, 89.86, 27.32, 94.55, 28.83, 96.63)
-      ..cubicTo(30.22, 98.81, 37.28, 97.61, 44.58, 93.9)
-      ..lineTo(44.83, 93.79)
-      ..lineTo(44.96, 93.68)
-      ..cubicTo(52.14, 90.08, 56.8, 85.38, 55.42, 83.19)
-      ..close();
+  Path _buildPathFromTemplate(
+    Path template, {
+    required Offset center,
+    required double targetHeight,
+  }) {
+    return _notePainterBuildPathFromTemplate(
+      template,
+      center: center,
+      targetHeight: targetHeight,
+    );
   }
 
-  Path _wholeOuterTemplate() {
-    return Path()
-      ..moveTo(32.1, 100.51)
-      ..cubicTo(26.45, 98.81, 22, 94.16, 22, 89.98)
-      ..cubicTo(22, 78.16, 47.81, 73.48, 58.47, 83.37)
-      ..cubicTo(70, 94.07, 51.19, 106.29, 32.1, 100.51)
-      ..close();
+  Path _buildSharpPath(Offset c, double s) {
+    return _notePainterBuildSharpPath(c, s);
   }
 
-  Path _wholeInnerTemplate() {
-    return Path()
-      ..moveTo(49.31, 97.54)
-      ..cubicTo(52.46, 92.83, 49.45, 83.49, 44.01, 81.05)
-      ..cubicTo(36.03, 77.47, 31.13, 83.57, 34.46, 92.96)
-      ..cubicTo(36.76, 99.45, 46.12, 102.34, 49.31, 97.54)
-      ..close();
+  Path _buildFlatPath(Offset c, double s) {
+    return _notePainterBuildFlatPath(c, s);
   }
+
+  Path _buildNaturalPath(Offset c, double s) {
+    return _notePainterBuildNaturalPath(c, s);
+  }
+
 
   Offset _drawStem(
     Canvas canvas, {
@@ -613,6 +846,7 @@ class GameNotePainter {
     required _StemDirection direction,
     required bool drawStem,
     required double spacing,
+    double extraOppositeStemHeight = 0,
   }) {
     if (!drawStem) {
       return center;
@@ -623,14 +857,16 @@ class GameNotePainter {
       ..strokeWidth = (spacing * 0.17).clamp(1.6, 2.8)
       ..strokeCap = StrokeCap.round;
 
-    final stemHeight = (spacing * 3.2).clamp(34.0, 76.0);
+    final baseStemHeight = (spacing * 3.2).clamp(34.0, 76.0);
     final stemX = direction == _StemDirection.up
         ? center.dx + spacing * 0.55
         : center.dx - spacing * 0.55;
-    final stemStart = Offset(stemX, center.dy);
+    final stemStart = direction == _StemDirection.up
+      ? Offset(stemX, center.dy + extraOppositeStemHeight)
+      : Offset(stemX, center.dy - extraOppositeStemHeight);
     final stemEnd = direction == _StemDirection.up
-        ? Offset(stemX, center.dy - stemHeight)
-        : Offset(stemX, center.dy + stemHeight);
+      ? Offset(stemX, center.dy - baseStemHeight)
+      : Offset(stemX, center.dy + baseStemHeight);
 
     canvas.drawLine(stemStart, stemEnd, p);
     return stemEnd;
@@ -668,44 +904,6 @@ class GameNotePainter {
     }
   }
 
-  Path _buildLegacyFlagTemplate({required _StemDirection direction}) {
-    if (direction == _StemDirection.up) {
-      return Path()
-        ..moveTo(0, 0)
-        ..cubicTo(1.64, 0.96, 3.22, 1.87, 4.73, 2.74)
-        ..cubicTo(21.7, 12.5, 30.12, 17.34, 20.83, 36.79)
-        ..cubicTo(34.09, 17.29, 26.89, 9.42, 15.88, -2.62)
-        ..cubicTo(10.85, 8.12, 5.03, 14.48, 0, -23.21)
-        ..close();
-    }
-
-    return Path()
-      ..moveTo(0, 0)
-      ..cubicTo(-1.64, -0.96, -3.22, -1.87, -4.73, -2.74)
-      ..cubicTo(-21.7, -12.5, -30.12, -17.34, -20.83, -36.79)
-      ..cubicTo(-34.09, -17.29, -26.89, -9.42, -15.88, 2.62)
-      ..cubicTo(-10.85, 8.12, -5.03, 14.48, 0, 23.21)
-      ..close();
-  }
-
-  Path _buildPathFromTemplate(
-    Path template, {
-    required Offset center,
-    required double targetHeight,
-  }) {
-    final bounds = template.getBounds();
-    if (bounds.height == 0) {
-      return template;
-    }
-
-    final scale = targetHeight / bounds.height;
-    final centerTemplate = bounds.center;
-    final matrix = Matrix4.identity()
-      ..translate(center.dx, center.dy)
-      ..scale(scale, scale)
-      ..translate(-centerTemplate.dx, -centerTemplate.dy);
-    return template.transform(matrix.storage);
-  }
 
   void _drawAccidental(
     Canvas canvas, {
@@ -718,7 +916,7 @@ class GameNotePainter {
       return;
     }
 
-    final scale = (spacing / 4.8).clamp(0.65, 1.05);
+    final scale = _accidentalScale(spacing);
     Path? path;
     Paint paint;
 
@@ -747,246 +945,50 @@ class GameNotePainter {
     canvas.drawPath(path, paint);
   }
 
-  Path _buildSharpPath(Offset c, double s) {
-    final x = c.dx - 10 * s;
-    final y = c.dy - 34 * s;
-    return Path()
-      ..moveTo(x + 6.523 * s, y + 43.5 * s)
-      ..lineTo(x + 6.523 * s, y + 26.659 * s)
-      ..lineTo(x + 13.368 * s, y + 24.682 * s)
-      ..lineTo(x + 13.368 * s, y + 41.438 * s)
-      ..lineTo(x + 6.523 * s, y + 43.5 * s)
-      ..moveTo(x + 20 * s, y + 39.426 * s)
-      ..lineTo(x + 15.294 * s, y + 40.837 * s)
-      ..lineTo(x + 15.294 * s, y + 24.081 * s)
-      ..lineTo(x + 20 * s, y + 22.706 * s)
-      ..lineTo(x + 20 * s, y + 15.746 * s)
-      ..lineTo(x + 15.294 * s, y + 17.12 * s)
-      ..lineTo(x + 15.294 * s, y)
-      ..lineTo(x + 13.368 * s, y)
-      ..lineTo(x + 13.368 * s, y + 17.64 * s)
-      ..lineTo(x + 6.523 * s, y + 19.698 * s)
-      ..lineTo(x + 6.523 * s, y + 3.05 * s)
-      ..lineTo(x + 4.706 * s, y + 3.05 * s)
-      ..lineTo(x + 4.706 * s, y + 20.332 * s)
-      ..lineTo(x, y + 21.71 * s)
-      ..lineTo(x, y + 28.685 * s)
-      ..lineTo(x + 4.706 * s, y + 27.31 * s)
-      ..lineTo(x + 4.706 * s, y + 44.034 * s)
-      ..lineTo(x, y + 45.405 * s)
-      ..lineTo(x, y + 52.351 * s)
-      ..lineTo(x + 4.706 * s, y + 50.976 * s)
-      ..lineTo(x + 4.706 * s, y + 68 * s)
-      ..lineTo(x + 6.523 * s, y + 68 * s)
-      ..lineTo(x + 6.523 * s, y + 50.368 * s)
-      ..lineTo(x + 13.368 * s, y + 48.398 * s)
-      ..lineTo(x + 13.368 * s, y + 64.96 * s)
-      ..lineTo(x + 15.294 * s, y + 64.96 * s)
-      ..lineTo(x + 15.294 * s, y + 47.775 * s)
-      ..lineTo(x + 20 * s, y + 46.397 * s)
-      ..lineTo(x + 20 * s, y + 39.426 * s)
-      ..close();
+  void _drawDots(
+    Canvas canvas, {
+    required Offset center,
+    required int dotCount,
+    required int noteStep,
+    required bool isTreble,
+    required double spacing,
+    required _NoteJudge judge,
+    required bool isActive,
+  }) {
+    if (dotCount <= 0) {
+      return;
+    }
+
+    final dotRadius = (spacing * 0.2).clamp(1.5, 3.5);
+    final fillColor = _noteInkColor(judge, isActive);
+    final dotPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    // If note head is on a staff line, shift dots up one note step so they stay visible.
+    final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
+    final onStaffLine = (noteStep - bottomLine).isEven;
+    final dotBaseY = onStaffLine ? center.dy - (spacing / 2) : center.dy;
+
+    // Draw dots to the right of the note head.
+    final firstDotX = center.dx + spacing * 1.2;
+    for (var i = 0; i < dotCount; i++) {
+      final dotY = dotBaseY + (i * spacing * 0.6);
+      canvas.drawCircle(Offset(firstDotX, dotY), dotRadius, dotPaint);
+    }
   }
 
-  Path _buildFlatPath(Offset c, double s) {
-    final x = c.dx - 10 * s;
-    final y = c.dy - 26 * s;
-    return Path()
-      ..moveTo(x + 2.475 * s, y)
-      ..lineTo(x + 2.475 * s, y + 31.091 * s)
-      ..lineTo(x + 2.475 * s, y + 33.186 * s)
-      ..lineTo(x + 2.475 * s, y + 37.378 * s)
-      ..cubicTo(
-        x + 5.332 * s,
-        y + 34.693 * s,
-        x + 8.537 * s,
-        y + 33.317 * s,
-        x + 12.091 * s,
-        y + 33.252 * s,
-      )
-      ..cubicTo(
-        x + 14.313 * s,
-        y + 33.252 * s,
-        x + 16.217 * s,
-        y + 34.201 * s,
-        x + 17.804 * s,
-        y + 36.101 * s,
-      )
-      ..cubicTo(
-        x + 19.2 * s,
-        y + 37.869 * s,
-        x + 19.93 * s,
-        y + 39.834 * s,
-        x + 19.994 * s,
-        y + 41.995 * s,
-      )
-      ..cubicTo(
-        x + 20.057 * s,
-        y + 43.698 * s,
-        x + 19.645 * s,
-        y + 45.662 * s,
-        x + 18.756 * s,
-        y + 47.889 * s,
-      )
-      ..cubicTo(
-        x + 18.439 * s,
-        y + 48.806 * s,
-        x + 17.74 * s,
-        y + 49.788 * s,
-        x + 16.661 * s,
-        y + 50.836 * s,
-      )
-      ..cubicTo(
-        x + 15.836 * s,
-        y + 51.622 * s,
-        x + 14.979 * s,
-        y + 52.441 * s,
-        x + 14.091 * s,
-        y + 53.292 * s,
-      )
-      ..cubicTo(
-        x + 9.394 * s,
-        y + 56.829 * s,
-        x + 4.697 * s,
-        y + 60.398 * s,
-        x,
-        y + 64 * s,
-      )
-      ..lineTo(x, y)
-      ..lineTo(x + 2.475 * s, y)
-      ..close();
-  }
-
-  Path _buildNaturalPath(Offset c, double s) {
-    final x = c.dx - 8.5 * s;
-    final y = c.dy - 34 * s;
-    return Path()
-      ..moveTo(x + 17.0 * s, y + 16.64 * s)
-      ..lineTo(x + 17.0 * s, y + 68.0 * s)
-      ..lineTo(x + 14.794 * s, y + 68.0 * s)
-      ..lineTo(x + 14.794 * s, y + 48.751 * s)
-      ..lineTo(x + 3.0 * s, y + 51.989 * s)
-      ..lineTo(x + 3.0 * s, y + 0.0 * s)
-      ..lineTo(x + 5.121 * s, y + 0.0 * s)
-      ..lineTo(x + 5.121 * s, y + 20.058 * s)
-      ..lineTo(x + 17.0 * s, y + 16.64 * s)
-      ..moveTo(x + 5.121 * s, y + 28.693 * s)
-      ..lineTo(x + 5.121 * s, y + 42.815 * s)
-      ..lineTo(x + 14.794 * s, y + 40.116 * s)
-      ..lineTo(x + 14.794 * s, y + 25.995 * s)
-      ..lineTo(x + 5.121 * s, y + 28.693 * s)
-      ..close();
-  }
 
   List<List<int>> _buildBeamGroups(List<_RenderNote> visible) {
-    return _buildExplicitBeamGroups(visible);
-  }
-
-  List<List<int>> _buildExplicitBeamGroups(List<_RenderNote> visible) {
-    final groups = <List<int>>[];
-    final states = <String, _ExplicitBeamTrackState>{};
-
-    _ExplicitBeamTrackState stateFor(_RenderNote note) {
-      final key = '${note.isTreble ? 't' : 'b'}-${note.note.voice}';
-      return states.putIfAbsent(key, _ExplicitBeamTrackState.new);
-    }
-
-    void flushState(_ExplicitBeamTrackState state) {
-      if (state.current.length >= 2) {
-        groups.add(List<int>.from(state.current));
-      }
-      state.current.clear();
-    }
-
-    for (var i = 0; i < visible.length; i++) {
-      final note = visible[i];
-      final beam = note.note.primaryBeam;
-      final canBeam =
-          note.durationType == _DurationType.eighth ||
-          note.durationType == _DurationType.sixteenth;
-      final state = stateFor(note);
-
-      if (!canBeam || beam == null) {
-        flushState(state);
-        state.measureIndex = note.note.measureIndex;
-        continue;
-      }
-
-      if (state.current.isNotEmpty &&
-          state.measureIndex != note.note.measureIndex) {
-        flushState(state);
-      }
-      state.measureIndex = note.note.measureIndex;
-
-      switch (beam) {
-        case 'begin':
-          flushState(state);
-          state.current.add(i);
-          break;
-        case 'continue':
-          if (state.current.isEmpty) {
-            state.current.add(i);
-          } else {
-            state.current.add(i);
-          }
-          break;
-        case 'end':
-          state.current.add(i);
-          flushState(state);
-          break;
-        case 'forward hook':
-        case 'backward hook':
-          flushState(state);
-          break;
-      }
-    }
-
-    for (final state in states.values) {
-      flushState(state);
-    }
-
-    return groups;
+    return _notePainterBuildBeamGroups(visible);
   }
 
   void _normalizeBeamGroupStemDirections(
     List<_RenderNote> visible,
     List<List<int>> groups,
   ) {
-    for (final group in groups) {
-      if (group.isEmpty) {
-        continue;
-      }
-
-      final firstExplicit = visible[group.first].note.stemFromMxl;
-      if (firstExplicit == 'up' || firstExplicit == 'down') {
-        final explicitDirection = firstExplicit == 'up'
-            ? _StemDirection.up
-            : _StemDirection.down;
-        for (final idx in group) {
-          visible[idx].stemDirection = explicitDirection;
-        }
-        continue;
-      }
-
-      final first = visible[group.first];
-      final bottomLine = first.isTreble
-          ? _trebleBottomLineStep
-          : _bassBottomLineStep;
-      final middleLine = bottomLine + 4;
-
-      var sum = 0.0;
-      for (final idx in group) {
-        sum += visible[idx].noteStep;
-      }
-      final avgStep = sum / group.length;
-      final direction = avgStep >= middleLine
-          ? _StemDirection.down
-          : _StemDirection.up;
-
-      for (final idx in group) {
-        visible[idx].stemDirection = direction;
-      }
-    }
+    _notePainterNormalizeBeamGroupStemDirections(visible, groups);
   }
 
   void _drawBeamGroup(
@@ -994,316 +996,17 @@ class GameNotePainter {
     List<_RenderNote> visible,
     List<int> indexes, {
     required double lineSpacing,
+    required double lockedSlope,
+    required Offset lockedReferenceStemTip,
   }) {
-    final first = visible[indexes.first];
-    final last = visible[indexes.last];
-    if (first.stemTip == null || last.stemTip == null) {
-      return;
-    }
-
-    final direction = first.stemDirection;
-    final beamPaint = Paint()
-      ..color = const Color(0xFF0E1620)
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    final beamThickness = (lineSpacing * 0.48).clamp(3.0, 6.0);
-
-    final x1 = first.stemTip!.dx;
-    final y1 = first.stemTip!.dy;
-    final x2 = last.stemTip!.dx;
-    final y2 = last.stemTip!.dy;
-    final dx = (x2 - x1).abs() < 1 ? 1.0 : x2 - x1;
-    final measuredSlope = (y2 - y1) / dx;
-    final legacySlope = _legacyTargetBeamSlopeByPattern(
-      visible,
-      indexes,
-      direction,
-    );
-    final maxSlope = _legacyMaxBeamSlope(visible, indexes);
-    var slope = measuredSlope * 0.2 + legacySlope * 0.8;
-    if (slope > maxSlope) {
-      slope = maxSlope;
-    }
-    if (slope < -maxSlope) {
-      slope = -maxSlope;
-    }
-
-    double beamYAt(double x) => y1 + slope * (x - x1);
-
-    final sign = direction == _StemDirection.up ? 1.0 : -1.0;
-    final topEdgePoints = <Offset>[];
-    final bottomEdgePoints = <Offset>[];
-
-    for (final idx in indexes) {
-      final item = visible[idx];
-      final targetY = beamYAt(item.stemTip!.dx);
-      final stemPaint = Paint()
-        ..color = const Color(0xFF0E1620)
-        ..strokeWidth = (lineSpacing * 0.17).clamp(1.6, 2.8)
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        item.stemTip!,
-        Offset(item.stemTip!.dx, targetY),
-        stemPaint,
-      );
-      item.stemTip = Offset(item.stemTip!.dx, targetY);
-
-      topEdgePoints.add(Offset(item.stemTip!.dx, targetY));
-      bottomEdgePoints.add(
-        Offset(item.stemTip!.dx, targetY + beamThickness * sign),
-      );
-    }
-
-    final beamPath = Path()
-      ..moveTo(topEdgePoints.first.dx, topEdgePoints.first.dy);
-    for (var i = 1; i < topEdgePoints.length; i++) {
-      beamPath.lineTo(topEdgePoints[i].dx, topEdgePoints[i].dy);
-    }
-    for (var i = bottomEdgePoints.length - 1; i >= 0; i--) {
-      beamPath.lineTo(bottomEdgePoints[i].dx, bottomEdgePoints[i].dy);
-    }
-    beamPath.close();
-    canvas.drawPath(beamPath, beamPaint);
-
-    final secondOffset =
-        (beamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
-    final hasExplicitSecondary = _drawExplicitSecondaryBeams(
+    _notePainterDrawBeamGroup(
       canvas,
       visible,
       indexes,
       lineSpacing: lineSpacing,
-      sign: sign,
-      beamThickness: beamThickness,
-      secondOffset: secondOffset,
-      beamPaint: beamPaint,
-      beamYAt: beamYAt,
-      topEdgePoints: topEdgePoints,
+      lockedSlope: lockedSlope,
+      lockedReferenceStemTip: lockedReferenceStemTip,
     );
-
-    final hasSecondBeam = !hasExplicitSecondary && indexes.every(
-      (idx) => visible[idx].durationType == _DurationType.sixteenth,
-    );
-    if (hasSecondBeam) {
-      final secondTop = <Offset>[];
-      final secondBottom = <Offset>[];
-      for (final point in topEdgePoints) {
-        secondTop.add(Offset(point.dx, point.dy + secondOffset));
-        secondBottom.add(
-          Offset(point.dx, point.dy + secondOffset + beamThickness * sign),
-        );
-      }
-
-      final secondPath = Path()..moveTo(secondTop.first.dx, secondTop.first.dy);
-      for (var i = 1; i < secondTop.length; i++) {
-        secondPath.lineTo(secondTop[i].dx, secondTop[i].dy);
-      }
-      for (var i = secondBottom.length - 1; i >= 0; i--) {
-        secondPath.lineTo(secondBottom[i].dx, secondBottom[i].dy);
-      }
-      secondPath.close();
-      canvas.drawPath(secondPath, beamPaint);
-    }
-  }
-
-  bool _drawExplicitSecondaryBeams(
-    Canvas canvas,
-    List<_RenderNote> visible,
-    List<int> indexes, {
-    required double lineSpacing,
-    required double sign,
-    required double beamThickness,
-    required double secondOffset,
-    required Paint beamPaint,
-    required double Function(double x) beamYAt,
-    required List<Offset> topEdgePoints,
-  }) {
-    var hasExplicitSecondary = false;
-    int? openStartLocalIndex;
-
-    for (var localIndex = 0; localIndex < indexes.length; localIndex++) {
-      final beamValue = visible[indexes[localIndex]].note.secondaryBeam;
-      if (beamValue == null) {
-        openStartLocalIndex = null;
-        continue;
-      }
-
-      hasExplicitSecondary = true;
-      switch (beamValue) {
-        case 'begin':
-          openStartLocalIndex = localIndex;
-          break;
-        case 'continue':
-          openStartLocalIndex ??= localIndex > 0 ? localIndex - 1 : null;
-          break;
-        case 'end':
-          if (openStartLocalIndex != null && openStartLocalIndex < localIndex) {
-            _drawParallelBeamSegment(
-              canvas,
-              startX: topEdgePoints[openStartLocalIndex].dx,
-              endX: topEdgePoints[localIndex].dx,
-              beamYAt: beamYAt,
-              secondOffset: secondOffset,
-              beamThickness: beamThickness,
-              sign: sign,
-              beamPaint: beamPaint,
-            );
-          }
-          openStartLocalIndex = null;
-          break;
-        case 'forward hook':
-          _drawSecondaryBeamHook(
-            canvas,
-            stemX: topEdgePoints[localIndex].dx,
-            isForward: true,
-            lineSpacing: lineSpacing,
-            beamYAt: beamYAt,
-            secondOffset: secondOffset,
-            beamThickness: beamThickness,
-            sign: sign,
-            beamPaint: beamPaint,
-          );
-          openStartLocalIndex = null;
-          break;
-        case 'backward hook':
-          _drawSecondaryBeamHook(
-            canvas,
-            stemX: topEdgePoints[localIndex].dx,
-            isForward: false,
-            lineSpacing: lineSpacing,
-            beamYAt: beamYAt,
-            secondOffset: secondOffset,
-            beamThickness: beamThickness,
-            sign: sign,
-            beamPaint: beamPaint,
-          );
-          openStartLocalIndex = null;
-          break;
-      }
-    }
-
-    return hasExplicitSecondary;
-  }
-
-  void _drawSecondaryBeamHook(
-    Canvas canvas, {
-    required double stemX,
-    required bool isForward,
-    required double lineSpacing,
-    required double Function(double x) beamYAt,
-    required double secondOffset,
-    required double beamThickness,
-    required double sign,
-    required Paint beamPaint,
-  }) {
-    final hookLength = (lineSpacing * 1.35).clamp(8.0, 20.0);
-    final startX = isForward ? stemX : stemX - hookLength;
-    final endX = isForward ? stemX + hookLength : stemX;
-
-    _drawParallelBeamSegment(
-      canvas,
-      startX: startX,
-      endX: endX,
-      beamYAt: beamYAt,
-      secondOffset: secondOffset,
-      beamThickness: beamThickness,
-      sign: sign,
-      beamPaint: beamPaint,
-    );
-  }
-
-  void _drawParallelBeamSegment(
-    Canvas canvas, {
-    required double startX,
-    required double endX,
-    required double Function(double x) beamYAt,
-    required double secondOffset,
-    required double beamThickness,
-    required double sign,
-    required Paint beamPaint,
-  }) {
-    if ((endX - startX).abs() < 1) {
-      return;
-    }
-
-    final topStart = Offset(startX, beamYAt(startX) + secondOffset);
-    final topEnd = Offset(endX, beamYAt(endX) + secondOffset);
-    final bottomEnd = Offset(
-      endX,
-      beamYAt(endX) + secondOffset + beamThickness * sign,
-    );
-    final bottomStart = Offset(
-      startX,
-      beamYAt(startX) + secondOffset + beamThickness * sign,
-    );
-
-    final path = Path()
-      ..moveTo(topStart.dx, topStart.dy)
-      ..lineTo(topEnd.dx, topEnd.dy)
-      ..lineTo(bottomEnd.dx, bottomEnd.dy)
-      ..lineTo(bottomStart.dx, bottomStart.dy)
-      ..close();
-    canvas.drawPath(path, beamPaint);
-  }
-
-  double _legacyMaxBeamSlope(List<_RenderNote> visible, List<int> indexes) {
-    final hasSixteenth = indexes.every(
-      (idx) => visible[idx].durationType == _DurationType.sixteenth,
-    );
-    final degrees = hasSixteenth ? 16.0 : 8.0;
-    return math.tan(degrees * math.pi / 180);
-  }
-
-  double _legacyTargetBeamSlopeByPattern(
-    List<_RenderNote> visible,
-    List<int> indexes,
-    _StemDirection direction,
-  ) {
-    final first = visible[indexes.first];
-    final last = visible[indexes.last];
-    final steps = indexes.map((idx) => visible[idx].noteStep).toList();
-
-    var minStep = steps.first;
-    var maxStep = steps.first;
-    for (final step in steps.skip(1)) {
-      if (step < minStep) {
-        minStep = step;
-      }
-      if (step > maxStep) {
-        maxStep = step;
-      }
-    }
-
-    // Pattern 1: beam should be visually flat when pitch is effectively equal.
-    if (maxStep - minStep <= 1) {
-      return 0;
-    }
-
-    final maxSlope = _legacyMaxBeamSlope(visible, indexes);
-    final stepDelta = last.noteStep - first.noteStep;
-    final variationFactor = ((maxStep - minStep) / 6).clamp(0.45, 1.0);
-
-    // Pattern 2: arch/valley shape (first ~ last, middle bends).
-    if (stepDelta.abs() <= 1 && indexes.length >= 3) {
-      final middleIndexes = indexes.sublist(1, indexes.length - 1);
-      var middleSum = 0.0;
-      for (final idx in middleIndexes) {
-        middleSum += visible[idx].noteStep;
-      }
-      final middleAvg = middleSum / middleIndexes.length;
-      final edgeAvg = (first.noteStep + last.noteStep) / 2;
-      final middleHigher = middleAvg > edgeAvg;
-
-      if (direction == _StemDirection.up) {
-        return (middleHigher ? -1 : 1) * maxSlope * 0.5 * variationFactor;
-      }
-      return (middleHigher ? 1 : -1) * maxSlope * 0.5 * variationFactor;
-    }
-
-    // Pattern 3: clear upward/downward contour across the group.
-    if (direction == _StemDirection.up) {
-      return (stepDelta > 0 ? -1 : 1) * maxSlope * variationFactor;
-    }
-    return (stepDelta > 0 ? 1 : -1) * maxSlope * variationFactor;
   }
 
   Color _noteInkColor(_NoteJudge judge, bool isActive) {
@@ -1316,40 +1019,3 @@ class GameNotePainter {
   }
 }
 
-class _RenderNote {
-  _RenderNote({
-    required this.index,
-    required this.x,
-    required this.y,
-    required this.isTreble,
-    required this.noteStep,
-    required this.note,
-    required this.adjustedHitMs,
-    required this.status,
-    required this.durationType,
-    required this.stemDirection,
-  });
-
-  final int index;
-  final double x;
-  final double y;
-  final bool isTreble;
-  final int noteStep;
-  final MusicNote note;
-  final int adjustedHitMs;
-  final _NoteJudge status;
-  final _DurationType durationType;
-  _StemDirection stemDirection;
-  Offset? stemTip;
-}
-
-class _ExplicitBeamTrackState {
-  final List<int> current = <int>[];
-  int measureIndex = -1;
-}
-
-enum _NoteJudge { pending, pass, miss }
-
-enum _DurationType { whole, half, quarter, eighth, sixteenth }
-
-enum _StemDirection { up, down }
