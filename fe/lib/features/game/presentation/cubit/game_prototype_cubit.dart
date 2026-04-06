@@ -15,7 +15,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   static const String sampleMxlUrl =
-      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1775314886/pianomisspass/canon-in-d-johann-pachelbel_ece4o3.mxl';
+      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1775445517/canon-in-d-johann-pachelbel_oumy6l.mxl';
 
   static const int hitWindowMs = 180;
   static const int missWindowMs = 220;
@@ -142,7 +142,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         throw Exception('Khong tai duoc MXL mau.');
       }
 
-      final score = parseMxl(Uint8List.fromList(bytes));
+      final mxlDocument = parseMxlDocument(Uint8List.fromList(bytes));
+      final score = buildScoreDataFromMxlDocument(mxlDocument);
 
       if (isClosed) {
         return;

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../domain/game_score.dart';
+import '../../domain/note_timing.dart';
 
 class GameKeyboardPainter {
   void paintKeyboard(
@@ -12,6 +13,9 @@ class GameKeyboardPainter {
     required int currentMs,
     required double keyboardTop,
   }) {
+    const whiteHeight = 92.0 * 0.7;
+    const blackHeight = 54.0 * 0.7;
+
     final startMidi = score.minMidi - 2;
     final endMidi = score.maxMidi + 2;
 
@@ -22,11 +26,10 @@ class GameKeyboardPainter {
 
     final whiteWidth = size.width / math.max(whiteMidis.length, 1);
     final blackWidth = whiteWidth * 0.62;
-    final blackHeight = 54.0;
 
     final active = <int>{};
     for (final note in score.notes) {
-      if ((note.hitTimeMs - currentMs).abs() <= 100) {
+      if ((NoteTiming.adjustedHitTimeMs(note) - currentMs).abs() <= 100) {
         active.add(note.midi);
       }
     }
@@ -39,7 +42,7 @@ class GameKeyboardPainter {
 
       final x = whiteIndex * whiteWidth;
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, keyboardTop, whiteWidth - 1, 92),
+        Rect.fromLTWH(x, keyboardTop, whiteWidth - 1, whiteHeight),
         const Radius.circular(6),
       );
       final isActive = active.contains(midi);
