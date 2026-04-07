@@ -27,6 +27,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
   int _baseElapsedMs = 0;
+  int _nextMissScanIndex = 0;
 
   Future<void> initialize() async {
     _ticker.stop();
@@ -34,6 +35,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..stop()
       ..reset();
     _baseElapsedMs = 0;
+    _nextMissScanIndex = 0;
 
     emit(const GamePrototypeState(isLoading: true));
 
@@ -103,8 +105,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
     var bestIndex = -1;
     var bestDelta = 1 << 30;
+    final windowStart = currentMs - hitWindowMs;
+    final windowEnd = currentMs + hitWindowMs;
+    final startIndex = _lowerBoundHitTime(score.notes, windowStart);
+    final endIndex = _upperBoundHitTime(score.notes, windowEnd);
 
-    for (var i = 0; i < score.notes.length; i++) {
+    for (var i = startIndex; i < endIndex; i++) {
       if (state.passedNoteIndexes.contains(i) ||
           state.missedNoteIndexes.contains(i)) {
         continue;
@@ -144,6 +150,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
       final mxlDocument = parseMxlDocument(Uint8List.fromList(bytes));
       final score = buildScoreDataFromMxlDocument(mxlDocument);
+      _nextMissScanIndex = 0;
 
       if (isClosed) {
         return;
@@ -207,44 +214,84 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     final current = currentMs;
-    final updatedMisses = _updateMisses(current);
+    final updatedMisses = _updateMissesIncremental(current);
 
     if (current >= maxDurationMs) {
       _pause();
       return;
     }
 
+    if (updatedMisses == null && current == state.elapsedMs) {
+      return;
+    }
+
     emit(
       state.copyWith(
         elapsedMs: current,
-        passedNoteIndexes: updatedMisses.passed,
-        missedNoteIndexes: updatedMisses.missed,
+        missedNoteIndexes: updatedMisses,
       ),
     );
   }
 
-  ({Set<int> passed, Set<int> missed}) _updateMisses(int currentMs) {
+  Set<int>? _updateMissesIncremental(int currentMs) {
     final score = state.score;
-    if (score == null) {
-      return (
-        passed: Set<int>.from(state.passedNoteIndexes),
-        missed: Set<int>.from(state.missedNoteIndexes),
-      );
+    if (score == null || score.notes.isEmpty) {
+      return null;
+    }
+
+    final deadline = currentMs - missWindowMs;
+    if (_nextMissScanIndex >= score.notes.length ||
+        score.notes[_nextMissScanIndex].hitTimeMs > deadline) {
+      return null;
     }
 
     final missed = Set<int>.from(state.missedNoteIndexes);
-    for (var i = 0; i < score.notes.length; i++) {
-      if (state.passedNoteIndexes.contains(i) || missed.contains(i)) {
-        continue;
+    var changed = false;
+
+    while (_nextMissScanIndex < score.notes.length) {
+      final note = score.notes[_nextMissScanIndex];
+      if (note.hitTimeMs > deadline) {
+        break;
       }
 
-      final note = score.notes[i];
-      if (currentMs - note.hitTimeMs > missWindowMs) {
-        missed.add(i);
+      if (!state.passedNoteIndexes.contains(_nextMissScanIndex) &&
+          !missed.contains(_nextMissScanIndex)) {
+        missed.add(_nextMissScanIndex);
+        changed = true;
       }
+
+      _nextMissScanIndex++;
     }
 
-    return (passed: Set<int>.from(state.passedNoteIndexes), missed: missed);
+    return changed ? missed : null;
+  }
+
+  int _lowerBoundHitTime(List<MusicNote> notes, int targetMs) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].hitTimeMs < targetMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  int _upperBoundHitTime(List<MusicNote> notes, int targetMs) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].hitTimeMs <= targetMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 
   int get currentMs {

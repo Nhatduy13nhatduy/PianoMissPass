@@ -74,6 +74,26 @@ class _ChordLayout {
   final Map<int, double> stemExtraHeightByAnchorVisibleIndex;
 }
 
+class _PrecomputedRenderNote {
+  const _PrecomputedRenderNote({
+    required this.adjustedHitMs,
+    required this.isTreble,
+    required this.durationType,
+    required this.stemDirection,
+  });
+
+  final int adjustedHitMs;
+  final bool isTreble;
+  final _DurationType durationType;
+  final _StemDirection stemDirection;
+}
+
+class _PrecomputedScoreRenderData {
+  const _PrecomputedScoreRenderData({required this.notes});
+
+  final List<_PrecomputedRenderNote> notes;
+}
+
 enum _NoteJudge { pending, pass, miss }
 
 enum _DurationType { whole, half, quarter, eighth, sixteenth }

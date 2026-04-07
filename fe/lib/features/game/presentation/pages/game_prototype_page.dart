@@ -404,20 +404,13 @@ class _StaffScrollerPainter extends CustomPainter {
   }
 
   Size _measureSmuflTextSize(String text, {required double fontSize}) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w400,
-          fontFamily: _bravuraFontFamily,
-          height: 1.0,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    return tp.size;
+    return _textPainter.measureText(
+      text,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w400,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
   }
 
   double _smuflFontSizeForTargetHeight(

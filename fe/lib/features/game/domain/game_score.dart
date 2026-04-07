@@ -63,7 +63,7 @@ void logParsedMxlTrace(
         note.notatedBeats ?? (note.holdMs / (60000.0 / score.bpm)),
       );
       print(
-        'm=${measure} voice=${note.voice} staff=${note.isTrebleFromMxl == true
+        'm=$measure voice=${note.voice} staff=${note.isTrebleFromMxl == true
             ? 1
             : note.isTrebleFromMxl == false
             ? 2

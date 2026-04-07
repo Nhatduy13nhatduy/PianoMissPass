@@ -39,10 +39,8 @@ class GamePrototypeState extends Equatable {
       score: score ?? this.score,
       isPlaying: isPlaying ?? this.isPlaying,
       elapsedMs: elapsedMs ?? this.elapsedMs,
-      passedNoteIndexes:
-          passedNoteIndexes ?? Set<int>.from(this.passedNoteIndexes),
-      missedNoteIndexes:
-          missedNoteIndexes ?? Set<int>.from(this.missedNoteIndexes),
+      passedNoteIndexes: passedNoteIndexes ?? this.passedNoteIndexes,
+      missedNoteIndexes: missedNoteIndexes ?? this.missedNoteIndexes,
     );
   }
 

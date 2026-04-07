@@ -16,6 +16,7 @@ class GameNotePainter {
   static const double previewWindowMs = 9000;
   static const double cleanupWindowMs = 2500;
   static const double _preRenderMeasuresRight = 1.0;
+  static const double _renderWindowPaddingMs = 1400;
   static const double _accidentalCollisionPaddingTuning = 1.0;
   static const double _accidentalCollisionPaddingScale = 0.04;
   static const double notePxPerMs = NoteTiming.notePxPerMs;
@@ -25,6 +26,8 @@ class GameNotePainter {
   static const int _lowerStableBassStep = 26; // A3-
   static const int _middleSplitStep = 28; // C4 pivot
   static final Set<int> _debugLoggedNoteIndexes = <int>{};
+  static final Expando<_PrecomputedScoreRenderData> _precomputedScoreCache =
+      Expando<_PrecomputedScoreRenderData>('game-note-precomputed');
 
   void paintNotes(
     Canvas canvas,
@@ -38,29 +41,30 @@ class GameNotePainter {
     required double bassTop,
     required double lineSpacing,
   }) {
-    bool? previousIsTreble;
     final allNotes = <_RenderNote>[];
+    final precomputedScore = _getPrecomputedScoreRenderData(score);
+    final precomputedNotes = precomputedScore.notes;
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
     final preRenderRightPx = measureMs * notePxPerMs * _preRenderMeasuresRight;
+    final windowStartMs =
+        (currentMs - cleanupWindowMs - _renderWindowPaddingMs).floor();
+    final windowEndMs =
+        (currentMs + previewWindowMs + _renderWindowPaddingMs).ceil();
+    final startIndex = _lowerBoundAdjustedHitMs(precomputedNotes, windowStartMs);
+    final endIndex = _upperBoundAdjustedHitMs(precomputedNotes, windowEndMs);
 
-    for (var i = 0; i < score.notes.length; i++) {
+    for (var i = startIndex; i < endIndex; i++) {
       final note = score.notes[i];
-      final adjustedHitMs = NoteTiming.adjustedHitTimeMs(note);
+      final precomputed = precomputedNotes[i];
+      final adjustedHitMs = precomputed.adjustedHitMs;
       final delta = adjustedHitMs - currentMs;
-      if (delta > previewWindowMs) {
-        continue;
+      if (delta > previewWindowMs + _renderWindowPaddingMs) {
+        break;
       }
 
       final x = playheadX + delta * notePxPerMs;
-      final isTreble =
-          note.isTrebleFromMxl ??
-          _chooseStaffForNote(
-            note.staffStep,
-            previousIsTreble: previousIsTreble,
-          );
-      previousIsTreble = isTreble;
-
+      final isTreble = precomputed.isTreble;
       final staffTop = isTreble ? trebleTop : bassTop;
       final y = _yForStaffStep(note.staffStep, isTreble, staffTop, lineSpacing);
       final status = passedNoteIndexes.contains(i)
@@ -68,8 +72,8 @@ class GameNotePainter {
           : missedNoteIndexes.contains(i)
           ? _NoteJudge.miss
           : _NoteJudge.pending;
-      final durationType = _durationTypeFromNote(note, score.bpm);
-      final stemDirection = _stemDirectionFromNote(note, isTreble: isTreble);
+      final durationType = precomputed.durationType;
+      final stemDirection = precomputed.stemDirection;
 
       allNotes.add(
         _RenderNote(
@@ -204,12 +208,21 @@ class GameNotePainter {
     }
 
     final accidentalByVisibleIndex = <int, String>{};
+    final keyChanges = score.keySignatures;
+    var keyChangeIndex = 0;
+    var activeKeyFifths = 0;
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final note = visible[visibleIndex];
-      final keyFifths = _activeKeyFifthsAt(score, note.note.hitTimeMs);
+      final noteTimeMs = note.note.hitTimeMs;
+      while (keyChangeIndex < keyChanges.length &&
+          keyChanges[keyChangeIndex].timeMs <= noteTimeMs) {
+        activeKeyFifths = keyChanges[keyChangeIndex].fifths;
+        keyChangeIndex++;
+      }
+
       final accidentalToRender = _accidentalToRender(
         note.note,
-        keyFifths: keyFifths,
+        keyFifths: activeKeyFifths,
       );
       if (accidentalToRender != null) {
         accidentalByVisibleIndex[visibleIndex] = accidentalToRender;
@@ -352,6 +365,66 @@ class GameNotePainter {
         lockedReferenceStemTip: group.lockedReferenceStemTip,
       );
     }
+  }
+
+  _PrecomputedScoreRenderData _getPrecomputedScoreRenderData(ScoreData score) {
+    final cached = _precomputedScoreCache[score];
+    if (cached != null && cached.notes.length == score.notes.length) {
+      return cached;
+    }
+
+    bool? previousIsTreble;
+    final precomputedNotes = <_PrecomputedRenderNote>[];
+    for (final note in score.notes) {
+      final isTreble =
+          note.isTrebleFromMxl ??
+          _chooseStaffForNote(
+            note.staffStep,
+            previousIsTreble: previousIsTreble,
+          );
+      previousIsTreble = isTreble;
+
+      precomputedNotes.add(
+        _PrecomputedRenderNote(
+          adjustedHitMs: NoteTiming.adjustedHitTimeMs(note),
+          isTreble: isTreble,
+          durationType: _durationTypeFromNote(note, score.bpm),
+          stemDirection: _stemDirectionFromNote(note, isTreble: isTreble),
+        ),
+      );
+    }
+
+    final built = _PrecomputedScoreRenderData(notes: precomputedNotes);
+    _precomputedScoreCache[score] = built;
+    return built;
+  }
+
+  int _lowerBoundAdjustedHitMs(List<_PrecomputedRenderNote> notes, int target) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].adjustedHitMs < target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  int _upperBoundAdjustedHitMs(List<_PrecomputedRenderNote> notes, int target) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].adjustedHitMs <= target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 
   Map<int, Offset> _layoutAccidentals(
@@ -672,18 +745,6 @@ class GameNotePainter {
       _DurationType.sixteenth => 2,
       _ => 0,
     };
-  }
-
-  int _activeKeyFifthsAt(ScoreData score, int timeMs) {
-    var result = 0;
-    for (final change in score.keySignatures) {
-      if (change.timeMs <= timeMs) {
-        result = change.fifths;
-      } else {
-        break;
-      }
-    }
-    return result;
   }
 
   bool _usesKeySignature(int keyFifths) {

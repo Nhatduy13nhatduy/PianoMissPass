@@ -6,6 +6,8 @@ import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
 
 class GameKeyboardPainter {
+  static const int _activeWindowMs = 100;
+
   void paintKeyboard(
     Canvas canvas,
     Size size, {
@@ -28,8 +30,14 @@ class GameKeyboardPainter {
     final blackWidth = whiteWidth * 0.62;
 
     final active = <int>{};
-    for (final note in score.notes) {
-      if ((NoteTiming.adjustedHitTimeMs(note) - currentMs).abs() <= 100) {
+    final startTime = currentMs - _activeWindowMs;
+    final endTime = currentMs + _activeWindowMs;
+    final startIndex = _lowerBoundHitTime(score.notes, startTime);
+    final endIndex = _upperBoundHitTime(score.notes, endTime);
+    for (var i = startIndex; i < endIndex; i++) {
+      final note = score.notes[i];
+      if ((NoteTiming.adjustedHitTimeMs(note) - currentMs).abs() <=
+          _activeWindowMs) {
         active.add(note.midi);
       }
     }
@@ -81,5 +89,33 @@ class GameKeyboardPainter {
   bool _isBlack(int midi) {
     final pc = midi % 12;
     return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+  }
+
+  int _lowerBoundHitTime(List<MusicNote> notes, int targetMs) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].hitTimeMs < targetMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  int _upperBoundHitTime(List<MusicNote> notes, int targetMs) {
+    var low = 0;
+    var high = notes.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (notes[mid].hitTimeMs <= targetMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 }
