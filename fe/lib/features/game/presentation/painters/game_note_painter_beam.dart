@@ -5,38 +5,85 @@ _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
   List<int> indexes, {
   required double lineSpacing,
 }) {
+  if (indexes.length < 2) {
+    final single = allNotes[indexes.first];
+    final singleTip = _notePainterBeamStemTipForNote(
+      single,
+      direction: single.stemDirection,
+      spacing: lineSpacing,
+    );
+    return _LockedBeamGeometry(slope: 0.0, referenceStemTip: singleTip);
+  }
+
   final first = allNotes[indexes.first];
-  final last = allNotes[indexes.last];
   final direction = first.stemDirection;
 
-  final firstTip = _notePainterBeamStemTipForNote(
-    first,
-    direction: direction,
-    spacing: lineSpacing,
-  );
-  final lastTip = _notePainterBeamStemTipForNote(
-    last,
-    direction: direction,
-    spacing: lineSpacing,
-  );
+  final tips = <Offset>[
+    for (final idx in indexes)
+      _notePainterBeamStemTipForNote(
+        allNotes[idx],
+        direction: direction,
+        spacing: lineSpacing,
+      ),
+  ];
+  final firstTip = tips.first;
+  final lastTip = tips.last;
 
-  final dx = (lastTip.dx - firstTip.dx).abs() < 1 ? 1.0 : lastTip.dx - firstTip.dx;
-  final measuredSlope = (lastTip.dy - firstTip.dy) / dx;
-  final legacySlope = _notePainterLegacyTargetBeamSlopeByPattern(
-    allNotes,
-    indexes,
-    direction,
-  );
-  final maxSlope = _notePainterLegacyMaxBeamSlope(allNotes, indexes);
-  var slope = measuredSlope * 0.2 + legacySlope * 0.8;
-  if (slope > maxSlope) {
-    slope = maxSlope;
-  }
-  if (slope < -maxSlope) {
-    slope = -maxSlope;
+  final dx = (lastTip.dx - firstTip.dx).abs() < 1
+      ? 1.0
+      : lastTip.dx - firstTip.dx;
+  final endpointSlope = (lastTip.dy - firstTip.dy) / dx;
+  final regressionSlope = _notePainterRegressionSlope(tips);
+  final maxSlope = _notePainterMaxBeamSlope(allNotes, indexes);
+
+  final contourReversals = _notePainterCountContourReversals(allNotes, indexes);
+  var contourDamping = 1.0;
+  if (contourReversals >= 3) {
+    contourDamping = 0.0;
+  } else if (contourReversals == 2) {
+    contourDamping = 0.35;
+  } else if (contourReversals == 1) {
+    contourDamping = 0.7;
   }
 
-  return _LockedBeamGeometry(slope: slope, referenceStemTip: firstTip);
+  var slope = (regressionSlope * 0.65 + endpointSlope * 0.35) * contourDamping;
+  slope = slope.clamp(-maxSlope, maxSlope);
+
+  final xMean = tips.fold<double>(0.0, (sum, p) => sum + p.dx) / tips.length;
+  final yMean = tips.fold<double>(0.0, (sum, p) => sum + p.dy) / tips.length;
+  var yAtFirst = yMean + slope * (firstTip.dx - xMean);
+
+  // Beam must stay outside all existing stem tips so stems only extend to meet it.
+  double beamYAt(double x, double referenceY) {
+    return referenceY + slope * (x - firstTip.dx);
+  }
+
+  if (direction == _StemDirection.up) {
+    var maxViolation = 0.0;
+    for (final tip in tips) {
+      final yOnBeam = beamYAt(tip.dx, yAtFirst);
+      final violation = yOnBeam - tip.dy;
+      if (violation > maxViolation) {
+        maxViolation = violation;
+      }
+    }
+    yAtFirst -= maxViolation;
+  } else {
+    var maxViolation = 0.0;
+    for (final tip in tips) {
+      final yOnBeam = beamYAt(tip.dx, yAtFirst);
+      final violation = tip.dy - yOnBeam;
+      if (violation > maxViolation) {
+        maxViolation = violation;
+      }
+    }
+    yAtFirst += maxViolation;
+  }
+
+  return _LockedBeamGeometry(
+    slope: slope,
+    referenceStemTip: Offset(firstTip.dx, yAtFirst),
+  );
 }
 
 Offset _notePainterBeamStemTipForNote(
@@ -44,7 +91,7 @@ Offset _notePainterBeamStemTipForNote(
   required _StemDirection direction,
   required double spacing,
 }) {
-  final stemHeight = (spacing * 3.2).clamp(34.0, 76.0);
+  final stemHeight = _notePainterBaseStemHeight(spacing);
   final stemX = note.stemXAxisDirection == _StemDirection.up
       ? note.x + spacing * 0.55
       : note.x - spacing * 0.55;
@@ -99,10 +146,8 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
     return best;
   }
 
-  final representativeIndexes = onsetTrackBuckets.values
-      .map(pickRepresentativeIndex)
-      .toList()
-    ..sort();
+  final representativeIndexes =
+      onsetTrackBuckets.values.map(pickRepresentativeIndex).toList()..sort();
 
   _ExplicitBeamTrackState stateFor(_RenderNote note) {
     final key = '${note.isTreble ? 't' : 'b'}-${note.note.voice}';
@@ -130,7 +175,8 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
       continue;
     }
 
-    if (state.current.isNotEmpty && state.measureIndex != note.note.measureIndex) {
+    if (state.current.isNotEmpty &&
+        state.measureIndex != note.note.measureIndex) {
       flushState(state);
     }
     state.measureIndex = note.note.measureIndex;
@@ -170,10 +216,16 @@ void _notePainterNormalizeBeamGroupStemDirections(
       continue;
     }
 
-    final firstExplicit = visible[group.first].note.stemFromMxl;
-    if (firstExplicit == 'up' || firstExplicit == 'down') {
-      final explicitDirection =
-          firstExplicit == 'up' ? _StemDirection.up : _StemDirection.down;
+    final explicitStem = group
+        .map((idx) => visible[idx].note.stemFromMxl)
+        .firstWhere(
+          (stem) => stem == 'up' || stem == 'down',
+          orElse: () => null,
+        );
+    if (explicitStem == 'up' || explicitStem == 'down') {
+      final explicitDirection = explicitStem == 'up'
+          ? _StemDirection.up
+          : _StemDirection.down;
       for (final idx in group) {
         visible[idx].stemDirection = explicitDirection;
       }
@@ -181,16 +233,45 @@ void _notePainterNormalizeBeamGroupStemDirections(
     }
 
     final first = visible[group.first];
-    final bottomLine =
-        first.isTreble ? GameNotePainter._trebleBottomLineStep : GameNotePainter._bassBottomLineStep;
+    final bottomLine = first.isTreble
+        ? GameNotePainter._trebleBottomLineStep
+        : GameNotePainter._bassBottomLineStep;
     final middleLine = bottomLine + 4;
 
+    var minStep = visible[group.first].noteStep;
+    var maxStep = minStep;
     var sum = 0.0;
     for (final idx in group) {
-      sum += visible[idx].noteStep;
+      final step = visible[idx].noteStep;
+      if (step < minStep) {
+        minStep = step;
+      }
+      if (step > maxStep) {
+        maxStep = step;
+      }
+      sum += step;
     }
-    final avgStep = sum / group.length;
-    final direction = avgStep >= middleLine ? _StemDirection.down : _StemDirection.up;
+
+    final direction = (() {
+      if (maxStep < middleLine) {
+        return _StemDirection.up;
+      }
+      if (minStep > middleLine) {
+        return _StemDirection.down;
+      }
+
+      final highDistance = (maxStep - middleLine).toDouble();
+      final lowDistance = (middleLine - minStep).toDouble();
+      if (highDistance > lowDistance) {
+        return _StemDirection.down;
+      }
+      if (lowDistance > highDistance) {
+        return _StemDirection.up;
+      }
+
+      final avgStep = sum / group.length;
+      return avgStep >= middleLine ? _StemDirection.down : _StemDirection.up;
+    })();
 
     for (final idx in group) {
       visible[idx].stemDirection = direction;
@@ -235,14 +316,21 @@ void _notePainterDrawBeamGroup(
       ..color = const Color(0xFF0E1620)
       ..strokeWidth = (lineSpacing * 0.17).clamp(1.6, 2.8)
       ..strokeCap = StrokeCap.round;
-    canvas.drawLine(item.stemTip!, Offset(item.stemTip!.dx, targetY), stemPaint);
+    canvas.drawLine(
+      item.stemTip!,
+      Offset(item.stemTip!.dx, targetY),
+      stemPaint,
+    );
     item.stemTip = Offset(item.stemTip!.dx, targetY);
 
     topEdgePoints.add(Offset(item.stemTip!.dx, targetY));
-    bottomEdgePoints.add(Offset(item.stemTip!.dx, targetY + beamThickness * sign));
+    bottomEdgePoints.add(
+      Offset(item.stemTip!.dx, targetY + beamThickness * sign),
+    );
   }
 
-  final beamPath = Path()..moveTo(topEdgePoints.first.dx, topEdgePoints.first.dy);
+  final beamPath = Path()
+    ..moveTo(topEdgePoints.first.dx, topEdgePoints.first.dy);
   for (var i = 1; i < topEdgePoints.length; i++) {
     beamPath.lineTo(topEdgePoints[i].dx, topEdgePoints[i].dy);
   }
@@ -252,7 +340,8 @@ void _notePainterDrawBeamGroup(
   beamPath.close();
   canvas.drawPath(beamPath, beamPaint);
 
-  final secondOffset = (beamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
+  final secondOffset =
+      (beamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
   final hasExplicitSecondary = _notePainterDrawExplicitSecondaryBeams(
     canvas,
     visible,
@@ -266,14 +355,19 @@ void _notePainterDrawBeamGroup(
     topEdgePoints: topEdgePoints,
   );
 
-  final hasSecondBeam = !hasExplicitSecondary &&
-      indexes.every((idx) => visible[idx].durationType == _DurationType.sixteenth);
+  final hasSecondBeam =
+      !hasExplicitSecondary &&
+      indexes.every(
+        (idx) => visible[idx].durationType == _DurationType.sixteenth,
+      );
   if (hasSecondBeam) {
     final secondTop = <Offset>[];
     final secondBottom = <Offset>[];
     for (final point in topEdgePoints) {
       secondTop.add(Offset(point.dx, point.dy + secondOffset));
-      secondBottom.add(Offset(point.dx, point.dy + secondOffset + beamThickness * sign));
+      secondBottom.add(
+        Offset(point.dx, point.dy + secondOffset + beamThickness * sign),
+      );
     }
 
     final secondPath = Path()..moveTo(secondTop.first.dx, secondTop.first.dy);
@@ -428,60 +522,63 @@ void _notePainterDrawParallelBeamSegment(
   canvas.drawPath(path, beamPaint);
 }
 
-double _notePainterLegacyMaxBeamSlope(List<_RenderNote> visible, List<int> indexes) {
-  final hasSixteenth = indexes.every(
-    (idx) => visible[idx].durationType == _DurationType.sixteenth,
-  );
-  final degrees = hasSixteenth ? 16.0 : 8.0;
-  return math.tan(degrees * math.pi / 180);
-}
-
-double _notePainterLegacyTargetBeamSlopeByPattern(
-  List<_RenderNote> visible,
-  List<int> indexes,
-  _StemDirection direction,
-) {
-  final first = visible[indexes.first];
-  final last = visible[indexes.last];
-  final steps = indexes.map((idx) => visible[idx].noteStep).toList();
-
-  var minStep = steps.first;
-  var maxStep = steps.first;
-  for (final step in steps.skip(1)) {
-    if (step < minStep) {
-      minStep = step;
-    }
-    if (step > maxStep) {
-      maxStep = step;
-    }
+double _notePainterRegressionSlope(List<Offset> points) {
+  if (points.length < 2) {
+    return 0.0;
   }
 
-  if (maxStep - minStep <= 1) {
+  final xMean =
+      points.fold<double>(0.0, (sum, p) => sum + p.dx) / points.length;
+  final yMean =
+      points.fold<double>(0.0, (sum, p) => sum + p.dy) / points.length;
+  var numerator = 0.0;
+  var denominator = 0.0;
+
+  for (final point in points) {
+    final dx = point.dx - xMean;
+    numerator += dx * (point.dy - yMean);
+    denominator += dx * dx;
+  }
+
+  if (denominator.abs() < 1e-6) {
+    return 0.0;
+  }
+  return numerator / denominator;
+}
+
+int _notePainterCountContourReversals(
+  List<_RenderNote> visible,
+  List<int> indexes,
+) {
+  if (indexes.length < 3) {
     return 0;
   }
 
-  final maxSlope = _notePainterLegacyMaxBeamSlope(visible, indexes);
-  final stepDelta = last.noteStep - first.noteStep;
-  final variationFactor = ((maxStep - minStep) / 6).clamp(0.45, 1.0);
-
-  if (stepDelta.abs() <= 1 && indexes.length >= 3) {
-    final middleIndexes = indexes.sublist(1, indexes.length - 1);
-    var middleSum = 0.0;
-    for (final idx in middleIndexes) {
-      middleSum += visible[idx].noteStep;
+  var reversals = 0;
+  int? previousSign;
+  for (var i = 1; i < indexes.length; i++) {
+    final delta =
+        visible[indexes[i]].noteStep - visible[indexes[i - 1]].noteStep;
+    final sign = delta == 0 ? 0 : (delta > 0 ? 1 : -1);
+    if (sign == 0) {
+      continue;
     }
-    final middleAvg = middleSum / middleIndexes.length;
-    final edgeAvg = (first.noteStep + last.noteStep) / 2;
-    final middleHigher = middleAvg > edgeAvg;
-
-    if (direction == _StemDirection.up) {
-      return (middleHigher ? -1 : 1) * maxSlope * 0.5 * variationFactor;
+    if (previousSign != null && sign != previousSign) {
+      reversals++;
     }
-    return (middleHigher ? 1 : -1) * maxSlope * 0.5 * variationFactor;
+    previousSign = sign;
   }
+  return reversals;
+}
 
-  if (direction == _StemDirection.up) {
-    return (stepDelta > 0 ? -1 : 1) * maxSlope * variationFactor;
-  }
-  return (stepDelta > 0 ? 1 : -1) * maxSlope * variationFactor;
+double _notePainterMaxBeamSlope(List<_RenderNote> visible, List<int> indexes) {
+  final hasSixteenth = indexes.every(
+    (idx) => visible[idx].durationType == _DurationType.sixteenth,
+  );
+  final degrees = hasSixteenth ? 12.0 : 8.0;
+  return math.tan(degrees * math.pi / 180);
+}
+
+double _notePainterBaseStemHeight(double spacing) {
+  return (spacing * 3.3).clamp(34.0, 76.0);
 }

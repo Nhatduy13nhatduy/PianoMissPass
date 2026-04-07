@@ -157,14 +157,12 @@ class GameNotePainter {
 
             final anchorVisibleIndex = groupStemDirection == _StemDirection.down
                 ? chordVisibleIndexes.reduce(
-                    (a, b) => visible[a].noteStep >= visible[b].noteStep
-                        ? a
-                        : b,
+                    (a, b) =>
+                        visible[a].noteStep >= visible[b].noteStep ? a : b,
                   )
                 : chordVisibleIndexes.reduce(
-                    (a, b) => visible[a].noteStep <= visible[b].noteStep
-                        ? a
-                        : b,
+                    (a, b) =>
+                        visible[a].noteStep <= visible[b].noteStep ? a : b,
                   );
             projected.add(anchorVisibleIndex);
             continue;
@@ -287,9 +285,9 @@ class GameNotePainter {
               (isChordInBeam
                   ? isBeamed
                   : (isBeamed ||
-                      chordLayout.stemAnchorVisibleIndexes.contains(
-                        visibleIndex,
-                      ))));
+                        chordLayout.stemAnchorVisibleIndexes.contains(
+                          visibleIndex,
+                        ))));
       final chordOppositeStemHeight =
           chordLayout.stemExtraHeightByAnchorVisibleIndex[visibleIndex] ?? 0.0;
 
@@ -499,7 +497,7 @@ class GameNotePainter {
         runEnd = runStart - 1;
       }
 
-        final anchor = stemDirection == _StemDirection.up
+      final anchor = stemDirection == _StemDirection.up
           ? sortedIndexes.last
           : sortedIndexes.first;
       stemAnchorVisibleIndexes.add(anchor);
@@ -967,7 +965,7 @@ class GameNotePainter {
       ..strokeWidth = (spacing * 0.17).clamp(1.6, 2.8)
       ..strokeCap = StrokeCap.round;
 
-    final baseStemHeight = (spacing * 3.2).clamp(34.0, 76.0);
+    final baseStemHeight = _notePainterBaseStemHeight(spacing);
     final stemX = xAxisDirection == _StemDirection.up
         ? center.dx + spacing * 0.55
         : center.dx - spacing * 0.55;
