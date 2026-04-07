@@ -15,7 +15,7 @@ Map<int, Offset> _notePainterLayoutAccidentals(
   }
   final sortedTimes = groupsByTime.keys.toList()..sort();
 
-  final shiftStep = spacing * 0.85;
+  final shiftStep = spacing * 0.75;
   for (final time in sortedTimes) {
     final chordIndexes = groupsByTime[time]!;
     chordIndexes.sort((a, b) => visible[a].y.compareTo(visible[b].y));
@@ -33,7 +33,7 @@ Map<int, Offset> _notePainterLayoutAccidentals(
           noteStepsInChord.contains(note.noteStep + 1);
       final extraLeftShift = hasConsecutiveAccidentalNeighbor ? shiftStep : 0.0;
       final baseCenter = Offset(
-        note.x + headDx - spacing * 1.35 - extraLeftShift,
+        note.x + headDx - spacing * 1.08 - extraLeftShift,
         note.y,
       );
 
@@ -82,7 +82,11 @@ bool _notePainterOverlapsAny(Rect rect, List<Rect> others) {
   return false;
 }
 
-Rect _notePainterAccidentalBounds(String accidental, Offset center, double spacing) {
+Rect _notePainterAccidentalBounds(
+  String accidental,
+  Offset center,
+  double spacing,
+) {
   final scale = _notePainterAccidentalScale(spacing);
   return switch (accidental) {
     '♯' => Rect.fromLTWH(
@@ -113,7 +117,7 @@ Rect _notePainterAccidentalBounds(String accidental, Offset center, double spaci
 }
 
 double _notePainterAccidentalScale(double spacing) {
-  return (spacing / 7.4).clamp(0.36, 0.66);
+  return (spacing / 7.0).clamp(0.38, 0.72);
 }
 
 double _notePainterAccidentalCollisionPadding(double spacing) {

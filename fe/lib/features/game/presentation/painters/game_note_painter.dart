@@ -12,6 +12,7 @@ part 'game_note_painter_beam.dart';
 
 class GameNotePainter {
   static const bool _enablePaintNoteDebugLog = false;
+  static const String _bravuraFontFamily = 'Bravura';
   static const double previewWindowMs = 9000;
   static const double cleanupWindowMs = 2500;
   static const double _preRenderMeasuresRight = 1.0;
@@ -299,6 +300,7 @@ class GameNotePainter {
         drawStem: shouldDrawStem,
         spacing: lineSpacing,
         extraOppositeStemHeight: chordOppositeStemHeight,
+        useButtCap: shouldHideTail,
       );
 
       if (!shouldHideTail && shouldDrawStem) {
@@ -316,7 +318,7 @@ class GameNotePainter {
         accidental: accidentalToRender,
         center:
             accidentalCenterByVisibleIndex[visibleIndex] ??
-            Offset(item.x - lineSpacing * 1.35, item.y),
+            Offset(item.x - lineSpacing * 1.08, item.y),
         spacing: lineSpacing,
         color: const Color(0xFF0E1620),
       );
@@ -935,18 +937,6 @@ class GameNotePainter {
     );
   }
 
-  Path _buildSharpPath(Offset c, double s) {
-    return _notePainterBuildSharpPath(c, s);
-  }
-
-  Path _buildFlatPath(Offset c, double s) {
-    return _notePainterBuildFlatPath(c, s);
-  }
-
-  Path _buildNaturalPath(Offset c, double s) {
-    return _notePainterBuildNaturalPath(c, s);
-  }
-
   Offset _drawStem(
     Canvas canvas, {
     required Offset center,
@@ -955,6 +945,7 @@ class GameNotePainter {
     required bool drawStem,
     required double spacing,
     double extraOppositeStemHeight = 0,
+    bool useButtCap = false,
   }) {
     if (!drawStem) {
       return center;
@@ -963,7 +954,7 @@ class GameNotePainter {
     final p = Paint()
       ..color = const Color(0xFF0E1620)
       ..strokeWidth = (spacing * 0.17).clamp(1.6, 2.8)
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
     final baseStemHeight = _notePainterBaseStemHeight(spacing);
     final stemX = xAxisDirection == _StemDirection.up
@@ -1018,38 +1009,65 @@ class GameNotePainter {
     required Offset center,
     required double spacing,
     required Color color,
+    double scaleMultiplier = 1.0,
   }) {
     if (accidental == null) {
       return;
     }
 
-    final scale = _accidentalScale(spacing);
-    Path? path;
-    Paint paint;
-
-    if (accidental == '♯') {
-      path = _buildSharpPath(center, scale);
-      paint = Paint()
-        ..color = color
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true;
-    } else if (accidental == '♭') {
-      path = _buildFlatPath(center, scale);
-      paint = Paint()
-        ..color = color
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true;
-    } else if (accidental == '♮') {
-      path = _buildNaturalPath(center, scale);
-      paint = Paint()
-        ..color = color
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true;
-    } else {
+    final smuflGlyph = switch (accidental) {
+      '♯' => '\uE262',
+      '♭' => '\uE260',
+      '♮' => '\uE261',
+      _ => null,
+    };
+    if (smuflGlyph == null) {
       return;
     }
 
-    canvas.drawPath(path, paint);
+    final scale = (_accidentalScale(spacing) * scaleMultiplier).clamp(0.2, 2.0);
+    final fontSize = (68.0 * scale).clamp(10.0, 56.0);
+    final baselineNudge = accidental == '♭' ? fontSize * 0.025 : 0.0;
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: smuflGlyph,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w400,
+          fontFamily: _bravuraFontFamily,
+          height: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    tp.paint(
+      canvas,
+      Offset(
+        center.dx - tp.width / 2,
+        center.dy - tp.height * 0.53 + baselineNudge,
+      ),
+    );
+  }
+
+  void paintAccidentalGlyph(
+    Canvas canvas, {
+    required String accidental,
+    required Offset center,
+    required double spacing,
+    Color color = const Color(0xFF0E1620),
+    double scaleMultiplier = 1.0,
+  }) {
+    _drawAccidental(
+      canvas,
+      accidental: accidental,
+      center: center,
+      spacing: spacing,
+      color: color,
+      scaleMultiplier: scaleMultiplier,
+    );
   }
 
   void _drawDots(

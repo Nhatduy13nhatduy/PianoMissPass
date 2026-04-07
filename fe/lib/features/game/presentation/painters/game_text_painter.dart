@@ -9,6 +9,8 @@ class GameTextPainter {
     required double fontSize,
     FontWeight fontWeight = FontWeight.w600,
     double maxWidth = 140,
+    String? fontFamily,
+    double height = 1.0,
   }) {
     final tp = TextPainter(
       text: TextSpan(
@@ -17,6 +19,8 @@ class GameTextPainter {
           color: color,
           fontSize: fontSize,
           fontWeight: fontWeight,
+          fontFamily: fontFamily,
+          height: height,
         ),
       ),
       textDirection: TextDirection.ltr,

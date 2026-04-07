@@ -299,6 +299,7 @@ void _notePainterDrawBeamGroup(
     ..style = PaintingStyle.fill
     ..isAntiAlias = true;
   final beamThickness = (lineSpacing * 0.48).clamp(3.0, 6.0);
+  final primaryBeamThickness = beamThickness * 1.6;
 
   final x1 = lockedReferenceStemTip.dx;
   final y1 = lockedReferenceStemTip.dy;
@@ -315,7 +316,7 @@ void _notePainterDrawBeamGroup(
     final stemPaint = Paint()
       ..color = const Color(0xFF0E1620)
       ..strokeWidth = (lineSpacing * 0.17).clamp(1.6, 2.8)
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.butt;
     canvas.drawLine(
       item.stemTip!,
       Offset(item.stemTip!.dx, targetY),
@@ -325,7 +326,7 @@ void _notePainterDrawBeamGroup(
 
     topEdgePoints.add(Offset(item.stemTip!.dx, targetY));
     bottomEdgePoints.add(
-      Offset(item.stemTip!.dx, targetY + beamThickness * sign),
+      Offset(item.stemTip!.dx, targetY + primaryBeamThickness * sign),
     );
   }
 
@@ -341,7 +342,7 @@ void _notePainterDrawBeamGroup(
   canvas.drawPath(beamPath, beamPaint);
 
   final secondOffset =
-      (beamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
+      (primaryBeamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
   final hasExplicitSecondary = _notePainterDrawExplicitSecondaryBeams(
     canvas,
     visible,

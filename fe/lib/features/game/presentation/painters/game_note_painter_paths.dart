@@ -126,10 +126,17 @@ Path _notePainterBuildFlatPath(Offset c, double s) {
   final x = c.dx - 10 * s;
   final y = c.dy - 26 * s;
   return Path()
+    ..fillType = PathFillType.evenOdd
     ..moveTo(x + 2.475 * s, y)
     ..lineTo(x + 2.475 * s, y + 31.091 * s)
-    ..lineTo(x + 2.475 * s, y + 33.186 * s)
-    ..lineTo(x + 2.475 * s, y + 37.378 * s)
+    ..cubicTo(
+      x + 2.475 * s,
+      y + 31.091 * s,
+      x + 2.475 * s,
+      y + 33.186 * s,
+      x + 2.475 * s,
+      y + 37.378 * s,
+    )
     ..cubicTo(
       x + 5.332 * s,
       y + 34.693 * s,
@@ -188,6 +195,65 @@ Path _notePainterBuildFlatPath(Offset c, double s) {
     )
     ..lineTo(x, y)
     ..lineTo(x + 2.475 * s, y)
+    ..close()
+    ..moveTo(x + 10.187 * s, y + 39.539 * s)
+    ..cubicTo(
+      x + 9.426 * s,
+      y + 38.622 * s,
+      x + 8.442 * s,
+      y + 38.164 * s,
+      x + 7.236 * s,
+      y + 38.164 * s,
+    )
+    ..cubicTo(
+      x + 5.712 * s,
+      y + 38.164 * s,
+      x + 4.475 * s,
+      y + 39.048 * s,
+      x + 3.523 * s,
+      y + 40.816 * s,
+    )
+    ..cubicTo(
+      x + 2.825 * s,
+      y + 42.191 * s,
+      x + 2.475 * s,
+      y + 45.433 * s,
+      x + 2.475 * s,
+      y + 50.542 * s,
+    )
+    ..lineTo(x + 2.475 * s, y + 58.99 * s)
+    ..cubicTo(
+      x + 2.539 * s,
+      y + 59.252 * s,
+      x + 4.316 * s,
+      y + 57.647 * s,
+      x + 7.807 * s,
+      y + 54.176 * s,
+    )
+    ..cubicTo(
+      x + 9.711 * s,
+      y + 52.343 * s,
+      x + 10.949 * s,
+      y + 50.181 * s,
+      x + 11.52 * s,
+      y + 47.693 * s,
+    )
+    ..cubicTo(
+      x + 11.774 * s,
+      y + 46.71 * s,
+      x + 11.901 * s,
+      y + 45.728 * s,
+      x + 11.901 * s,
+      y + 44.746 * s,
+    )
+    ..cubicTo(
+      x + 11.901 * s,
+      y + 42.584 * s,
+      x + 11.33 * s,
+      y + 40.849 * s,
+      x + 10.187 * s,
+      y + 39.539 * s,
+    )
     ..close();
 }
 

@@ -120,6 +120,7 @@ class _ErrorView extends StatelessWidget {
 
 class _StaffScrollerPainter extends CustomPainter {
   static const bool _debugHideLowerStaff = false;
+  static const String _bravuraFontFamily = 'Bravura';
 
   _StaffScrollerPainter({
     required this.score,
@@ -198,16 +199,24 @@ class _StaffScrollerPainter extends CustomPainter {
     }
 
     final activeKeyFifths = _activeKeyFifths(score, currentMs);
-    if (_shouldUseKeySignature(activeKeyFifths)) {
-      _paintKeySignature(
-        canvas,
-        fifths: activeKeyFifths,
-        trebleTop: trebleTop,
-        bassTop: bassTop,
-        lineSpacing: lineSpacing,
-        drawBass: !_debugHideLowerStaff,
-      );
-    }
+    final keySignatureEndX = _paintKeySignature(
+      canvas,
+      fifths: activeKeyFifths,
+      trebleTop: trebleTop,
+      bassTop: bassTop,
+      lineSpacing: lineSpacing,
+      drawBass: !_debugHideLowerStaff,
+    );
+    _paintTimeSignature(
+      canvas,
+      top: score.beatsPerMeasure,
+      bottom: score.beatUnit,
+      startX: keySignatureEndX + (lineSpacing * 1.8).clamp(16.0, 30.0),
+      trebleTop: trebleTop,
+      bassTop: bassTop,
+      lineSpacing: lineSpacing,
+      drawBass: !_debugHideLowerStaff,
+    );
 
     final symbolPaint = Paint()
       ..color = const Color(0xFF0D3750)
@@ -374,7 +383,59 @@ class _StaffScrollerPainter extends CustomPainter {
     return sign == 'F' ? '𝄢' : '𝄞';
   }
 
-  void _paintKeySignature(
+  String _smuflAccidentalGlyph(bool isSharp) {
+    return isSharp ? '\uE262' : '\uE260';
+  }
+
+  String _smuflTimeSigDigits(int value) {
+    final digits = value.abs().toString().split('');
+    final buffer = StringBuffer();
+    for (final digit in digits) {
+      final n = int.tryParse(digit);
+      if (n == null || n < 0 || n > 9) {
+        continue;
+      }
+      buffer.writeCharCode(0xE080 + n);
+    }
+    if (buffer.isEmpty) {
+      return String.fromCharCode(0xE080);
+    }
+    return buffer.toString();
+  }
+
+  Size _measureSmuflTextSize(String text, {required double fontSize}) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w400,
+          fontFamily: _bravuraFontFamily,
+          height: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return tp.size;
+  }
+
+  double _smuflFontSizeForTargetHeight(
+    String text, {
+    required double targetHeight,
+  }) {
+    const probeSize = 100.0;
+    final measuredHeight = _measureSmuflTextSize(
+      text,
+      fontSize: probeSize,
+    ).height;
+    if (measuredHeight <= 0) {
+      return targetHeight;
+    }
+    return probeSize * (targetHeight / measuredHeight);
+  }
+
+  double _paintKeySignature(
     Canvas canvas, {
     required int fifths,
     required double trebleTop,
@@ -382,16 +443,17 @@ class _StaffScrollerPainter extends CustomPainter {
     required double lineSpacing,
     bool drawBass = true,
   }) {
-    if (fifths == 0) {
-      return;
+    final startX = 86.0;
+    if (!_shouldUseKeySignature(fifths)) {
+      return startX;
     }
 
     final count = fifths.abs().clamp(0, 7);
     final isSharp = fifths > 0;
-    final glyph = isSharp ? '♯' : '♭';
-    final fontSize = (lineSpacing * 2.2).clamp(15.0, 28.0);
-    final startX = 74.0;
-    final spacingX = (lineSpacing * 1.2).clamp(8.0, 13.0);
+    final glyph = _smuflAccidentalGlyph(isSharp);
+    final glyphFontSize = (lineSpacing * 3.6).clamp(28.0, 58.0);
+    final glyphBaselineNudge = isSharp ? 0.6 : 2.2;
+    final spacingX = (lineSpacing * 1.28).clamp(10.0, 18.0);
 
     final trebleSteps = isSharp
         ? const [38, 35, 39, 36, 33, 37, 34]
@@ -417,25 +479,135 @@ class _StaffScrollerPainter extends CustomPainter {
 
       _textPainter.paintText(
         canvas,
-        Offset(x, trebleY - fontSize * 0.62),
+        Offset(x, trebleY - glyphFontSize * 0.55 + glyphBaselineNudge),
         glyph,
         color: const Color(0xFF0E1620),
-        fontSize: fontSize,
-        fontWeight: FontWeight.w700,
-        maxWidth: 40,
+        fontSize: glyphFontSize,
+        fontWeight: FontWeight.w400,
+        maxWidth: glyphFontSize * 1.4,
+        fontFamily: _bravuraFontFamily,
+        height: 1.0,
       );
       if (drawBass) {
         _textPainter.paintText(
           canvas,
-          Offset(x, bassY - fontSize * 0.62),
+          Offset(x, bassY - glyphFontSize * 0.55 + glyphBaselineNudge),
           glyph,
           color: const Color(0xFF0E1620),
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          maxWidth: 40,
+          fontSize: glyphFontSize,
+          fontWeight: FontWeight.w400,
+          maxWidth: glyphFontSize * 1.4,
+          fontFamily: _bravuraFontFamily,
+          height: 1.0,
         );
       }
     }
+
+    return startX + count * spacingX + (lineSpacing * 1.95);
+  }
+
+  void _paintTimeSignature(
+    Canvas canvas, {
+    required int top,
+    required int bottom,
+    required double startX,
+    required double trebleTop,
+    required double bassTop,
+    required double lineSpacing,
+    bool drawBass = true,
+  }) {
+    final topText = _smuflTimeSigDigits(top);
+    final bottomText = _smuflTimeSigDigits(bottom);
+    final targetDigitHeight = lineSpacing * 2.0;
+    final topSizeProbe = _smuflFontSizeForTargetHeight(
+      topText,
+      targetHeight: targetDigitHeight,
+    );
+    final bottomSizeProbe = _smuflFontSizeForTargetHeight(
+      bottomText,
+      targetHeight: targetDigitHeight,
+    );
+    final fontSize =
+        (topSizeProbe > bottomSizeProbe ? topSizeProbe : bottomSizeProbe)
+            .clamp(26.0, 56.0)
+            .toDouble() *
+        2.0;
+    final effectiveFontSize = fontSize.clamp(52.0, 112.0).toDouble();
+
+    final topSize = _measureSmuflTextSize(topText, fontSize: effectiveFontSize);
+    final bottomSize = _measureSmuflTextSize(
+      bottomText,
+      fontSize: effectiveFontSize,
+    );
+    final topWidth = topSize.width;
+    final bottomWidth = bottomSize.width;
+    final topHeight = topSize.height;
+    final bottomHeight = bottomSize.height;
+    final blockWidth = topWidth > bottomWidth ? topWidth : bottomWidth;
+
+    const keySignatureStartX = 86.0;
+    final clusterCenterX = (keySignatureStartX + (startX + blockWidth)) / 2;
+    final centerX = clusterCenterX;
+    final topX = centerX - topWidth / 2;
+    final bottomX = centerX - bottomWidth / 2;
+
+    final verticalOverlap = lineSpacing * 2;
+    final stackHeight = topHeight + bottomHeight - verticalOverlap;
+    final stackStartInStaff = ((lineSpacing * 4) - stackHeight) / 2;
+    final trebleTopY = trebleTop + stackStartInStaff;
+    final trebleBottomY = trebleTopY + topHeight - verticalOverlap;
+
+    _textPainter.paintText(
+      canvas,
+      Offset(topX, trebleTopY),
+      topText,
+      color: const Color(0xFF0E1620),
+      fontSize: effectiveFontSize,
+      fontWeight: FontWeight.w400,
+      maxWidth: blockWidth + 6,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
+    _textPainter.paintText(
+      canvas,
+      Offset(bottomX, trebleBottomY),
+      bottomText,
+      color: const Color(0xFF0E1620),
+      fontSize: effectiveFontSize,
+      fontWeight: FontWeight.w400,
+      maxWidth: blockWidth + 6,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
+
+    if (!drawBass) {
+      return;
+    }
+
+    final bassTopY = bassTop + stackStartInStaff;
+    final bassBottomY = bassTopY + topHeight - verticalOverlap;
+    _textPainter.paintText(
+      canvas,
+      Offset(topX, bassTopY),
+      topText,
+      color: const Color(0xFF0E1620),
+      fontSize: effectiveFontSize,
+      fontWeight: FontWeight.w400,
+      maxWidth: blockWidth + 6,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
+    _textPainter.paintText(
+      canvas,
+      Offset(bottomX, bassBottomY),
+      bottomText,
+      color: const Color(0xFF0E1620),
+      fontSize: effectiveFontSize,
+      fontWeight: FontWeight.w400,
+      maxWidth: blockWidth + 6,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
   }
 
   double _yForStaffStep(
