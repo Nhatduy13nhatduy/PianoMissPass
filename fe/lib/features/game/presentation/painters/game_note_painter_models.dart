@@ -12,6 +12,7 @@ class _RenderNote {
     required this.status,
     required this.durationType,
     required this.stemDirection,
+    required this.stemXAxisDirection,
   });
 
   final int index;
@@ -24,6 +25,7 @@ class _RenderNote {
   final _NoteJudge status;
   final _DurationType durationType;
   _StemDirection stemDirection;
+  _StemDirection stemXAxisDirection;
   Offset? stemTip;
 }
 

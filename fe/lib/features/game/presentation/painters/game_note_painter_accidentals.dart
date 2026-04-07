@@ -19,13 +19,23 @@ Map<int, Offset> _notePainterLayoutAccidentals(
   for (final time in sortedTimes) {
     final chordIndexes = groupsByTime[time]!;
     chordIndexes.sort((a, b) => visible[a].y.compareTo(visible[b].y));
+    final noteStepsInChord = chordIndexes
+        .map((visibleIndex) => visible[visibleIndex].noteStep)
+        .toSet();
 
     final chordRects = <Rect>[];
     for (final visibleIndex in chordIndexes) {
       final note = visible[visibleIndex];
       final accidental = accidentalByVisibleIndex[visibleIndex]!;
       final headDx = noteHeadDxByVisibleIndex[visibleIndex] ?? 0.0;
-      final baseCenter = Offset(note.x + headDx - spacing * 1.35, note.y);
+      final hasConsecutiveAccidentalNeighbor =
+          noteStepsInChord.contains(note.noteStep - 1) ||
+          noteStepsInChord.contains(note.noteStep + 1);
+      final extraLeftShift = hasConsecutiveAccidentalNeighbor ? shiftStep : 0.0;
+      final baseCenter = Offset(
+        note.x + headDx - spacing * 1.35 - extraLeftShift,
+        note.y,
+      );
 
       var resolvedCenter = baseCenter;
       var resolvedBounds = _notePainterAccidentalBounds(

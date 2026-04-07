@@ -82,6 +82,7 @@ class GameNotePainter {
           status: status,
           durationType: durationType,
           stemDirection: stemDirection,
+          stemXAxisDirection: stemDirection,
         ),
       );
     }
@@ -120,10 +121,20 @@ class GameNotePainter {
       visibleIndexByScoreIndex[visible[i].index] = i;
     }
 
+    final chordVisibleIndexesByKey = <String, List<int>>{};
+    for (var i = 0; i < visible.length; i++) {
+      final chordKey = chordLayout.chordKeyByVisibleIndex[i];
+      if (chordKey != null) {
+        chordVisibleIndexesByKey.putIfAbsent(chordKey, () => <int>[]).add(i);
+      }
+    }
+
     final beamGroups = <_ProjectedBeamGroup>[];
+    final beamStemDirectionByVisibleIndex = <int, _StemDirection>{};
     for (final group in allBeamGroups) {
       final projected = <int>[];
       final projectedChordKeys = <String>{};
+      final groupStemDirection = allNotes[group.first].stemDirection;
       for (final allIndex in group) {
         final scoreIndex = allNotes[allIndex].index;
         final visibleIndex = visibleIndexByScoreIndex[scoreIndex];
@@ -137,10 +148,29 @@ class GameNotePainter {
           if (chordKey != null && projectedChordKeys.contains(chordKey)) {
             continue;
           }
-          projected.add(visibleIndex);
           if (chordKey != null) {
             projectedChordKeys.add(chordKey);
+            final chordVisibleIndexes = chordVisibleIndexesByKey[chordKey];
+            if (chordVisibleIndexes == null || chordVisibleIndexes.isEmpty) {
+              continue;
+            }
+
+            final anchorVisibleIndex = groupStemDirection == _StemDirection.down
+                ? chordVisibleIndexes.reduce(
+                    (a, b) => visible[a].noteStep >= visible[b].noteStep
+                        ? a
+                        : b,
+                  )
+                : chordVisibleIndexes.reduce(
+                    (a, b) => visible[a].noteStep <= visible[b].noteStep
+                        ? a
+                        : b,
+                  );
+            projected.add(anchorVisibleIndex);
+            continue;
           }
+
+          projected.add(visibleIndex);
         }
       }
       if (projected.length >= 2) {
@@ -149,6 +179,9 @@ class GameNotePainter {
           group,
           lineSpacing: lineSpacing,
         );
+        for (final visibleIndex in projected) {
+          beamStemDirectionByVisibleIndex[visibleIndex] = groupStemDirection;
+        }
         beamGroups.add(
           _ProjectedBeamGroup(
             indexes: projected,
@@ -160,8 +193,15 @@ class GameNotePainter {
     }
 
     final beamedVisibleIndexes = <int>{};
+    final beamedChordKeys = <String>{};
     for (final group in beamGroups) {
       beamedVisibleIndexes.addAll(group.indexes);
+      for (final visibleIndex in group.indexes) {
+        final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
+        if (chordKey != null) {
+          beamedChordKeys.add(chordKey);
+        }
+      }
     }
 
     final accidentalByVisibleIndex = <int, String>{};
@@ -186,12 +226,19 @@ class GameNotePainter {
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final item = visible[visibleIndex];
       final accidentalToRender = accidentalByVisibleIndex[visibleIndex];
-        final headDx = chordLayout.headDxByVisibleIndex[visibleIndex] ?? 0.0;
+      final headDx = chordLayout.headDxByVisibleIndex[visibleIndex] ?? 0.0;
       final center = Offset(item.x + headDx, item.y);
-      final effectiveStemDirection =
+      final layoutStemDirection =
           chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
           item.stemDirection;
+      final beamStemDirection = beamStemDirectionByVisibleIndex[visibleIndex];
+      final effectiveStemDirection = beamStemDirection ?? layoutStemDirection;
+      final stemXAxisDirection =
+          beamStemDirection != null && beamStemDirection != layoutStemDirection
+          ? layoutStemDirection
+          : effectiveStemDirection;
       item.stemDirection = effectiveStemDirection;
+      item.stemXAxisDirection = stemXAxisDirection;
       assert(() {
         if (!_enablePaintNoteDebugLog) {
           return true;
@@ -208,15 +255,6 @@ class GameNotePainter {
         );
         return true;
       }());
-      _drawLedgerLines(
-        canvas,
-        centerX: center.dx,
-        noteStep: item.noteStep,
-        isTreble: item.isTreble,
-        staffTop: item.isTreble ? trebleTop : bassTop,
-        spacing: lineSpacing,
-      );
-
       _drawNoteGlyph(
         canvas,
         center: center,
@@ -226,29 +264,46 @@ class GameNotePainter {
         spacing: lineSpacing,
       );
 
+      _drawLedgerLines(
+        canvas,
+        centerX: center.dx,
+        noteStep: item.noteStep,
+        isTreble: item.isTreble,
+        staffTop: item.isTreble ? trebleTop : bassTop,
+        spacing: lineSpacing,
+      );
+
+      final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
       final isBeamed = beamedVisibleIndexes.contains(visibleIndex);
+      final isChordMember = chordLayout.chordMemberVisibleIndexes.contains(
+        visibleIndex,
+      );
+      final isChordInBeam =
+          chordKey != null && beamedChordKeys.contains(chordKey);
+      final shouldHideTail = isBeamed || isChordInBeam;
       final shouldDrawStem =
           item.durationType != _DurationType.whole &&
-          (!chordLayout.chordMemberVisibleIndexes.contains(
-                visibleIndex,
-              ) ||
-              isBeamed ||
-              chordLayout.stemAnchorVisibleIndexes.contains(
-                visibleIndex,
-              ));
-        final chordOppositeStemHeight =
+          (!isChordMember ||
+              (isChordInBeam
+                  ? isBeamed
+                  : (isBeamed ||
+                      chordLayout.stemAnchorVisibleIndexes.contains(
+                        visibleIndex,
+                      ))));
+      final chordOppositeStemHeight =
           chordLayout.stemExtraHeightByAnchorVisibleIndex[visibleIndex] ?? 0.0;
 
       item.stemTip = _drawStem(
         canvas,
         center: center,
         direction: effectiveStemDirection,
+        xAxisDirection: stemXAxisDirection,
         drawStem: shouldDrawStem,
         spacing: lineSpacing,
         extraOppositeStemHeight: chordOppositeStemHeight,
       );
 
-      if (!isBeamed && shouldDrawStem) {
+      if (!shouldHideTail && shouldDrawStem) {
         _drawFlags(
           canvas,
           stemTip: item.stemTip!,
@@ -344,17 +399,33 @@ class GameNotePainter {
 
       chordMemberVisibleIndexes.addAll(indexes);
 
+      final sortedIndexes = List<int>.from(indexes)
+        ..sort((a, b) {
+          final stepCompare = visible[a].noteStep.compareTo(
+            visible[b].noteStep,
+          );
+          if (stepCompare != 0) {
+            return stepCompare;
+          }
+          return a.compareTo(b);
+        });
+
       _StemDirection stemDirection;
       final explicitStem = indexes
           .map((idx) => visible[idx].note.stemFromMxl)
-          .firstWhere((stem) => stem == 'up' || stem == 'down', orElse: () => null);
+          .firstWhere(
+            (stem) => stem == 'up' || stem == 'down',
+            orElse: () => null,
+          );
       if (explicitStem == 'up') {
         stemDirection = _StemDirection.up;
       } else if (explicitStem == 'down') {
         stemDirection = _StemDirection.down;
       } else {
         final isTreble = visible[indexes.first].isTreble;
-        final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
+        final bottomLine = isTreble
+            ? _trebleBottomLineStep
+            : _bassBottomLineStep;
         final middleLine = bottomLine + 4;
         var minStep = visible[indexes.first].noteStep;
         var maxStep = minStep;
@@ -378,30 +449,70 @@ class GameNotePainter {
         stemDirectionByVisibleIndex[idx] = stemDirection;
       }
 
-      final anchor = stemDirection == _StemDirection.up
-          ? indexes.reduce(
-              (a, b) => visible[a].noteStep >= visible[b].noteStep ? a : b,
-            )
-          : indexes.reduce(
-              (a, b) => visible[a].noteStep <= visible[b].noteStep ? a : b,
-            );
+      var runEnd = sortedIndexes.length - 1;
+
+      while (runEnd >= 0) {
+        var runStart = runEnd;
+
+        var prevStep = visible[sortedIndexes[runStart]].noteStep;
+
+        while (runStart - 1 >= 0) {
+          final prevIndex = sortedIndexes[runStart - 1];
+          final prevStepCandidate = visible[prevIndex].noteStep;
+
+          if (prevStep - prevStepCandidate != 1) break;
+
+          prevStep = prevStepCandidate;
+          runStart--;
+        }
+
+        final runLength = runEnd - runStart + 1;
+
+        if (runLength >= 2) {
+          final baseDx = spacing;
+          final dir = stemDirection;
+
+          int nextIndex = -1;
+          int nextStepLocal = 0;
+
+          for (var i = runEnd; i >= runStart; i--) {
+            final current = sortedIndexes[i];
+            final currentStep = visible[current].noteStep;
+
+            double dx = 0.0;
+
+            if (nextIndex != -1 && (currentStep - nextStepLocal).abs() == 1) {
+              final positionInRun = runEnd - i;
+              final isShifted = positionInRun.isOdd;
+              dx = isShifted ? baseDx : 0.0;
+            }
+
+            headDxByVisibleIndex[current] = dx == 0.0
+                ? 0.0
+                : (dir == _StemDirection.up ? dx : -dx);
+
+            nextIndex = current;
+            nextStepLocal = currentStep;
+          }
+        }
+
+        runEnd = runStart - 1;
+      }
+
+        final anchor = stemDirection == _StemDirection.up
+          ? sortedIndexes.last
+          : sortedIndexes.first;
       stemAnchorVisibleIndexes.add(anchor);
 
-      var minY = visible[indexes.first].y;
-      var maxY = minY;
-      for (final idx in indexes.skip(1)) {
+      var minY = double.infinity;
+      var maxY = double.negativeInfinity;
+      for (final idx in indexes) {
         final y = visible[idx].y;
-        if (y < minY) {
-          minY = y;
-        }
-        if (y > maxY) {
-          maxY = y;
-        }
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
       final chordSpanHeight = (maxY - minY).abs();
       stemExtraHeightByAnchorVisibleIndex[anchor] = chordSpanHeight;
-
-      // Temporarily disable notehead offset for adjacent chord tones.
     }
 
     return _ChordLayout(
@@ -425,7 +536,6 @@ class GameNotePainter {
       lineSpacing: lineSpacing,
     );
   }
-
 
   void _drawSlurs(
     Canvas canvas, {
@@ -650,7 +760,7 @@ class GameNotePainter {
     final ledgerPaint = Paint()
       ..color = const Color(0xFF111111)
       ..strokeWidth = 1.6;
-    const halfLength = 16.0;
+    final halfLength = (spacing * 0.95).clamp(8.0, 14.0);
 
     if (noteStep > topLine) {
       for (
@@ -839,11 +949,11 @@ class GameNotePainter {
     return _notePainterBuildNaturalPath(c, s);
   }
 
-
   Offset _drawStem(
     Canvas canvas, {
     required Offset center,
     required _StemDirection direction,
+    required _StemDirection xAxisDirection,
     required bool drawStem,
     required double spacing,
     double extraOppositeStemHeight = 0,
@@ -858,15 +968,15 @@ class GameNotePainter {
       ..strokeCap = StrokeCap.round;
 
     final baseStemHeight = (spacing * 3.2).clamp(34.0, 76.0);
-    final stemX = direction == _StemDirection.up
+    final stemX = xAxisDirection == _StemDirection.up
         ? center.dx + spacing * 0.55
         : center.dx - spacing * 0.55;
     final stemStart = direction == _StemDirection.up
-      ? Offset(stemX, center.dy + extraOppositeStemHeight)
-      : Offset(stemX, center.dy - extraOppositeStemHeight);
+        ? Offset(stemX, center.dy + extraOppositeStemHeight)
+        : Offset(stemX, center.dy - extraOppositeStemHeight);
     final stemEnd = direction == _StemDirection.up
-      ? Offset(stemX, center.dy - baseStemHeight)
-      : Offset(stemX, center.dy + baseStemHeight);
+        ? Offset(stemX, center.dy - baseStemHeight)
+        : Offset(stemX, center.dy + baseStemHeight);
 
     canvas.drawLine(stemStart, stemEnd, p);
     return stemEnd;
@@ -903,7 +1013,6 @@ class GameNotePainter {
       canvas.drawPath(path, paint);
     }
   }
-
 
   void _drawAccidental(
     Canvas canvas, {
@@ -979,7 +1088,6 @@ class GameNotePainter {
     }
   }
 
-
   List<List<int>> _buildBeamGroups(List<_RenderNote> visible) {
     return _notePainterBuildBeamGroups(visible);
   }
@@ -1018,4 +1126,3 @@ class GameNotePainter {
     };
   }
 }
-

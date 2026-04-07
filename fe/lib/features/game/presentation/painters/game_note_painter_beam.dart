@@ -45,7 +45,7 @@ Offset _notePainterBeamStemTipForNote(
   required double spacing,
 }) {
   final stemHeight = (spacing * 3.2).clamp(34.0, 76.0);
-  final stemX = direction == _StemDirection.up
+  final stemX = note.stemXAxisDirection == _StemDirection.up
       ? note.x + spacing * 0.55
       : note.x - spacing * 0.55;
   final stemY = direction == _StemDirection.up
