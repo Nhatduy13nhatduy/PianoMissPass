@@ -121,6 +121,7 @@ class _ErrorView extends StatelessWidget {
 class _StaffScrollerPainter extends CustomPainter {
   static const bool _debugHideLowerStaff = false;
   static const String _bravuraFontFamily = 'Bravura';
+  static const int _clefTransitionMs = 700;
 
   _StaffScrollerPainter({
     required this.score,
@@ -155,47 +156,27 @@ class _StaffScrollerPainter extends CustomPainter {
         ? trebleTop + staffHeight
         : bassTop + staffHeight;
     final lineSpacing = staffHeight / 4;
+    const staffLeftInset = 18.0;
+    const staffRightInset = 0.0;
+    final staffWidth = size.width - staffLeftInset - staffRightInset;
 
     _staffPainter.paint(
       canvas,
-      Rect.fromLTWH(18, trebleTop, size.width - 36, staffHeight),
+      Rect.fromLTWH(staffLeftInset, trebleTop, staffWidth, staffHeight),
       lineSpacing,
     );
     if (!_debugHideLowerStaff) {
       _staffPainter.paint(
         canvas,
-        Rect.fromLTWH(18, bassTop, size.width - 36, staffHeight),
+        Rect.fromLTWH(staffLeftInset, bassTop, staffWidth, staffHeight),
         lineSpacing,
       );
     }
 
-    final activeTrebleClef = _activeClefSign(
-      score,
-      currentMs: currentMs,
-      staffNumber: 1,
-      fallback: 'G',
-    );
-    final activeBassClef = _activeClefSign(
-      score,
-      currentMs: currentMs,
-      staffNumber: 2,
-      fallback: 'F',
-    );
-
-    _textPainter.paintClef(
-      canvas,
-      Offset(28, trebleTop + lineSpacing * 0.2),
-      _glyphForClefSign(activeTrebleClef),
-      72,
-    );
-    if (!_debugHideLowerStaff) {
-      _textPainter.paintClef(
-        canvas,
-        Offset(30, bassTop + lineSpacing * 0.6),
-        _glyphForClefSign(activeBassClef),
-        54,
-      );
-    }
+    final trebleMainClefX = 28.0;
+    final bassMainClefX = 30.0;
+    final trebleClefY = trebleTop + lineSpacing * 0.35;
+    final bassClefY = bassTop + lineSpacing * 0.35;
 
     final activeKeyFifths = _activeKeyFifths(score, currentMs);
     final keySignatureEndX = _paintKeySignature(
@@ -232,24 +213,85 @@ class _StaffScrollerPainter extends CustomPainter {
       symbolPaint,
     );
 
+    final trebleActiveClef = _mainClefSignForStaffAtAnchor(
+      score,
+      currentMs: currentMs,
+      staffNumber: 1,
+      fallback: 'G',
+      playheadX: playheadX,
+      lineSpacing: lineSpacing,
+      measureLineOffsetX: measureLineOffsetX,
+      mainClefX: trebleMainClefX,
+    );
+    final trebleMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
+      score,
+      currentMs: currentMs,
+      staffNumber: 1,
+      playheadX: playheadX,
+      lineSpacing: lineSpacing,
+      measureLineOffsetX: measureLineOffsetX,
+      mainClefX: trebleMainClefX,
+    );
+    final bassActiveClef = _mainClefSignForStaffAtAnchor(
+      score,
+      currentMs: currentMs,
+      staffNumber: 2,
+      fallback: 'F',
+      playheadX: playheadX,
+      lineSpacing: lineSpacing,
+      measureLineOffsetX: measureLineOffsetX,
+      mainClefX: bassMainClefX,
+    );
+    final bassMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
+      score,
+      currentMs: currentMs,
+      staffNumber: 2,
+      playheadX: playheadX,
+      lineSpacing: lineSpacing,
+      measureLineOffsetX: measureLineOffsetX,
+      mainClefX: bassMainClefX,
+    );
+    _textPainter.paintClef(
+      canvas,
+      Offset(trebleMainClefX, trebleClefY),
+      _glyphForClefSign(trebleActiveClef),
+      72,
+      color: _withOpacity(const Color(0xFF111111), trebleMainClefOpacity),
+    );
+    if (!_debugHideLowerStaff) {
+      _textPainter.paintClef(
+        canvas,
+        Offset(bassMainClefX, bassClefY),
+        _glyphForClefSign(bassActiveClef),
+        72,
+        color: _withOpacity(const Color(0xFF111111), bassMainClefOpacity),
+      );
+    }
+
     final visibleSymbols = score.symbols.where((symbol) {
       final delta = symbol.timeMs - currentMs;
       return delta <= GameNotePainter.previewWindowMs &&
           delta >= -GameNotePainter.cleanupWindowMs;
     });
+    final measureStartTimes =
+        score.symbols
+            .where((symbol) => symbol.label == '|')
+            .map((symbol) => symbol.timeMs)
+            .toList()
+          ..sort();
 
     for (final symbol in visibleSymbols) {
       final x =
           playheadX + (symbol.timeMs - currentMs) * GameNotePainter.notePxPerMs;
-      if (x < 10 || x > size.width - 10) {
-        continue;
-      }
 
       if (symbol.label == '|') {
         if (symbol.timeMs <= 0) {
           continue;
         }
         final measureX = x + measureLineOffsetX;
+        if (measureX < 10 || measureX > size.width - 10) {
+          continue;
+        }
         canvas.drawLine(
           Offset(measureX, trebleTop),
           Offset(measureX, stavesBottomY),
@@ -259,34 +301,6 @@ class _StaffScrollerPainter extends CustomPainter {
       }
 
       if (symbol.label.startsWith('Key ')) {
-        continue;
-      }
-
-      if (symbol.label.startsWith('Clef:')) {
-        final parsed = _parseClefSymbol(symbol.label);
-        if (parsed == null) {
-          continue;
-        }
-        final clefDeltaMs = symbol.timeMs - currentMs;
-        if (clefDeltaMs < -900 || clefDeltaMs > 2200) {
-          continue;
-        }
-        final isTrebleStaff = parsed.staffNumber == 1;
-        if (!isTrebleStaff && _debugHideLowerStaff) {
-          continue;
-        }
-        final proximity = (1 - (clefDeltaMs.abs() / 2200))
-            .clamp(0.0, 1.0)
-            .toDouble();
-        final glyph = _glyphForClefSign(parsed.sign);
-        final xOffset = -lineSpacing * (1.8 - proximity * 0.35);
-        final y = isTrebleStaff
-            ? trebleTop + lineSpacing * 0.16
-            : bassTop + lineSpacing * 0.5;
-        final fontSize = isTrebleStaff
-            ? 30 + proximity * 9
-            : 26 + proximity * 7;
-        _textPainter.paintClef(canvas, Offset(x + xOffset, y), glyph, fontSize);
         continue;
       }
 
@@ -309,7 +323,26 @@ class _StaffScrollerPainter extends CustomPainter {
           glyph,
           targetHeight: targetHeight,
         );
-        final fontSize = (baseFontSize * 2.0).clamp(48.0, 148.0);
+        final isWholeRest = parsedRest.restType == 'whole';
+        final isWholeOrHalfRest =
+            parsedRest.restType == 'whole' || parsedRest.restType == 'half';
+        final restX = isWholeRest
+            ? _centeredWholeRestX(
+                restTimeMs: symbol.timeMs,
+                measureStartTimes: measureStartTimes,
+                playheadX: playheadX,
+                currentMs: currentMs,
+                barlineOffsetX: measureLineOffsetX,
+              )
+            : x;
+        if (restX < 10 || restX > size.width - 10) {
+          continue;
+        }
+
+        final scaleFactor = isWholeOrHalfRest ? 2.7 : 2.0;
+        final minSize = isWholeOrHalfRest ? 60.0 : 48.0;
+        final maxSize = isWholeOrHalfRest ? 168.0 : 148.0;
+        final fontSize = (baseFontSize * scaleFactor).clamp(minSize, maxSize);
 
         final staffTop = isTrebleStaff ? trebleTop : bassTop;
         final restStep = _restStaffStep(
@@ -330,7 +363,7 @@ class _StaffScrollerPainter extends CustomPainter {
         _textPainter.paintText(
           canvas,
           Offset(
-            x - fontSize * xOffsetFactor,
+            restX - fontSize * xOffsetFactor,
             restY - fontSize * 0.55 + baselineNudge,
           ),
           glyph,
@@ -340,6 +373,45 @@ class _StaffScrollerPainter extends CustomPainter {
           maxWidth: fontSize * 1.5,
           fontFamily: _bravuraFontFamily,
           height: 1.0,
+        );
+        continue;
+      }
+
+      if (x < 10 || x > size.width - 10) {
+        continue;
+      }
+
+      if (symbol.label.startsWith('Clef:')) {
+        final parsed = _parseClefSymbol(symbol.label);
+        if (parsed == null) {
+          continue;
+        }
+        if (symbol.timeMs <= 0) {
+          continue;
+        }
+        final isTrebleStaff = parsed.staffNumber == 1;
+        if (!isTrebleStaff && _debugHideLowerStaff) {
+          continue;
+        }
+        final glyph = _glyphForClefSign(parsed.sign);
+        final clefX = x + measureLineOffsetX + lineSpacing * 0.35;
+        final y = isTrebleStaff ? trebleClefY : bassClefY;
+        final mainClefX = isTrebleStaff ? trebleMainClefX : bassMainClefX;
+        if (clefX <= mainClefX) {
+          continue;
+        }
+        final passedPlayheadMs = currentMs - symbol.timeMs;
+        final fadeInProgress = (passedPlayheadMs / _clefTransitionMs)
+            .clamp(0.0, 1.0)
+            .toDouble();
+        final movingOpacity = 0.5 + (0.5 * fadeInProgress);
+        const fontSize = 72.0;
+        _textPainter.paintClef(
+          canvas,
+          Offset(clefX, y),
+          glyph,
+          fontSize,
+          color: _withOpacity(const Color(0xFF111111), movingOpacity),
         );
         continue;
       }
@@ -407,24 +479,110 @@ class _StaffScrollerPainter extends CustomPainter {
     return fifths.abs() >= 2;
   }
 
-  String _activeClefSign(
+  String _mainClefSignForStaffAtAnchor(
     ScoreData score, {
     required int currentMs,
     required int staffNumber,
     required String fallback,
+    required double playheadX,
+    required double lineSpacing,
+    required double measureLineOffsetX,
+    required double mainClefX,
   }) {
-    var sign = fallback;
+    final changes = <_ClefSymbolEvent>[];
     for (final symbol in score.symbols) {
-      if (symbol.timeMs > currentMs) {
-        break;
-      }
       final parsed = _parseClefSymbol(symbol.label);
       if (parsed == null || parsed.staffNumber != staffNumber) {
         continue;
       }
-      sign = parsed.sign;
+      changes.add(_ClefSymbolEvent(timeMs: symbol.timeMs, sign: parsed.sign));
     }
-    return sign;
+
+    if (changes.isEmpty) {
+      return fallback;
+    }
+
+    changes.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+
+    var activeSign = fallback;
+    for (final change in changes) {
+      final arrivalMs = _clefArrivalMsAtMainAnchor(
+        symbolTimeMs: change.timeMs,
+        playheadX: playheadX,
+        lineSpacing: lineSpacing,
+        measureLineOffsetX: measureLineOffsetX,
+        mainClefX: mainClefX,
+      );
+      if (currentMs >= arrivalMs) {
+        activeSign = change.sign;
+      } else {
+        break;
+      }
+    }
+    return activeSign;
+  }
+
+  double _mainClefOpacityForStaffAtAnchor(
+    ScoreData score, {
+    required int currentMs,
+    required int staffNumber,
+    required double playheadX,
+    required double lineSpacing,
+    required double measureLineOffsetX,
+    required double mainClefX,
+  }) {
+    final changes = <_ClefSymbolEvent>[];
+    for (final symbol in score.symbols) {
+      final parsed = _parseClefSymbol(symbol.label);
+      if (parsed == null || parsed.staffNumber != staffNumber) {
+        continue;
+      }
+      changes.add(_ClefSymbolEvent(timeMs: symbol.timeMs, sign: parsed.sign));
+    }
+
+    if (changes.isEmpty) {
+      return 1.0;
+    }
+
+    changes.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+
+    for (final change in changes) {
+      final arrivalMs = _clefArrivalMsAtMainAnchor(
+        symbolTimeMs: change.timeMs,
+        playheadX: playheadX,
+        lineSpacing: lineSpacing,
+        measureLineOffsetX: measureLineOffsetX,
+        mainClefX: mainClefX,
+      );
+      if (currentMs >= arrivalMs) {
+        continue;
+      }
+
+      final fadeStartMs = arrivalMs - _clefTransitionMs;
+      if (currentMs <= fadeStartMs) {
+        return 1.0;
+      }
+
+      final progress = ((currentMs - fadeStartMs) / _clefTransitionMs)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      return 1.0 - progress;
+    }
+
+    return 1.0;
+  }
+
+  int _clefArrivalMsAtMainAnchor({
+    required int symbolTimeMs,
+    required double playheadX,
+    required double lineSpacing,
+    required double measureLineOffsetX,
+    required double mainClefX,
+  }) {
+    final clefOffsetX = measureLineOffsetX + lineSpacing * 0.35;
+    final distanceToMain = (playheadX + clefOffsetX) - mainClefX;
+    final travelMs = distanceToMain / GameNotePainter.notePxPerMs;
+    return symbolTimeMs + travelMs.round();
   }
 
   _ClefSymbol? _parseClefSymbol(String label) {
@@ -495,7 +653,7 @@ class _StaffScrollerPainter extends CustomPainter {
   double _restGlyphTargetHeight(String restType, double lineSpacing) {
     return switch (restType) {
       'whole' => (lineSpacing * 1.7).clamp(14.0, 26.0),
-      'half' => (lineSpacing * 1.75).clamp(14.0, 27.0),
+      'half' => (lineSpacing * 1.7).clamp(14.0, 26.0),
       'quarter' => (lineSpacing * 2.3).clamp(18.0, 36.0),
       '8th' => (lineSpacing * 2.55).clamp(20.0, 40.0),
       '16th' => (lineSpacing * 2.8).clamp(22.0, 43.0),
@@ -520,8 +678,8 @@ class _StaffScrollerPainter extends CustomPainter {
   double _restBaselineNudge(String restType, double lineSpacing) {
     return switch (restType) {
       // Whole rest hangs from the 4th line; half rest sits on the middle line.
-      'whole' => lineSpacing * 0.44,
-      'half' => -lineSpacing * 0.22,
+      'whole' => lineSpacing * 0.28,
+      'half' => lineSpacing * 0.22,
       'quarter' => lineSpacing * 0.05,
       '8th' => lineSpacing * 0.0,
       '16th' => -lineSpacing * 0.05,
@@ -532,14 +690,58 @@ class _StaffScrollerPainter extends CustomPainter {
 
   double _restXOffsetFactor(String restType) {
     return switch (restType) {
-      'whole' => 0.31,
-      'half' => 0.31,
-      'quarter' => 0.35,
-      '8th' => 0.35,
-      '16th' => 0.35,
-      '32th' || '32nd' => 0.35,
+      'whole' => 0.17,
+      'half' => 0.17,
+      'quarter' => 0.17,
+      '8th' => 0.17,
+      '16th' => 0.17,
+      '32th' || '32nd' => 0.17,
       _ => 0.35,
     };
+  }
+
+  double _centeredWholeRestX({
+    required int restTimeMs,
+    required List<int> measureStartTimes,
+    required double playheadX,
+    required int currentMs,
+    required double barlineOffsetX,
+  }) {
+    final centerTimeMs = _measureCenterTimeMs(restTimeMs, measureStartTimes);
+    return playheadX +
+        (centerTimeMs - currentMs) * GameNotePainter.notePxPerMs +
+        barlineOffsetX;
+  }
+
+  double _measureCenterTimeMs(int timeMs, List<int> measureStartTimes) {
+    if (measureStartTimes.isEmpty) {
+      return timeMs.toDouble();
+    }
+
+    var currentIndex = 0;
+    for (var i = 0; i < measureStartTimes.length; i++) {
+      if (measureStartTimes[i] <= timeMs) {
+        currentIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    final currentMeasureStart = measureStartTimes[currentIndex];
+    if (currentIndex + 1 < measureStartTimes.length) {
+      final nextMeasureStart = measureStartTimes[currentIndex + 1];
+      return (currentMeasureStart + nextMeasureStart) / 2.0;
+    }
+
+    if (currentIndex > 0) {
+      final previousMeasureStart = measureStartTimes[currentIndex - 1];
+      final lastMeasureSpan = currentMeasureStart - previousMeasureStart;
+      if (lastMeasureSpan > 0) {
+        return currentMeasureStart + (lastMeasureSpan / 2.0);
+      }
+    }
+
+    return timeMs.toDouble();
   }
 
   String _glyphForClefSign(String sign) {
@@ -780,6 +982,18 @@ class _StaffScrollerPainter extends CustomPainter {
     final diff = staffStep - refStep;
     return staffTop + spacing * 4 - diff * (spacing / 2);
   }
+
+  Color _withOpacity(Color base, double opacity) {
+    final alpha = (255 * opacity.clamp(0.0, 1.0)).round();
+    return base.withAlpha(alpha);
+  }
+}
+
+class _ClefSymbolEvent {
+  const _ClefSymbolEvent({required this.timeMs, required this.sign});
+
+  final int timeMs;
+  final String sign;
 }
 
 class _ClefSymbol {

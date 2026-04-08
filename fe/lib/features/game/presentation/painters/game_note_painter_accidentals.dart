@@ -31,9 +31,14 @@ Map<int, Offset> _notePainterLayoutAccidentals(
       final hasConsecutiveAccidentalNeighbor =
           noteStepsInChord.contains(note.noteStep - 1) ||
           noteStepsInChord.contains(note.noteStep + 1);
-      final extraLeftShift = hasConsecutiveAccidentalNeighbor ? shiftStep : 0.0;
+      final extraLeftShift = hasConsecutiveAccidentalNeighbor
+          ? shiftStep * 1.3
+          : 0.0;
+      final accidentalBaseGap = note.durationType == _DurationType.whole
+          ? spacing * 1.48
+          : spacing * 1.16;
       final baseCenter = Offset(
-        note.x + headDx - spacing * 1.08 - extraLeftShift,
+        note.x + headDx - accidentalBaseGap - extraLeftShift,
         note.y,
       );
 

@@ -34,14 +34,16 @@ class GameTextPainter {
     tp.paint(canvas, offset);
   }
 
-  void paintClef(Canvas canvas, Offset offset, String text, double fontSize) {
+  void paintClef(
+    Canvas canvas,
+    Offset offset,
+    String text,
+    double fontSize, {
+    Color color = const Color(0xFF111111),
+  }) {
     final tp = _resolvePainter(
       text: text,
-      style: TextStyle(
-        color: const Color(0xFF111111),
-        fontSize: fontSize,
-        height: 1,
-      ),
+      style: TextStyle(color: color, fontSize: fontSize, height: 1),
       maxLines: 1,
     );
     tp.paint(canvas, offset);

@@ -54,7 +54,7 @@ Path _notePainterBuildLegacyFlagTemplate({required _StemDirection direction}) {
       ..cubicTo(1.64, 0.96, 3.22, 1.87, 4.73, 2.74)
       ..cubicTo(21.7, 12.5, 30.12, 17.34, 20.83, 36.79)
       ..cubicTo(34.09, 17.29, 26.89, 9.42, 15.88, -2.62)
-      ..cubicTo(10.85, 8.12, 5.03, 14.48, 0, -23.21)
+      ..cubicTo(10.85, -8.12, 5.03, -14.48, 0, -23.21)
       ..close();
   }
 

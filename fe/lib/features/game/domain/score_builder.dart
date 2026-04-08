@@ -1,5 +1,12 @@
 part of 'game_score.dart';
 
+// Duration-based spacing in quarter units.
+// MusicXML durations are in divisions, where `measureDivisions` is divisions per
+// quarter note. We convert duration to quarter-count first, then multiply by the
+// fixed timeline factor below.
+const bool _useDurationBasedTimeline = true;
+const double _timelineMsPerDurationDivision = 1600;
+
 ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   if (document.parts.isEmpty) {
     return const ScoreData(
@@ -140,10 +147,14 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     var measureCursorDiv = 0.0;
     var measureLastOnsetDiv = 0.0;
     var measureMaxDiv = 0.0;
+    final expectedMeasureDivCurrent = divisions * beats * (4.0 / beatType);
     final staffByVoice = <int, int>{...globalStaffByVoice};
     int? lastExplicitStaff = globalLastExplicitStaff;
 
     var noteCursor = 0;
+    final isMeasureAllRest =
+        measure.notes.isNotEmpty && measure.notes.every((n) => n.isRest);
+    final emittedWholeRestStaffs = <int>{};
     for (final element in measure.elements) {
       if (_nameEquals(element.name, 'backup')) {
         final duration =
@@ -199,9 +210,16 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           : measureCursorDiv;
       final onsetMs =
           measureStartMs +
-          (onsetInMeasureDiv / measureDivisions * 60000 / measureBpm).round();
-      final holdMs = ((duration / measureDivisions) * 60000 / measureBpm)
-          .round();
+          _divisionsToTimelineMs(
+            onsetInMeasureDiv,
+            measureDivisions: measureDivisions,
+            measureBpm: measureBpm,
+          );
+      final holdMs = _divisionsToTimelineMs(
+        duration.toDouble(),
+        measureDivisions: measureDivisions,
+        measureBpm: measureBpm,
+      );
       final explicitStaff = note.staff;
       final staffNumber =
           explicitStaff ??
@@ -258,10 +276,20 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           );
         }
       } else {
-        final restType = _restTypeFromNoteNode(note);
         final restStaff = staffNumber ?? 1;
+        if (isMeasureAllRest && !emittedWholeRestStaffs.add(restStaff)) {
+          continue;
+        }
+
+        final restType = isMeasureAllRest
+            ? 'whole'
+            : _restTypeFromNoteNode(
+                note,
+                expectedMeasureDiv: expectedMeasureDivCurrent,
+              );
+        final restTimeMs = isMeasureAllRest ? measureStartMs : onsetMs;
         symbols.add(
-          MusicSymbol(label: 'Rest:$restStaff:$restType', timeMs: onsetMs),
+          MusicSymbol(label: 'Rest:$restStaff:$restType', timeMs: restTimeMs),
         );
       }
 
@@ -283,7 +311,11 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     }
     elapsedMs =
         measureStartMs +
-        (measureMaxDiv / measureDivisions * 60000 / measureBpm).round();
+        _divisionsToTimelineMs(
+          measureMaxDiv,
+          measureDivisions: measureDivisions,
+          measureBpm: measureBpm,
+        );
   }
 
   notes.sort((a, b) => a.hitTimeMs.compareTo(b.hitTimeMs));
@@ -307,7 +339,39 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   );
 }
 
-String _restTypeFromNoteNode(MxlNoteNode note) {
+int _divisionsToTimelineMs(
+  double divisions, {
+  required int measureDivisions,
+  required double measureBpm,
+}) {
+  if (_useDurationBasedTimeline) {
+    if (measureDivisions <= 0) {
+      return 0;
+    }
+    final quarterCount = divisions / measureDivisions;
+    return (quarterCount * _timelineMsPerDurationDivision).round();
+  }
+
+  if (measureDivisions <= 0 || measureBpm <= 0) {
+    return 0;
+  }
+
+  return (divisions / measureDivisions * 60000 / measureBpm).round();
+}
+
+String _restTypeFromNoteNode(
+  MxlNoteNode note, {
+  required double expectedMeasureDiv,
+}) {
+  final restNode = _firstChildByName(note.raw.children, 'rest');
+  final isMeasureRest =
+      restNode?.attributes['measure']?.trim().toLowerCase() == 'yes';
+  final durationDiv = (note.durationDivisions ?? 0).toDouble();
+  if (isMeasureRest ||
+      (expectedMeasureDiv > 0 && durationDiv >= expectedMeasureDiv)) {
+    return 'whole';
+  }
+
   final type = note.type?.trim().toLowerCase();
   return switch (type) {
     'whole' => 'whole',

@@ -725,7 +725,8 @@ class GameNotePainter {
     var bestDelta = (beats - best.$2).abs();
     for (final candidate in candidates.skip(1)) {
       final delta = (beats - candidate.$2).abs();
-      if (delta < bestDelta) {
+      // On ties, prefer the shorter base duration so dotted values map correctly.
+      if (delta <= bestDelta) {
         bestDelta = delta;
         best = candidate;
       }
