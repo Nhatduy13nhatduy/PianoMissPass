@@ -17,6 +17,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const String sampleMxlUrl =
       'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1775481958/chopin-nocturne-op-9-no-2-e-flat-major_ffwkk1.mxl';
 
+  static const int initialLeadInMs = 4500;
   static const int hitWindowMs = 180;
   static const int missWindowMs = 220;
 
@@ -34,7 +35,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _stopwatch
       ..stop()
       ..reset();
-    _baseElapsedMs = 0;
+    _baseElapsedMs = -initialLeadInMs;
     _nextMissScanIndex = 0;
 
     emit(const GamePrototypeState(isLoading: true));
@@ -161,7 +162,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           isLoading: false,
           clearErrorMessage: true,
           score: score,
-          elapsedMs: 0,
+          elapsedMs: _baseElapsedMs,
           passedNoteIndexes: const <int>{},
           missedNoteIndexes: const <int>{},
         ),
@@ -225,12 +226,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    emit(
-      state.copyWith(
-        elapsedMs: current,
-        missedNoteIndexes: updatedMisses,
-      ),
-    );
+    emit(state.copyWith(elapsedMs: current, missedNoteIndexes: updatedMisses));
   }
 
   Set<int>? _updateMissesIncremental(int currentMs) {

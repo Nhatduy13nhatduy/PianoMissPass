@@ -202,6 +202,19 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           (onsetInMeasureDiv / measureDivisions * 60000 / measureBpm).round();
       final holdMs = ((duration / measureDivisions) * 60000 / measureBpm)
           .round();
+      final explicitStaff = note.staff;
+      final staffNumber =
+          explicitStaff ??
+          staffByVoice[voice] ??
+          globalStaffByVoice[voice] ??
+          lastExplicitStaff ??
+          globalLastExplicitStaff;
+      if (explicitStaff != null) {
+        staffByVoice[voice] = explicitStaff;
+        lastExplicitStaff = explicitStaff;
+        globalStaffByVoice[voice] = explicitStaff;
+        globalLastExplicitStaff = explicitStaff;
+      }
 
       if (!isRest) {
         final midi = pitchToMidiFromPitch(
@@ -211,19 +224,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         );
         final step = note.step;
         final octave = note.octave;
-        final explicitStaff = note.staff;
-        final staffNumber =
-            explicitStaff ??
-            staffByVoice[voice] ??
-            globalStaffByVoice[voice] ??
-            lastExplicitStaff ??
-            globalLastExplicitStaff;
-        if (explicitStaff != null) {
-          staffByVoice[voice] = explicitStaff;
-          lastExplicitStaff = explicitStaff;
-          globalStaffByVoice[voice] = explicitStaff;
-          globalLastExplicitStaff = explicitStaff;
-        }
         final isTrebleFromMxl = staffNumber == null
             ? null
             : (staffClefIsTreble[staffNumber] ?? (staffNumber == 1));
@@ -258,7 +258,11 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           );
         }
       } else {
-        symbols.add(MusicSymbol(label: 'rest', timeMs: onsetMs));
+        final restType = _restTypeFromNoteNode(note);
+        final restStaff = staffNumber ?? 1;
+        symbols.add(
+          MusicSymbol(label: 'Rest:$restStaff:$restType', timeMs: onsetMs),
+        );
       }
 
       if (!isChord) {
@@ -271,7 +275,10 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     }
 
     final expectedMeasureDiv = divisions * beats * (4.0 / beatType);
-    if (measureMaxDiv < expectedMeasureDiv) {
+    final shouldPadToExpectedMeasureLength =
+        measureIndex > 0 || measureMaxDiv >= expectedMeasureDiv;
+    if (shouldPadToExpectedMeasureLength &&
+        measureMaxDiv < expectedMeasureDiv) {
       measureMaxDiv = expectedMeasureDiv;
     }
     elapsedMs =
@@ -298,6 +305,19 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     minMidi: minMidi,
     maxMidi: maxMidi,
   );
+}
+
+String _restTypeFromNoteNode(MxlNoteNode note) {
+  final type = note.type?.trim().toLowerCase();
+  return switch (type) {
+    'whole' => 'whole',
+    'half' => 'half',
+    'quarter' => 'quarter',
+    'eighth' => '8th',
+    '16th' => '16th',
+    '32nd' => '32th',
+    _ => 'quarter',
+  };
 }
 
 List<SlurSpan> _buildSlurSpans(List<MusicNote> notes) {

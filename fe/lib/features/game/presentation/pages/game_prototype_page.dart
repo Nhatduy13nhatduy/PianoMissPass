@@ -141,7 +141,6 @@ class _StaffScrollerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final playheadX = size.width * 0.72;
     final topPadding = 48.0;
     final baseStaffHeight = (size.height - 170 - topPadding - 16) / 2;
     final staffHeight = baseStaffHeight * 0.7;
@@ -207,7 +206,7 @@ class _StaffScrollerPainter extends CustomPainter {
       lineSpacing: lineSpacing,
       drawBass: !_debugHideLowerStaff,
     );
-    _paintTimeSignature(
+    final timeSignatureEndX = _paintTimeSignature(
       canvas,
       top: score.beatsPerMeasure,
       bottom: score.beatUnit,
@@ -217,6 +216,8 @@ class _StaffScrollerPainter extends CustomPainter {
       lineSpacing: lineSpacing,
       drawBass: !_debugHideLowerStaff,
     );
+    final playheadX =
+        timeSignatureEndX + (lineSpacing * 1.15).clamp(12.0, 22.0);
 
     final symbolPaint = Paint()
       ..color = const Color(0xFF0D3750)
@@ -245,6 +246,9 @@ class _StaffScrollerPainter extends CustomPainter {
       }
 
       if (symbol.label == '|') {
+        if (symbol.timeMs <= 0) {
+          continue;
+        }
         final measureX = x + measureLineOffsetX;
         canvas.drawLine(
           Offset(measureX, trebleTop),
@@ -283,6 +287,60 @@ class _StaffScrollerPainter extends CustomPainter {
             ? 30 + proximity * 9
             : 26 + proximity * 7;
         _textPainter.paintClef(canvas, Offset(x + xOffset, y), glyph, fontSize);
+        continue;
+      }
+
+      if (symbol.label.startsWith('Rest:') || symbol.label == 'rest') {
+        final parsedRest = _parseRestSymbol(symbol.label);
+        if (parsedRest == null) {
+          continue;
+        }
+        final isTrebleStaff = parsedRest.staffNumber == 1;
+        if (!isTrebleStaff && _debugHideLowerStaff) {
+          continue;
+        }
+
+        final glyph = _smuflRestGlyph(parsedRest.restType);
+        final targetHeight = _restGlyphTargetHeight(
+          parsedRest.restType,
+          lineSpacing,
+        );
+        final baseFontSize = _smuflFontSizeForTargetHeight(
+          glyph,
+          targetHeight: targetHeight,
+        );
+        final fontSize = (baseFontSize * 2.0).clamp(48.0, 148.0);
+
+        final staffTop = isTrebleStaff ? trebleTop : bassTop;
+        final restStep = _restStaffStep(
+          parsedRest.restType,
+          isTreble: isTrebleStaff,
+        );
+        final restY = _yForStaffStep(
+          restStep,
+          isTreble: isTrebleStaff,
+          staffTop: staffTop,
+          spacing: lineSpacing,
+        );
+        final baselineNudge = _restBaselineNudge(
+          parsedRest.restType,
+          lineSpacing,
+        );
+        final xOffsetFactor = _restXOffsetFactor(parsedRest.restType);
+        _textPainter.paintText(
+          canvas,
+          Offset(
+            x - fontSize * xOffsetFactor,
+            restY - fontSize * 0.55 + baselineNudge,
+          ),
+          glyph,
+          color: const Color(0xFF0E1620),
+          fontSize: fontSize,
+          fontWeight: FontWeight.w400,
+          maxWidth: fontSize * 1.5,
+          fontFamily: _bravuraFontFamily,
+          height: 1.0,
+        );
         continue;
       }
 
@@ -326,6 +384,14 @@ class _StaffScrollerPainter extends CustomPainter {
   }
 
   int _activeKeyFifths(ScoreData score, int timeMs) {
+    if (score.keySignatures.isEmpty) {
+      return 0;
+    }
+
+    if (timeMs < score.keySignatures.first.timeMs) {
+      return score.keySignatures.first.fifths;
+    }
+
     var result = 0;
     for (final change in score.keySignatures) {
       if (change.timeMs <= timeMs) {
@@ -377,6 +443,103 @@ class _StaffScrollerPainter extends CustomPainter {
     }
 
     return _ClefSymbol(staffNumber: staffNumber, sign: sign);
+  }
+
+  _RestSymbol? _parseRestSymbol(String label) {
+    if (label == 'rest') {
+      return const _RestSymbol(staffNumber: 1, restType: 'quarter');
+    }
+    if (!label.startsWith('Rest:')) {
+      return null;
+    }
+
+    final parts = label.split(':');
+    if (parts.length != 3) {
+      return null;
+    }
+
+    final staffNumber = int.tryParse(parts[1]);
+    if (staffNumber == null || (staffNumber != 1 && staffNumber != 2)) {
+      return null;
+    }
+
+    final restType = parts[2].trim().toLowerCase();
+    if (!_isSupportedRestType(restType)) {
+      return null;
+    }
+    return _RestSymbol(staffNumber: staffNumber, restType: restType);
+  }
+
+  bool _isSupportedRestType(String type) {
+    return type == 'whole' ||
+        type == 'half' ||
+        type == 'quarter' ||
+        type == '8th' ||
+        type == '16th' ||
+        type == '32th' ||
+        type == '32nd';
+  }
+
+  String _smuflRestGlyph(String restType) {
+    return switch (restType) {
+      'whole' => '\uE4E3',
+      'half' => '\uE4E4',
+      'quarter' => '\uE4E5',
+      '8th' => '\uE4E6',
+      '16th' => '\uE4E7',
+      '32th' || '32nd' => '\uE4E8',
+      _ => '\uE4E5',
+    };
+  }
+
+  double _restGlyphTargetHeight(String restType, double lineSpacing) {
+    return switch (restType) {
+      'whole' => (lineSpacing * 1.7).clamp(14.0, 26.0),
+      'half' => (lineSpacing * 1.75).clamp(14.0, 27.0),
+      'quarter' => (lineSpacing * 2.3).clamp(18.0, 36.0),
+      '8th' => (lineSpacing * 2.55).clamp(20.0, 40.0),
+      '16th' => (lineSpacing * 2.8).clamp(22.0, 43.0),
+      '32th' || '32nd' => (lineSpacing * 3.05).clamp(24.0, 46.0),
+      _ => (lineSpacing * 2.3).clamp(18.0, 36.0),
+    };
+  }
+
+  int _restStaffStep(String restType, {required bool isTreble}) {
+    final bottomLine = isTreble ? 30 : 18;
+    return switch (restType) {
+      'whole' => bottomLine + 6,
+      'half' => bottomLine + 4,
+      'quarter' => bottomLine + 4,
+      '8th' => bottomLine + 4,
+      '16th' => bottomLine + 4,
+      '32th' || '32nd' => bottomLine + 4,
+      _ => bottomLine + 4,
+    };
+  }
+
+  double _restBaselineNudge(String restType, double lineSpacing) {
+    return switch (restType) {
+      // Whole rest hangs from the 4th line; half rest sits on the middle line.
+      'whole' => lineSpacing * 0.44,
+      'half' => -lineSpacing * 0.22,
+      'quarter' => lineSpacing * 0.05,
+      '8th' => lineSpacing * 0.0,
+      '16th' => -lineSpacing * 0.05,
+      '32th' || '32nd' => -lineSpacing * 0.11,
+      _ => lineSpacing * 0.04,
+    };
+  }
+
+  double _restXOffsetFactor(String restType) {
+    return switch (restType) {
+      'whole' => 0.31,
+      'half' => 0.31,
+      'quarter' => 0.35,
+      '8th' => 0.35,
+      '16th' => 0.35,
+      '32th' || '32nd' => 0.35,
+      _ => 0.35,
+    };
   }
 
   String _glyphForClefSign(String sign) {
@@ -499,7 +662,7 @@ class _StaffScrollerPainter extends CustomPainter {
     return startX + count * spacingX + (lineSpacing * 1.95);
   }
 
-  void _paintTimeSignature(
+  double _paintTimeSignature(
     Canvas canvas, {
     required int top,
     required int bottom,
@@ -573,8 +736,10 @@ class _StaffScrollerPainter extends CustomPainter {
       height: 1.0,
     );
 
+    final blockRightX = centerX + blockWidth / 2;
+
     if (!drawBass) {
-      return;
+      return blockRightX;
     }
 
     final bassTopY = bassTop + stackStartInStaff;
@@ -601,6 +766,8 @@ class _StaffScrollerPainter extends CustomPainter {
       fontFamily: _bravuraFontFamily,
       height: 1.0,
     );
+
+    return blockRightX;
   }
 
   double _yForStaffStep(
@@ -620,4 +787,11 @@ class _ClefSymbol {
 
   final int staffNumber;
   final String sign;
+}
+
+class _RestSymbol {
+  const _RestSymbol({required this.staffNumber, required this.restType});
+
+  final int staffNumber;
+  final String restType;
 }
