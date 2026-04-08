@@ -118,6 +118,7 @@ class MusicNote {
     this.notatedBeats,
     this.primaryBeam,
     this.secondaryBeam,
+    this.tertiaryBeam,
     this.stemFromMxl,
     this.slurStarts = const <int>[],
     this.slurStops = const <int>[],
@@ -135,6 +136,7 @@ class MusicNote {
   final double? notatedBeats;
   final String? primaryBeam;
   final String? secondaryBeam;
+  final String? tertiaryBeam;
   final String? stemFromMxl;
   final List<int> slurStarts;
   final List<int> slurStops;

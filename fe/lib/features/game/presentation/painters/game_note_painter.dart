@@ -47,11 +47,14 @@ class GameNotePainter {
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
     final preRenderRightPx = measureMs * notePxPerMs * _preRenderMeasuresRight;
-    final windowStartMs =
-        (currentMs - cleanupWindowMs - _renderWindowPaddingMs).floor();
-    final windowEndMs =
-        (currentMs + previewWindowMs + _renderWindowPaddingMs).ceil();
-    final startIndex = _lowerBoundAdjustedHitMs(precomputedNotes, windowStartMs);
+    final windowStartMs = (currentMs - cleanupWindowMs - _renderWindowPaddingMs)
+        .floor();
+    final windowEndMs = (currentMs + previewWindowMs + _renderWindowPaddingMs)
+        .ceil();
+    final startIndex = _lowerBoundAdjustedHitMs(
+      precomputedNotes,
+      windowStartMs,
+    );
     final endIndex = _upperBoundAdjustedHitMs(precomputedNotes, windowEndMs);
 
     for (var i = startIndex; i < endIndex; i++) {
@@ -234,12 +237,15 @@ class GameNotePainter {
       noteHeadDxByVisibleIndex: chordLayout.headDxByVisibleIndex,
       spacing: lineSpacing,
     );
+    final stemColorByVisibleIndex = <int, Color>{};
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final item = visible[visibleIndex];
       final accidentalToRender = accidentalByVisibleIndex[visibleIndex];
       final headDx = chordLayout.headDxByVisibleIndex[visibleIndex] ?? 0.0;
       final center = Offset(item.x + headDx, item.y);
+      final isActive = (item.adjustedHitMs - currentMs).abs() <= 70;
+      final noteColor = _noteInkColor(item.status, isActive);
       final layoutStemDirection =
           chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
           item.stemDirection;
@@ -271,17 +277,8 @@ class GameNotePainter {
         canvas,
         center: center,
         judge: item.status,
-        isActive: (item.adjustedHitMs - currentMs).abs() <= 70,
+        isActive: isActive,
         durationType: item.durationType,
-        spacing: lineSpacing,
-      );
-
-      _drawLedgerLines(
-        canvas,
-        centerX: center.dx,
-        noteStep: item.noteStep,
-        isTreble: item.isTreble,
-        staffTop: item.isTreble ? trebleTop : bassTop,
         spacing: lineSpacing,
       );
 
@@ -305,6 +302,19 @@ class GameNotePainter {
       final chordOppositeStemHeight =
           chordLayout.stemExtraHeightByAnchorVisibleIndex[visibleIndex] ?? 0.0;
 
+      final ledgerColor = noteColor;
+
+      _drawLedgerLines(
+        canvas,
+        centerX: center.dx,
+        durationType: item.durationType,
+        noteStep: item.noteStep,
+        isTreble: item.isTreble,
+        staffTop: item.isTreble ? trebleTop : bassTop,
+        spacing: lineSpacing,
+        color: ledgerColor,
+      );
+
       item.stemTip = _drawStem(
         canvas,
         center: center,
@@ -312,6 +322,7 @@ class GameNotePainter {
         xAxisDirection: stemXAxisDirection,
         drawStem: shouldDrawStem,
         spacing: lineSpacing,
+        color: noteColor,
         extraOppositeStemHeight: chordOppositeStemHeight,
         useButtCap: shouldHideTail,
       );
@@ -323,8 +334,11 @@ class GameNotePainter {
           direction: effectiveStemDirection,
           flagCount: _flagCountForDuration(item.durationType),
           spacing: lineSpacing,
+          color: noteColor,
         );
       }
+
+      stemColorByVisibleIndex[visibleIndex] = noteColor;
 
       _drawAccidental(
         canvas,
@@ -333,7 +347,7 @@ class GameNotePainter {
             accidentalCenterByVisibleIndex[visibleIndex] ??
             Offset(item.x - lineSpacing * 1.08, item.y),
         spacing: lineSpacing,
-        color: const Color(0xFF0E1620),
+        color: noteColor,
       );
 
       _drawDots(
@@ -344,7 +358,7 @@ class GameNotePainter {
         isTreble: item.isTreble,
         spacing: lineSpacing,
         judge: item.status,
-        isActive: (item.adjustedHitMs - currentMs).abs() <= 70,
+        isActive: isActive,
       );
     }
 
@@ -363,6 +377,7 @@ class GameNotePainter {
         lineSpacing: lineSpacing,
         lockedSlope: group.lockedSlope,
         lockedReferenceStemTip: group.lockedReferenceStemTip,
+        stemColorByVisibleIndex: stemColorByVisibleIndex,
       );
     }
   }
@@ -703,6 +718,7 @@ class GameNotePainter {
       (_DurationType.quarter, 1.0),
       (_DurationType.eighth, 0.5),
       (_DurationType.sixteenth, 0.25),
+      (_DurationType.thirtySecond, 0.125),
     ];
 
     var best = candidates.first;
@@ -743,6 +759,7 @@ class GameNotePainter {
     return switch (type) {
       _DurationType.eighth => 1,
       _DurationType.sixteenth => 2,
+      _DurationType.thirtySecond => 3,
       _ => 0,
     };
   }
@@ -811,17 +828,22 @@ class GameNotePainter {
   void _drawLedgerLines(
     Canvas canvas, {
     required double centerX,
+    required _DurationType durationType,
     required int noteStep,
     required bool isTreble,
     required double staffTop,
     required double spacing,
+    required Color color,
   }) {
     final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
     final topLine = bottomLine + 8;
     final ledgerPaint = Paint()
-      ..color = const Color(0xFF111111)
+      ..color = color
       ..strokeWidth = 1.6;
     final halfLength = (spacing * 0.95).clamp(8.0, 14.0);
+    final leftHalfLength = durationType == _DurationType.whole
+        ? halfLength * 1.45
+        : halfLength;
 
     if (noteStep > topLine) {
       for (
@@ -831,7 +853,7 @@ class GameNotePainter {
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
         canvas.drawLine(
-          Offset(centerX - halfLength, y),
+          Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
           ledgerPaint,
         );
@@ -846,7 +868,7 @@ class GameNotePainter {
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
         canvas.drawLine(
-          Offset(centerX - halfLength, y),
+          Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
           ledgerPaint,
         );
@@ -863,14 +885,10 @@ class GameNotePainter {
     required double spacing,
   }) {
     final strokeColor = _noteInkColor(judge, isActive);
-    final wholeTargetHeight = (spacing * 1.1).clamp(8.0, 20.0);
-    final headTargetHeight = (spacing * 1.02).clamp(7.5, 18.0);
+    final wholeTargetHeight = (spacing * 1.15).clamp(8.0, 20.0);
+    final headTargetHeight = (spacing * 1.07).clamp(7.5, 18.0);
     final fillPaint = Paint()
-      ..color =
-          (durationType == _DurationType.whole ||
-              durationType == _DurationType.half)
-          ? const Color(0xFFFFFFFF)
-          : strokeColor
+      ..color = strokeColor
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
     final borderPaint = Paint()
@@ -880,35 +898,52 @@ class GameNotePainter {
       ..isAntiAlias = true;
 
     if (durationType == _DurationType.whole) {
-      final outer = _wholeOuterTemplate();
-      final inner = _wholeInnerTemplate();
-      final refBounds = outer.getBounds();
+      final wholeHead = _wholeHeadTemplate();
+      final refBounds = wholeHead.getBounds();
+      final wholeScaledTargetHeight = (wholeTargetHeight * 1.2).clamp(
+        9.6,
+        24.0,
+      );
 
       _drawTemplatePathAligned(
         canvas,
-        outer,
+        wholeHead,
         referenceBounds: refBounds,
         center: center,
-        targetHeight: wholeTargetHeight,
+        targetHeight: wholeScaledTargetHeight,
         paint: fillPaint,
       );
       _drawTemplatePathAligned(
         canvas,
-        inner,
+        wholeHead,
         referenceBounds: refBounds,
         center: center,
-        targetHeight: wholeTargetHeight,
-        paint: Paint()
-          ..color = const Color(0xFFFFFFFF)
-          ..style = PaintingStyle.fill
-          ..isAntiAlias = true,
+        targetHeight: wholeScaledTargetHeight,
+        paint: borderPaint,
       );
+      return;
+    }
+
+    if (durationType == _DurationType.half) {
+      final halfHead = _halfHeadTemplate();
+      final refBounds = halfHead.getBounds();
+      final halfTargetHeight = (headTargetHeight * 1).clamp(9.0, 21.6);
+
       _drawTemplatePathAligned(
         canvas,
-        outer,
+        halfHead,
         referenceBounds: refBounds,
         center: center,
-        targetHeight: wholeTargetHeight,
+        targetHeight: halfTargetHeight,
+        paint: fillPaint,
+      );
+
+      _drawTemplatePathAligned(
+        canvas,
+        halfHead,
+        referenceBounds: refBounds,
+        center: center,
+        targetHeight: halfTargetHeight,
         paint: borderPaint,
       );
       return;
@@ -916,37 +951,23 @@ class GameNotePainter {
 
     final quarterHead = _quarterHeadTemplate();
     final refBounds = quarterHead.getBounds();
+    final quarterTargetHeight = (headTargetHeight * 1).clamp(9.0, 21.6);
 
     _drawTemplatePathAligned(
       canvas,
       quarterHead,
       referenceBounds: refBounds,
       center: center,
-      targetHeight: headTargetHeight,
+      targetHeight: quarterTargetHeight,
       paint: fillPaint,
     );
 
-    if (durationType == _DurationType.half) {
-      final inner = _halfInnerTemplate();
-      _drawTemplatePathAligned(
-        canvas,
-        inner,
-        referenceBounds: refBounds,
-        center: center,
-        targetHeight: headTargetHeight,
-        paint: Paint()
-          ..color = const Color(0xFFFFFFFF)
-          ..style = PaintingStyle.fill
-          ..isAntiAlias = true,
-      );
-    }
-
     _drawTemplatePathAligned(
       canvas,
       quarterHead,
       referenceBounds: refBounds,
       center: center,
-      targetHeight: headTargetHeight,
+      targetHeight: quarterTargetHeight,
       paint: borderPaint,
     );
   }
@@ -976,26 +997,12 @@ class GameNotePainter {
 
   Path _quarterHeadTemplate() => _notePainterQuarterHeadTemplate();
 
-  Path _halfInnerTemplate() => _notePainterHalfInnerTemplate();
+  Path _halfHeadTemplate() => _notePainterHalfHeadTemplate();
 
-  Path _wholeOuterTemplate() => _notePainterWholeOuterTemplate();
-
-  Path _wholeInnerTemplate() => _notePainterWholeInnerTemplate();
+  Path _wholeHeadTemplate() => _notePainterWholeHeadTemplate();
 
   Path _buildLegacyFlagTemplate({required _StemDirection direction}) {
     return _notePainterBuildLegacyFlagTemplate(direction: direction);
-  }
-
-  Path _buildPathFromTemplate(
-    Path template, {
-    required Offset center,
-    required double targetHeight,
-  }) {
-    return _notePainterBuildPathFromTemplate(
-      template,
-      center: center,
-      targetHeight: targetHeight,
-    );
   }
 
   Offset _drawStem(
@@ -1005,6 +1012,7 @@ class GameNotePainter {
     required _StemDirection xAxisDirection,
     required bool drawStem,
     required double spacing,
+    required Color color,
     double extraOppositeStemHeight = 0,
     bool useButtCap = false,
   }) {
@@ -1013,8 +1021,8 @@ class GameNotePainter {
     }
 
     final p = Paint()
-      ..color = const Color(0xFF0E1620)
-      ..strokeWidth = (spacing * 0.17).clamp(1.6, 2.8)
+      ..color = color
+      ..strokeWidth = (spacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
     final baseStemHeight = _notePainterBaseStemHeight(spacing);
@@ -1038,28 +1046,36 @@ class GameNotePainter {
     required _StemDirection direction,
     required int flagCount,
     required double spacing,
+    required Color color,
   }) {
     if (flagCount <= 0) {
       return;
     }
 
     final paint = Paint()
-      ..color = const Color(0xFF0E1620)
+      ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
+    final stemDirectionNudge = spacing * 0.6;
 
     for (var i = 0; i < flagCount; i++) {
       final yOffset = i * (spacing * 0.72);
       final anchor = direction == _StemDirection.up
-          ? Offset(stemTip.dx, stemTip.dy + yOffset)
-          : Offset(stemTip.dx, stemTip.dy - yOffset);
+          ? Offset(stemTip.dx, stemTip.dy + stemDirectionNudge + yOffset)
+          : Offset(stemTip.dx, stemTip.dy - stemDirectionNudge - yOffset);
 
       final template = _buildLegacyFlagTemplate(direction: direction);
-      final path = _buildPathFromTemplate(
-        template,
-        center: anchor,
-        targetHeight: (spacing * 1.7).clamp(12.0, 24.0),
-      );
+      final bounds = template.getBounds();
+      if (bounds.height == 0) {
+        continue;
+      }
+
+      final flagTargetHeight = (spacing * 2.2).clamp(14.0, 30.0);
+      final scale = flagTargetHeight / bounds.height;
+      final matrix = Matrix4.identity()
+        ..translate(anchor.dx, anchor.dy)
+        ..scale(scale, scale);
+      final path = template.transform(matrix.storage);
       canvas.drawPath(path, paint);
     }
   }
@@ -1183,6 +1199,7 @@ class GameNotePainter {
     required double lineSpacing,
     required double lockedSlope,
     required Offset lockedReferenceStemTip,
+    required Map<int, Color> stemColorByVisibleIndex,
   }) {
     _notePainterDrawBeamGroup(
       canvas,
@@ -1191,6 +1208,7 @@ class GameNotePainter {
       lineSpacing: lineSpacing,
       lockedSlope: lockedSlope,
       lockedReferenceStemTip: lockedReferenceStemTip,
+      stemColorByVisibleIndex: stemColorByVisibleIndex,
     );
   }
 

@@ -191,6 +191,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       final notatedBeats = _notatedBeatsFromNoteNode(note);
       final primaryBeam = _primaryBeamFromNoteNode(note);
       final secondaryBeam = _secondaryBeamFromNoteNode(note);
+      final tertiaryBeam = _tertiaryBeamFromNoteNode(note);
       final stemFromMxl = note.stem;
 
       final onsetInMeasureDiv = isChord
@@ -248,6 +249,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               notatedBeats: notatedBeats,
               primaryBeam: primaryBeam,
               secondaryBeam: secondaryBeam,
+              tertiaryBeam: tertiaryBeam,
               stemFromMxl: stemFromMxl,
               slurStarts: note.slurStarts,
               slurStops: note.slurStops,
@@ -339,6 +341,31 @@ String? _secondaryBeamFromNoteNode(MxlNoteNode note) {
   }
 
   final value = secondary.value.trim().toLowerCase();
+  if (value == 'begin' ||
+      value == 'continue' ||
+      value == 'end' ||
+      value == 'forward hook' ||
+      value == 'backward hook') {
+    return value;
+  }
+
+  return null;
+}
+
+String? _tertiaryBeamFromNoteNode(MxlNoteNode note) {
+  MxlBeamNode? tertiary;
+  for (final beam in note.beams) {
+    if (beam.number == 3) {
+      tertiary = beam;
+      break;
+    }
+  }
+
+  if (tertiary == null) {
+    return null;
+  }
+
+  final value = tertiary.value.trim().toLowerCase();
   if (value == 'begin' ||
       value == 'continue' ||
       value == 'end' ||

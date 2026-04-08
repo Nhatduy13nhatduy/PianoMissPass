@@ -129,7 +129,8 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
         value += 3;
       }
       if (n.durationType == _DurationType.eighth ||
-          n.durationType == _DurationType.sixteenth) {
+          n.durationType == _DurationType.sixteenth ||
+          n.durationType == _DurationType.thirtySecond) {
         value += 2;
       }
       return value;
@@ -166,7 +167,8 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
     final beam = note.note.primaryBeam;
     final canBeam =
         note.durationType == _DurationType.eighth ||
-        note.durationType == _DurationType.sixteenth;
+        note.durationType == _DurationType.sixteenth ||
+        note.durationType == _DurationType.thirtySecond;
     final state = stateFor(note);
 
     if (!canBeam || beam == null) {
@@ -286,6 +288,7 @@ void _notePainterDrawBeamGroup(
   required double lineSpacing,
   required double lockedSlope,
   required Offset lockedReferenceStemTip,
+  required Map<int, Color> stemColorByVisibleIndex,
 }) {
   final first = visible[indexes.first];
   final last = visible[indexes.last];
@@ -300,6 +303,18 @@ void _notePainterDrawBeamGroup(
     ..isAntiAlias = true;
   final beamThickness = (lineSpacing * 0.48).clamp(3.0, 6.0);
   final primaryBeamThickness = beamThickness * 1.6;
+  final hasThirtySecondInGroup = indexes.any(
+    (idx) => visible[idx].durationType == _DurationType.thirtySecond,
+  );
+  final interBeamGap = hasThirtySecondInGroup
+      ? (lineSpacing * 0.18).clamp(1.6, 3.2)
+      : (lineSpacing * 0.24).clamp(2.0, 4.0);
+  final secondaryBeamThickness = hasThirtySecondInGroup
+      ? beamThickness * 0.86
+      : beamThickness;
+  final tertiaryBeamThickness = hasThirtySecondInGroup
+      ? beamThickness * 0.74
+      : beamThickness * 0.86;
 
   final x1 = lockedReferenceStemTip.dx;
   final y1 = lockedReferenceStemTip.dy;
@@ -313,9 +328,10 @@ void _notePainterDrawBeamGroup(
   for (final idx in indexes) {
     final item = visible[idx];
     final targetY = beamYAt(item.stemTip!.dx);
+    final stemColor = stemColorByVisibleIndex[idx] ?? const Color(0xFF0E1620);
     final stemPaint = Paint()
-      ..color = const Color(0xFF0E1620)
-      ..strokeWidth = (lineSpacing * 0.17).clamp(1.6, 2.8)
+      ..color = stemColor
+      ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = StrokeCap.butt;
     canvas.drawLine(
       item.stemTip!,
@@ -341,15 +357,14 @@ void _notePainterDrawBeamGroup(
   beamPath.close();
   canvas.drawPath(beamPath, beamPaint);
 
-  final secondOffset =
-      (primaryBeamThickness + (lineSpacing * 0.24).clamp(2.0, 4.0)) * sign;
+  final secondOffset = sign * (primaryBeamThickness + interBeamGap);
   final hasExplicitSecondary = _notePainterDrawExplicitSecondaryBeams(
     canvas,
     visible,
     indexes,
     lineSpacing: lineSpacing,
     sign: sign,
-    beamThickness: beamThickness,
+    beamThickness: secondaryBeamThickness,
     secondOffset: secondOffset,
     beamPaint: beamPaint,
     beamYAt: beamYAt,
@@ -359,7 +374,9 @@ void _notePainterDrawBeamGroup(
   final hasSecondBeam =
       !hasExplicitSecondary &&
       indexes.every(
-        (idx) => visible[idx].durationType == _DurationType.sixteenth,
+        (idx) =>
+            visible[idx].durationType == _DurationType.sixteenth ||
+            visible[idx].durationType == _DurationType.thirtySecond,
       );
   if (hasSecondBeam) {
     final secondTop = <Offset>[];
@@ -367,7 +384,10 @@ void _notePainterDrawBeamGroup(
     for (final point in topEdgePoints) {
       secondTop.add(Offset(point.dx, point.dy + secondOffset));
       secondBottom.add(
-        Offset(point.dx, point.dy + secondOffset + beamThickness * sign),
+        Offset(
+          point.dx,
+          point.dy + secondOffset + secondaryBeamThickness * sign,
+        ),
       );
     }
 
@@ -380,6 +400,47 @@ void _notePainterDrawBeamGroup(
     }
     secondPath.close();
     canvas.drawPath(secondPath, beamPaint);
+  }
+
+  final thirdOffset =
+      secondOffset + sign * (secondaryBeamThickness + interBeamGap);
+  final hasExplicitTertiary = _notePainterDrawExplicitTertiaryBeams(
+    canvas,
+    visible,
+    indexes,
+    lineSpacing: lineSpacing,
+    sign: sign,
+    beamThickness: tertiaryBeamThickness,
+    thirdOffset: thirdOffset,
+    beamPaint: beamPaint,
+    beamYAt: beamYAt,
+    topEdgePoints: topEdgePoints,
+  );
+
+  final hasThirdBeam =
+      !hasExplicitTertiary &&
+      indexes.every(
+        (idx) => visible[idx].durationType == _DurationType.thirtySecond,
+      );
+  if (hasThirdBeam) {
+    final thirdTop = <Offset>[];
+    final thirdBottom = <Offset>[];
+    for (final point in topEdgePoints) {
+      thirdTop.add(Offset(point.dx, point.dy + thirdOffset));
+      thirdBottom.add(
+        Offset(point.dx, point.dy + thirdOffset + tertiaryBeamThickness * sign),
+      );
+    }
+
+    final thirdPath = Path()..moveTo(thirdTop.first.dx, thirdTop.first.dy);
+    for (var i = 1; i < thirdTop.length; i++) {
+      thirdPath.lineTo(thirdTop[i].dx, thirdTop[i].dy);
+    }
+    for (var i = thirdBottom.length - 1; i >= 0; i--) {
+      thirdPath.lineTo(thirdBottom[i].dx, thirdBottom[i].dy);
+    }
+    thirdPath.close();
+    canvas.drawPath(thirdPath, beamPaint);
   }
 }
 
@@ -460,6 +521,85 @@ bool _notePainterDrawExplicitSecondaryBeams(
   }
 
   return hasExplicitSecondary;
+}
+
+bool _notePainterDrawExplicitTertiaryBeams(
+  Canvas canvas,
+  List<_RenderNote> visible,
+  List<int> indexes, {
+  required double lineSpacing,
+  required double sign,
+  required double beamThickness,
+  required double thirdOffset,
+  required Paint beamPaint,
+  required double Function(double x) beamYAt,
+  required List<Offset> topEdgePoints,
+}) {
+  var hasExplicitTertiary = false;
+  int? openStartLocalIndex;
+
+  for (var localIndex = 0; localIndex < indexes.length; localIndex++) {
+    final beamValue = visible[indexes[localIndex]].note.tertiaryBeam;
+    if (beamValue == null) {
+      openStartLocalIndex = null;
+      continue;
+    }
+
+    hasExplicitTertiary = true;
+    switch (beamValue) {
+      case 'begin':
+        openStartLocalIndex = localIndex;
+        break;
+      case 'continue':
+        openStartLocalIndex ??= localIndex > 0 ? localIndex - 1 : null;
+        break;
+      case 'end':
+        if (openStartLocalIndex != null && openStartLocalIndex < localIndex) {
+          _notePainterDrawParallelBeamSegment(
+            canvas,
+            startX: topEdgePoints[openStartLocalIndex].dx,
+            endX: topEdgePoints[localIndex].dx,
+            beamYAt: beamYAt,
+            secondOffset: thirdOffset,
+            beamThickness: beamThickness,
+            sign: sign,
+            beamPaint: beamPaint,
+          );
+        }
+        openStartLocalIndex = null;
+        break;
+      case 'forward hook':
+        _notePainterDrawSecondaryBeamHook(
+          canvas,
+          stemX: topEdgePoints[localIndex].dx,
+          isForward: true,
+          lineSpacing: lineSpacing,
+          beamYAt: beamYAt,
+          secondOffset: thirdOffset,
+          beamThickness: beamThickness,
+          sign: sign,
+          beamPaint: beamPaint,
+        );
+        openStartLocalIndex = null;
+        break;
+      case 'backward hook':
+        _notePainterDrawSecondaryBeamHook(
+          canvas,
+          stemX: topEdgePoints[localIndex].dx,
+          isForward: false,
+          lineSpacing: lineSpacing,
+          beamYAt: beamYAt,
+          secondOffset: thirdOffset,
+          beamThickness: beamThickness,
+          sign: sign,
+          beamPaint: beamPaint,
+        );
+        openStartLocalIndex = null;
+        break;
+    }
+  }
+
+  return hasExplicitTertiary;
 }
 
 void _notePainterDrawSecondaryBeamHook(
@@ -573,10 +713,12 @@ int _notePainterCountContourReversals(
 }
 
 double _notePainterMaxBeamSlope(List<_RenderNote> visible, List<int> indexes) {
-  final hasSixteenth = indexes.every(
-    (idx) => visible[idx].durationType == _DurationType.sixteenth,
+  final hasFastDuration = indexes.every(
+    (idx) =>
+        visible[idx].durationType == _DurationType.sixteenth ||
+        visible[idx].durationType == _DurationType.thirtySecond,
   );
-  final degrees = hasSixteenth ? 12.0 : 8.0;
+  final degrees = hasFastDuration ? 12.0 : 8.0;
   return math.tan(degrees * math.pi / 180);
 }
 

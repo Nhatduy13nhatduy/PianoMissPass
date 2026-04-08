@@ -96,6 +96,6 @@ class _PrecomputedScoreRenderData {
 
 enum _NoteJudge { pending, pass, miss }
 
-enum _DurationType { whole, half, quarter, eighth, sixteenth }
+enum _DurationType { whole, half, quarter, eighth, sixteenth, thirtySecond }
 
 enum _StemDirection { up, down }
