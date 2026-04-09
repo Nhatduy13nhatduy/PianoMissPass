@@ -28,6 +28,7 @@ class _RenderNote {
   final _DurationType durationType;
   _StemDirection stemDirection;
   _StemDirection stemXAxisDirection;
+  double headDx = 0;
   Offset? stemTip;
 }
 
@@ -66,6 +67,7 @@ class _ChordLayout {
     required this.chordMemberVisibleIndexes,
     required this.chordKeyByVisibleIndex,
     required this.stemExtraHeightByAnchorVisibleIndex,
+    required this.stemXByAnchorVisibleIndex,
   });
 
   final Map<int, _StemDirection> stemDirectionByVisibleIndex;
@@ -74,6 +76,7 @@ class _ChordLayout {
   final Set<int> chordMemberVisibleIndexes;
   final Map<int, String> chordKeyByVisibleIndex;
   final Map<int, double> stemExtraHeightByAnchorVisibleIndex;
+  final Map<int, double> stemXByAnchorVisibleIndex;
 }
 
 class _PrecomputedRenderNote {
