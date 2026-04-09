@@ -321,8 +321,7 @@ class GameNotePainter {
                         ))));
       final chordOppositeStemHeight =
           chordLayout.stemExtraHeightByAnchorVisibleIndex[visibleIndex] ?? 0.0;
-      final stemXOverride =
-          chordLayout.stemXByAnchorVisibleIndex[visibleIndex];
+      final stemXOverride = chordLayout.stemXByAnchorVisibleIndex[visibleIndex];
 
       final ledgerColor = noteColor;
 
@@ -708,171 +707,171 @@ class GameNotePainter {
   }
 
   _ChordLayout _buildChordLayout(
-  List<_RenderNote> visible, {
-  required double spacing,
-}) {
-  final stemDirectionByVisibleIndex = <int, _StemDirection>{};
-  final headDxByVisibleIndex = <int, double>{};
-  final stemAnchorVisibleIndexes = <int>{};
-  final chordMemberVisibleIndexes = <int>{};
-  final chordKeyByVisibleIndex = <int, String>{};
-  final stemExtraHeightByAnchorVisibleIndex = <int, double>{};
-  final stemXByAnchorVisibleIndex = <int, double>{};
+    List<_RenderNote> visible, {
+    required double spacing,
+  }) {
+    final stemDirectionByVisibleIndex = <int, _StemDirection>{};
+    final headDxByVisibleIndex = <int, double>{};
+    final stemAnchorVisibleIndexes = <int>{};
+    final chordMemberVisibleIndexes = <int>{};
+    final chordKeyByVisibleIndex = <int, String>{};
+    final stemExtraHeightByAnchorVisibleIndex = <int, double>{};
+    final stemXByAnchorVisibleIndex = <int, double>{};
 
-  final groups = <String, List<int>>{};
-  for (var i = 0; i < visible.length; i++) {
-    final note = visible[i];
-    final key =
-        '${note.adjustedHitMs}-${note.isUpperStaff ? 't' : 'b'}-${note.note.voice}';
-    groups.putIfAbsent(key, () => <int>[]).add(i);
-    chordKeyByVisibleIndex[i] = key;
-  }
-
-  for (final indexes in groups.values) {
-    if (indexes.length < 2) {
-      continue;
+    final groups = <String, List<int>>{};
+    for (var i = 0; i < visible.length; i++) {
+      final note = visible[i];
+      final key =
+          '${note.adjustedHitMs}-${note.isUpperStaff ? 't' : 'b'}-${note.note.voice}';
+      groups.putIfAbsent(key, () => <int>[]).add(i);
+      chordKeyByVisibleIndex[i] = key;
     }
 
-    chordMemberVisibleIndexes.addAll(indexes);
-
-    final sortedIndexes = List<int>.from(indexes)
-      ..sort((a, b) {
-        final stepCompare = visible[a].noteStep.compareTo(visible[b].noteStep);
-        if (stepCompare != 0) {
-          return stepCompare;
-        }
-        return a.compareTo(b);
-      });
-
-    _StemDirection stemDirection;
-    final explicitStem = indexes
-        .map((idx) => visible[idx].note.stemFromMxl)
-        .firstWhere(
-          (stem) => stem == 'up' || stem == 'down',
-          orElse: () => null,
-        );
-
-    if (explicitStem == 'up') {
-      stemDirection = _StemDirection.up;
-    } else if (explicitStem == 'down') {
-      stemDirection = _StemDirection.down;
-    } else {
-      final isTreble = visible[indexes.first].isTreble;
-      final bottomLine =
-          isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
-      final middleLine = bottomLine + 4;
-
-      var minStep = visible[indexes.first].noteStep;
-      var maxStep = minStep;
-
-      for (final idx in indexes.skip(1)) {
-        final step = visible[idx].noteStep;
-        if (step < minStep) {
-          minStep = step;
-        }
-        if (step > maxStep) {
-          maxStep = step;
-        }
+    for (final indexes in groups.values) {
+      if (indexes.length < 2) {
+        continue;
       }
 
-      final highDistance = (maxStep - middleLine).abs();
-      final lowDistance = (middleLine - minStep).abs();
-      stemDirection = highDistance > lowDistance
-          ? _StemDirection.down
-          : _StemDirection.up;
-    }
+      chordMemberVisibleIndexes.addAll(indexes);
 
-    for (final idx in indexes) {
-      stemDirectionByVisibleIndex[idx] = stemDirection;
-      headDxByVisibleIndex[idx] = 0.0;
-    }
-
-    // Chỉ lệch notehead để tránh va chạm khi có khoảng cách 1 staff step.
-    // Stem vẫn sẽ bám theo anchor column, không bám theo mép ngoài cùng.
-    var runEnd = sortedIndexes.length - 1;
-
-    while (runEnd >= 0) {
-      var runStart = runEnd;
-      var prevStep = visible[sortedIndexes[runStart]].noteStep;
-
-      while (runStart - 1 >= 0) {
-        final prevIndex = sortedIndexes[runStart - 1];
-        final prevStepCandidate = visible[prevIndex].noteStep;
-
-        if (prevStep - prevStepCandidate != 1) {
-          break;
-        }
-
-        prevStep = prevStepCandidate;
-        runStart--;
-      }
-
-      final runLength = runEnd - runStart + 1;
-
-      if (runLength >= 2) {
-        final baseDx = spacing;
-
-        // Engraving rule:
-        // - stem up  -> anchor là note cao nhất, cột stem ở bên phải
-        // - stem down -> anchor là note thấp nhất, cột stem ở bên trái
-        //
-        // Những note kề nhau sẽ lệch sang phía đối diện cột stem.
-        if (stemDirection == _StemDirection.up) {
-          for (var i = runStart; i <= runEnd; i++) {
-            final current = sortedIndexes[i];
-            final distanceFromAnchor = runEnd - i;
-            final shouldShiftLeft = distanceFromAnchor.isOdd;
-            headDxByVisibleIndex[current] = shouldShiftLeft ? -baseDx : 0.0;
+      final sortedIndexes = List<int>.from(indexes)
+        ..sort((a, b) {
+          final stepCompare = visible[a].noteStep.compareTo(
+            visible[b].noteStep,
+          );
+          if (stepCompare != 0) {
+            return stepCompare;
           }
-        } else {
-          for (var i = runStart; i <= runEnd; i++) {
-            final current = sortedIndexes[i];
-            final distanceFromAnchor = i - runStart;
-            final shouldShiftRight = distanceFromAnchor.isOdd;
-            headDxByVisibleIndex[current] = shouldShiftRight ? baseDx : 0.0;
+          return a.compareTo(b);
+        });
+
+      _StemDirection stemDirection;
+      final explicitStem = indexes
+          .map((idx) => visible[idx].note.stemFromMxl)
+          .firstWhere(
+            (stem) => stem == 'up' || stem == 'down',
+            orElse: () => null,
+          );
+
+      if (explicitStem == 'up') {
+        stemDirection = _StemDirection.up;
+      } else if (explicitStem == 'down') {
+        stemDirection = _StemDirection.down;
+      } else {
+        final isTreble = visible[indexes.first].isTreble;
+        final bottomLine = isTreble
+            ? _trebleBottomLineStep
+            : _bassBottomLineStep;
+        final middleLine = bottomLine + 4;
+
+        var minStep = visible[indexes.first].noteStep;
+        var maxStep = minStep;
+
+        for (final idx in indexes.skip(1)) {
+          final step = visible[idx].noteStep;
+          if (step < minStep) {
+            minStep = step;
+          }
+          if (step > maxStep) {
+            maxStep = step;
           }
         }
+
+        final highDistance = (maxStep - middleLine).abs();
+        final lowDistance = (middleLine - minStep).abs();
+        stemDirection = highDistance > lowDistance
+            ? _StemDirection.down
+            : _StemDirection.up;
       }
 
-      runEnd = runStart - 1;
+      for (final idx in indexes) {
+        stemDirectionByVisibleIndex[idx] = stemDirection;
+        headDxByVisibleIndex[idx] = 0.0;
+      }
+
+      // Chỉ lệch notehead để tránh va chạm khi có khoảng cách 1 staff step.
+      // Stem vẫn sẽ bám theo anchor column, không bám theo mép ngoài cùng.
+      var runStart = 0;
+
+      while (runStart < sortedIndexes.length) {
+        var runEnd = runStart;
+        var prevStep = visible[sortedIndexes[runStart]].noteStep;
+
+        // build run theo chiều tăng
+        while (runEnd + 1 < sortedIndexes.length) {
+          final nextIndex = sortedIndexes[runEnd + 1];
+          final nextStep = visible[nextIndex].noteStep;
+
+          // ⚠️ đổi chiều so sánh
+          if (nextStep - prevStep != 1) {
+            break;
+          }
+
+          prevStep = nextStep;
+          runEnd++;
+        }
+
+        final runLength = runEnd - runStart + 1;
+
+        if (runLength >= 2) {
+          final baseDx = spacing;
+
+          if (stemDirection == _StemDirection.up) {
+            for (var i = runStart; i <= runEnd; i++) {
+              final current = sortedIndexes[i];
+              final distanceFromAnchor = runEnd - i;
+              final shouldShiftLeft = distanceFromAnchor.isOdd;
+
+              headDxByVisibleIndex[current] = shouldShiftLeft ? baseDx : 0.0;
+            }
+          } else {
+            for (var i = runStart; i <= runEnd; i++) {
+              final current = sortedIndexes[i];
+              final distanceFromAnchor = i - runStart;
+              final shouldShiftRight = distanceFromAnchor.isOdd;
+
+              headDxByVisibleIndex[current] = shouldShiftRight ? -baseDx : 0.0;
+            }
+          }
+        }
+
+        runStart = runEnd + 1;
+      }
+
+      final anchor = stemDirection == _StemDirection.up
+          ? sortedIndexes.last
+          : sortedIndexes.first;
+      stemAnchorVisibleIndexes.add(anchor);
+
+      var minY = double.infinity;
+      var maxY = double.negativeInfinity;
+      for (final idx in indexes) {
+        final y = visible[idx].y;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+
+      final chordSpanHeight = (maxY - minY).abs();
+      stemExtraHeightByAnchorVisibleIndex[anchor] = chordSpanHeight;
+
+      final anchorHeadCenterX =
+          visible[anchor].x + (headDxByVisibleIndex[anchor] ?? 0.0);
+
+      stemXByAnchorVisibleIndex[anchor] = stemDirection == _StemDirection.up
+          ? anchorHeadCenterX + spacing * 0.55
+          : anchorHeadCenterX - spacing * 0.55;
     }
 
-    final anchor = stemDirection == _StemDirection.up
-        ? sortedIndexes.last
-        : sortedIndexes.first;
-    stemAnchorVisibleIndexes.add(anchor);
-
-    var minY = double.infinity;
-    var maxY = double.negativeInfinity;
-    for (final idx in indexes) {
-      final y = visible[idx].y;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-
-    final chordSpanHeight = (maxY - minY).abs();
-    stemExtraHeightByAnchorVisibleIndex[anchor] = chordSpanHeight;
-
-    // Stem X phải bám theo anchor column của chord,
-    // không lấy theo outermost shifted notehead.
-    final anchorHeadCenterX =
-        visible[anchor].x + (headDxByVisibleIndex[anchor] ?? 0.0);
-
-    stemXByAnchorVisibleIndex[anchor] = stemDirection == _StemDirection.up
-        ? anchorHeadCenterX + spacing * 0.55
-        : anchorHeadCenterX - spacing * 0.55;
+    return _ChordLayout(
+      stemDirectionByVisibleIndex: stemDirectionByVisibleIndex,
+      headDxByVisibleIndex: headDxByVisibleIndex,
+      stemAnchorVisibleIndexes: stemAnchorVisibleIndexes,
+      chordMemberVisibleIndexes: chordMemberVisibleIndexes,
+      chordKeyByVisibleIndex: chordKeyByVisibleIndex,
+      stemExtraHeightByAnchorVisibleIndex: stemExtraHeightByAnchorVisibleIndex,
+      stemXByAnchorVisibleIndex: stemXByAnchorVisibleIndex,
+    );
   }
-
-  return _ChordLayout(
-    stemDirectionByVisibleIndex: stemDirectionByVisibleIndex,
-    headDxByVisibleIndex: headDxByVisibleIndex,
-    stemAnchorVisibleIndexes: stemAnchorVisibleIndexes,
-    chordMemberVisibleIndexes: chordMemberVisibleIndexes,
-    chordKeyByVisibleIndex: chordKeyByVisibleIndex,
-    stemExtraHeightByAnchorVisibleIndex: stemExtraHeightByAnchorVisibleIndex,
-    stemXByAnchorVisibleIndex: stemXByAnchorVisibleIndex,
-  );
-}
 
   _LockedBeamGeometry _buildLockedBeamGeometry(
     List<_RenderNote> allNotes,
@@ -989,7 +988,6 @@ class GameNotePainter {
     var bestDelta = (beats - best.$2).abs();
     for (final candidate in candidates.skip(1)) {
       final delta = (beats - candidate.$2).abs();
-      // On ties, prefer the shorter base duration so dotted values map correctly.
       if (delta <= bestDelta) {
         bestDelta = delta;
         best = candidate;

@@ -5,7 +5,7 @@ part of 'game_score.dart';
 // quarter note. We convert duration to quarter-count first, then multiply by the
 // fixed timeline factor below.
 const bool _useDurationBasedTimeline = true;
-const double _timelineMsPerDurationDivision = 1600;
+const double _timelineMsPerDurationDivision = 800;
 
 ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   if (document.parts.isEmpty) {
