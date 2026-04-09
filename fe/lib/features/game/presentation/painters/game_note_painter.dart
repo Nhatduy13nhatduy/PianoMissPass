@@ -67,8 +67,9 @@ class GameNotePainter {
       }
 
       final x = playheadX + delta * notePxPerMs;
+      final isUpperStaff = precomputed.isUpperStaff;
       final isTreble = precomputed.isTreble;
-      final staffTop = isTreble ? trebleTop : bassTop;
+      final staffTop = isUpperStaff ? trebleTop : bassTop;
       final y = _yForStaffStep(note.staffStep, isTreble, staffTop, lineSpacing);
       final status = passedNoteIndexes.contains(i)
           ? _NoteJudge.pass
@@ -83,6 +84,7 @@ class GameNotePainter {
           index: i,
           x: x,
           y: y,
+          isUpperStaff: isUpperStaff,
           isTreble: isTreble,
           noteStep: note.staffStep,
           note: note,
@@ -237,6 +239,12 @@ class GameNotePainter {
       noteHeadDxByVisibleIndex: chordLayout.headDxByVisibleIndex,
       spacing: lineSpacing,
     );
+    final dotAnchorByVisibleIndex = _layoutDotAnchors(
+      visible,
+      chordLayout: chordLayout,
+      chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+      spacing: lineSpacing,
+    );
     final stemColorByVisibleIndex = <int, Color>{};
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
@@ -267,7 +275,7 @@ class GameNotePainter {
         _debugLoggedNoteIndexes.add(item.index);
         debugPrint(
           'paintNote currentMs=$currentMs measure=${item.note.measureIndex + 1} '
-          'voice=${item.note.voice} staff=${item.isTreble ? 1 : 2} '
+          'voice=${item.note.voice} staff=${item.isUpperStaff ? 1 : 2} '
           'x=${item.x.toStringAsFixed(1)} y=${item.y.toStringAsFixed(1)} '
           'midi=${item.note.midi} dur=${item.durationType}',
         );
@@ -310,7 +318,7 @@ class GameNotePainter {
         durationType: item.durationType,
         noteStep: item.noteStep,
         isTreble: item.isTreble,
-        staffTop: item.isTreble ? trebleTop : bassTop,
+        staffTop: item.isUpperStaff ? trebleTop : bassTop,
         spacing: lineSpacing,
         color: ledgerColor,
       );
@@ -356,9 +364,11 @@ class GameNotePainter {
         dotCount: item.note.dotCount,
         noteStep: item.noteStep,
         isTreble: item.isTreble,
+        durationType: item.durationType,
         spacing: lineSpacing,
         judge: item.status,
         isActive: isActive,
+        anchor: dotAnchorByVisibleIndex[visibleIndex],
       );
     }
 
@@ -388,20 +398,30 @@ class GameNotePainter {
       return cached;
     }
 
-    bool? previousIsTreble;
+    final clefChangesByStaff = _buildClefChangeTimelineByStaff(score);
+    bool? previousIsUpperStaff;
     final precomputedNotes = <_PrecomputedRenderNote>[];
     for (final note in score.notes) {
-      final isTreble =
-          note.isTrebleFromMxl ??
-          _chooseStaffForNote(
-            note.staffStep,
-            previousIsTreble: previousIsTreble,
-          );
-      previousIsTreble = isTreble;
+      final isUpperStaff = note.staffNumber != null
+          ? note.staffNumber == 1
+          : _chooseStaffForNote(
+              note.staffStep,
+              previousIsUpperStaff: previousIsUpperStaff,
+            );
+      previousIsUpperStaff = isUpperStaff;
+
+      final resolvedStaffNumber = note.staffNumber ?? (isUpperStaff ? 1 : 2);
+      final fallbackIsTreble = note.isTrebleFromMxl ?? isUpperStaff;
+      final isTreble = _resolveClefIsTrebleAtTime(
+        clefChangesByStaff[resolvedStaffNumber],
+        note.hitTimeMs,
+        fallbackIsTreble: fallbackIsTreble,
+      );
 
       precomputedNotes.add(
         _PrecomputedRenderNote(
           adjustedHitMs: NoteTiming.adjustedHitTimeMs(note),
+          isUpperStaff: isUpperStaff,
           isTreble: isTreble,
           durationType: _durationTypeFromNote(note, score.bpm),
           stemDirection: _stemDirectionFromNote(note, isTreble: isTreble),
@@ -412,6 +432,60 @@ class GameNotePainter {
     final built = _PrecomputedScoreRenderData(notes: precomputedNotes);
     _precomputedScoreCache[score] = built;
     return built;
+  }
+
+  Map<int, List<(int, bool)>> _buildClefChangeTimelineByStaff(ScoreData score) {
+    final byStaff = <int, List<(int, bool)>>{};
+    for (final symbol in score.symbols) {
+      final parsed = _parseClefSymbolLabel(symbol.label);
+      if (parsed == null) {
+        continue;
+      }
+      final (staffNumber, isTreble) = parsed;
+      byStaff.putIfAbsent(staffNumber, () => <(int, bool)>[]).add((
+        symbol.timeMs,
+        isTreble,
+      ));
+    }
+    for (final timeline in byStaff.values) {
+      timeline.sort((a, b) => a.$1.compareTo(b.$1));
+    }
+    return byStaff;
+  }
+
+  (int, bool)? _parseClefSymbolLabel(String label) {
+    if (!label.startsWith('Clef:')) {
+      return null;
+    }
+    final parts = label.split(':');
+    if (parts.length != 3) {
+      return null;
+    }
+    final staffNumber = int.tryParse(parts[1]);
+    final sign = parts[2].trim().toUpperCase();
+    if (staffNumber == null || (sign != 'G' && sign != 'F')) {
+      return null;
+    }
+    return (staffNumber, sign == 'G');
+  }
+
+  bool _resolveClefIsTrebleAtTime(
+    List<(int, bool)>? timeline,
+    int timeMs, {
+    required bool fallbackIsTreble,
+  }) {
+    if (timeline == null || timeline.isEmpty) {
+      return fallbackIsTreble;
+    }
+
+    var active = fallbackIsTreble;
+    for (final point in timeline) {
+      if (point.$1 > timeMs) {
+        break;
+      }
+      active = point.$2;
+    }
+    return active;
   }
 
   int _lowerBoundAdjustedHitMs(List<_PrecomputedRenderNote> notes, int target) {
@@ -456,6 +530,164 @@ class GameNotePainter {
     );
   }
 
+  Map<int, Offset> _layoutDotAnchors(
+    List<_RenderNote> visible, {
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required double spacing,
+  }) {
+    final anchors = <int, Offset>{};
+    final dotRadius = (spacing * 0.2).clamp(1.5, 3.5).toDouble();
+
+    final dottedVisibleIndexes = <int>[
+      for (var i = 0; i < visible.length; i++)
+        if (visible[i].note.dotCount > 0) i,
+    ];
+
+    final groups = <String, List<int>>{};
+    for (final visibleIndex in dottedVisibleIndexes) {
+      final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
+      final groupKey = chordKey ?? 'single:$visibleIndex';
+      groups.putIfAbsent(groupKey, () => <int>[]).add(visibleIndex);
+    }
+
+    for (final entry in groups.entries) {
+      final group = entry.value;
+      if (group.isEmpty) {
+        continue;
+      }
+
+      final isSingleGroup = entry.key.startsWith('single:');
+      final chordIndexes = isSingleGroup
+          ? group
+          : (chordVisibleIndexesByKey[entry.key] ?? group);
+
+      final chordCenters = <int, Offset>{};
+      var rightMostHeadX = double.negativeInfinity;
+      for (final idx in chordIndexes) {
+        final headDx = chordLayout.headDxByVisibleIndex[idx] ?? 0.0;
+        final center = Offset(visible[idx].x + headDx, visible[idx].y);
+        chordCenters[idx] = center;
+        rightMostHeadX = math.max(rightMostHeadX, center.dx);
+      }
+      var chordDotGap = 0.0;
+      for (final idx in chordIndexes) {
+        chordDotGap = math.max(
+          chordDotGap,
+          _dotLeadingGapForDuration(visible[idx].durationType, spacing),
+        );
+      }
+
+      final headRects = <Rect>[
+        for (final center in chordCenters.values)
+          Rect.fromCenter(
+            center: center,
+            width: spacing * 1.6,
+            height: spacing * 1.3,
+          ),
+      ];
+
+      final placedDotAnchors = <Offset>[];
+      final sortedGroup = List<int>.from(group)
+        ..sort((a, b) => visible[a].y.compareTo(visible[b].y));
+
+      for (final idx in sortedGroup) {
+        final note = visible[idx];
+        final noteCenter =
+            chordCenters[idx] ??
+            Offset(
+              note.x + (chordLayout.headDxByVisibleIndex[idx] ?? 0.0),
+              note.y,
+            );
+
+        final baseAnchor = _defaultDotAnchor(
+          center: noteCenter,
+          noteStep: note.noteStep,
+          isTreble: note.isTreble,
+          durationType: note.durationType,
+          spacing: spacing,
+        );
+
+        final baseX = math.max(baseAnchor.dx, rightMostHeadX + chordDotGap);
+        // Keep augmentation dots on spaces only (avoid staff lines).
+        final candidateYs = <double>[
+          baseAnchor.dy,
+          baseAnchor.dy - spacing,
+          baseAnchor.dy + spacing,
+          baseAnchor.dy - spacing * 2,
+          baseAnchor.dy + spacing * 2,
+        ];
+
+        Offset? chosenAnchor;
+        for (var xShift = 0; xShift <= 3 && chosenAnchor == null; xShift++) {
+          final candidateX = baseX + xShift * spacing * 0.36;
+          for (final candidateY in candidateYs) {
+            // If another note in this chord already uses the same space lane,
+            // reuse that exact anchor so both notes share one visible dot.
+            final sharedAnchor = placedDotAnchors.firstWhere(
+              (other) => (other.dy - candidateY).abs() < spacing * 0.08,
+              orElse: () => const Offset(double.nan, double.nan),
+            );
+            if (!sharedAnchor.dx.isNaN) {
+              chosenAnchor = sharedAnchor;
+              break;
+            }
+
+            final candidate = Offset(candidateX, candidateY);
+            final candidateRect = Rect.fromCircle(
+              center: candidate,
+              radius: dotRadius + spacing * 0.08,
+            );
+
+            final overlapsHead = headRects.any(
+              (headRect) => headRect.overlaps(candidateRect),
+            );
+            if (overlapsHead) {
+              continue;
+            }
+
+            final overlapsPlacedDot = placedDotAnchors.any((other) {
+              final dx = (other.dx - candidate.dx).abs();
+              final dy = (other.dy - candidate.dy).abs();
+              return dx < dotRadius * 2.4 && dy < spacing * 0.45;
+            });
+            if (overlapsPlacedDot) {
+              continue;
+            }
+
+            chosenAnchor = candidate;
+            break;
+          }
+        }
+
+        if (chosenAnchor == null) {
+          final fallbackY = _snapDotYToNearestSpace(
+            baseAnchor.dy,
+            baseSpaceY: baseAnchor.dy,
+            spacing: spacing,
+          );
+          chosenAnchor = Offset(baseX + spacing * 1.1, fallbackY);
+        }
+        anchors[idx] = chosenAnchor;
+        placedDotAnchors.add(chosenAnchor);
+      }
+    }
+
+    return anchors;
+  }
+
+  double _snapDotYToNearestSpace(
+    double y, {
+    required double baseSpaceY,
+    required double spacing,
+  }) {
+    if (spacing <= 0) {
+      return y;
+    }
+    final step = ((y - baseSpaceY) / spacing).roundToDouble();
+    return baseSpaceY + step * spacing;
+  }
+
   double _accidentalScale(double spacing) {
     return _notePainterAccidentalScale(spacing);
   }
@@ -475,7 +707,7 @@ class GameNotePainter {
     for (var i = 0; i < visible.length; i++) {
       final note = visible[i];
       final key =
-          '${note.adjustedHitMs}-${note.isTreble ? 't' : 'b'}-${note.note.voice}';
+          '${note.adjustedHitMs}-${note.isUpperStaff ? 't' : 'b'}-${note.note.voice}';
       groups.putIfAbsent(key, () => <int>[]).add(i);
       chordKeyByVisibleIndex[i] = key;
     }
@@ -695,15 +927,18 @@ class GameNotePainter {
     }
   }
 
-  bool _chooseStaffForNote(int staffStep, {required bool? previousIsTreble}) {
+  bool _chooseStaffForNote(
+    int staffStep, {
+    required bool? previousIsUpperStaff,
+  }) {
     if (staffStep >= _upperStableTrebleStep) {
       return true;
     }
     if (staffStep <= _lowerStableBassStep) {
       return false;
     }
-    if (previousIsTreble != null) {
-      return previousIsTreble;
+    if (previousIsUpperStaff != null) {
+      return previousIsUpperStaff;
     }
     return staffStep >= _middleSplitStep;
   }
@@ -1154,9 +1389,11 @@ class GameNotePainter {
     required int dotCount,
     required int noteStep,
     required bool isTreble,
+    required _DurationType durationType,
     required double spacing,
     required _NoteJudge judge,
     required bool isActive,
+    Offset? anchor,
   }) {
     if (dotCount <= 0) {
       return;
@@ -1169,17 +1406,63 @@ class GameNotePainter {
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
 
+    final dotAnchor =
+        anchor ??
+        _defaultDotAnchor(
+          center: center,
+          noteStep: noteStep,
+          isTreble: isTreble,
+          durationType: durationType,
+          spacing: spacing,
+        );
+
+    final firstDotX = dotAnchor.dx;
+    final dotY = dotAnchor.dy;
+    final interDotDx = _dotInterSpacingForDuration(durationType, spacing);
+    for (var i = 0; i < dotCount; i++) {
+      final dotX = firstDotX + (i * interDotDx);
+      canvas.drawCircle(Offset(dotX, dotY), dotRadius, dotPaint);
+    }
+  }
+
+  Offset _defaultDotAnchor({
+    required Offset center,
+    required int noteStep,
+    required bool isTreble,
+    required _DurationType durationType,
+    required double spacing,
+  }) {
     // If note head is on a staff line, shift dots up one note step so they stay visible.
     final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
     final onStaffLine = (noteStep - bottomLine).isEven;
     final dotBaseY = onStaffLine ? center.dy - (spacing / 2) : center.dy;
+    final leadingGap = _dotLeadingGapForDuration(durationType, spacing);
+    return Offset(center.dx + leadingGap, dotBaseY);
+  }
 
-    // Draw dots to the right of the note head.
-    final firstDotX = center.dx + spacing * 1.2;
-    for (var i = 0; i < dotCount; i++) {
-      final dotY = dotBaseY + (i * spacing * 0.6);
-      canvas.drawCircle(Offset(firstDotX, dotY), dotRadius, dotPaint);
-    }
+  double _dotLeadingGapForDuration(_DurationType durationType, double spacing) {
+    return switch (durationType) {
+      _DurationType.whole => spacing * 1.42,
+      _DurationType.half => spacing * 1.3,
+      _DurationType.quarter ||
+      _DurationType.eighth ||
+      _DurationType.sixteenth ||
+      _DurationType.thirtySecond => spacing * 1.18,
+    };
+  }
+
+  double _dotInterSpacingForDuration(
+    _DurationType durationType,
+    double spacing,
+  ) {
+    return switch (durationType) {
+      _DurationType.whole => spacing * 0.62,
+      _DurationType.half => spacing * 0.6,
+      _DurationType.quarter ||
+      _DurationType.eighth ||
+      _DurationType.sixteenth ||
+      _DurationType.thirtySecond => spacing * 0.56,
+    };
   }
 
   List<List<int>> _buildBeamGroups(List<_RenderNote> visible) {

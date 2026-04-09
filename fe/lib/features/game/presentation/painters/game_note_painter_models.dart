@@ -5,6 +5,7 @@ class _RenderNote {
     required this.index,
     required this.x,
     required this.y,
+    required this.isUpperStaff,
     required this.isTreble,
     required this.noteStep,
     required this.note,
@@ -18,6 +19,7 @@ class _RenderNote {
   final int index;
   final double x;
   final double y;
+  final bool isUpperStaff;
   final bool isTreble;
   final int noteStep;
   final MusicNote note;
@@ -77,12 +79,14 @@ class _ChordLayout {
 class _PrecomputedRenderNote {
   const _PrecomputedRenderNote({
     required this.adjustedHitMs,
+    required this.isUpperStaff,
     required this.isTreble,
     required this.durationType,
     required this.stemDirection,
   });
 
   final int adjustedHitMs;
+  final bool isUpperStaff;
   final bool isTreble;
   final _DurationType durationType;
   final _StemDirection stemDirection;

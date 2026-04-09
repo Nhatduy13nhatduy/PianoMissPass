@@ -5,7 +5,7 @@ part of 'game_score.dart';
 // quarter note. We convert duration to quarter-count first, then multiply by the
 // fixed timeline factor below.
 const bool _useDurationBasedTimeline = true;
-const double _timelineMsPerDurationDivision = 1600;
+const double _timelineMsPerDurationDivision = 800;
 
 ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   if (document.parts.isEmpty) {
@@ -62,30 +62,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     symbols.add(MusicSymbol(label: '|', timeMs: measureStartMs));
 
     if (attrs != null) {
-      for (final clef in _childrenByName(attrs.children, 'clef')) {
-        final number = int.tryParse(clef.attributes['number'] ?? '1') ?? 1;
-        final previousIsTreble = staffClefIsTreble[number];
-        final sign = _firstChildByName(
-          clef.children,
-          'sign',
-        )?.innerText?.trim().toUpperCase();
-        bool? nextIsTreble;
-        if (sign == 'G') {
-          nextIsTreble = true;
-          staffClefIsTreble[number] = true;
-        } else if (sign == 'F') {
-          nextIsTreble = false;
-          staffClefIsTreble[number] = false;
-        }
-        if (sign != null &&
-            (sign == 'G' || sign == 'F') &&
-            (previousIsTreble == null || previousIsTreble != nextIsTreble)) {
-          symbols.add(
-            MusicSymbol(label: 'Clef:$number:$sign', timeMs: measureStartMs),
-          );
-        }
-      }
-
       final keyFifths = _firstChildByName(
         _firstChildByName(attrs.children, 'key')?.children,
         'fifths',
@@ -156,6 +132,23 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         measure.notes.isNotEmpty && measure.notes.every((n) => n.isRest);
     final emittedWholeRestStaffs = <int>{};
     for (final element in measure.elements) {
+      if (_nameEquals(element.name, 'attributes')) {
+        final attributesTimeMs =
+            measureStartMs +
+            _divisionsToTimelineMs(
+              measureCursorDiv,
+              measureDivisions: measureDivisions,
+              measureBpm: measureBpm,
+            );
+        _applyClefChangesFromAttributes(
+          attributesNode: element,
+          eventTimeMs: attributesTimeMs,
+          staffClefIsTreble: staffClefIsTreble,
+          symbols: symbols,
+        );
+        continue;
+      }
+
       if (_nameEquals(element.name, 'backup')) {
         final duration =
             int.tryParse(
@@ -263,6 +256,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               voice: voice,
               accidental: accidental,
               isTrebleFromMxl: isTrebleFromMxl,
+              staffNumber: staffNumber,
               measureIndex: measureIndex,
               notatedBeats: notatedBeats,
               primaryBeam: primaryBeam,
@@ -337,6 +331,37 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     minMidi: minMidi,
     maxMidi: maxMidi,
   );
+}
+
+void _applyClefChangesFromAttributes({
+  required MxlElementNode attributesNode,
+  required int eventTimeMs,
+  required Map<int, bool> staffClefIsTreble,
+  required List<MusicSymbol> symbols,
+}) {
+  for (final clef in _childrenByName(attributesNode.children, 'clef')) {
+    final number = int.tryParse(clef.attributes['number'] ?? '1') ?? 1;
+    final previousIsTreble = staffClefIsTreble[number];
+    final sign = _firstChildByName(
+      clef.children,
+      'sign',
+    )?.innerText?.trim().toUpperCase();
+    bool? nextIsTreble;
+    if (sign == 'G') {
+      nextIsTreble = true;
+      staffClefIsTreble[number] = true;
+    } else if (sign == 'F') {
+      nextIsTreble = false;
+      staffClefIsTreble[number] = false;
+    }
+    if (sign != null &&
+        (sign == 'G' || sign == 'F') &&
+        (previousIsTreble == null || previousIsTreble != nextIsTreble)) {
+      symbols.add(
+        MusicSymbol(label: 'Clef:$number:$sign', timeMs: eventTimeMs),
+      );
+    }
+  }
 }
 
 int _divisionsToTimelineMs(

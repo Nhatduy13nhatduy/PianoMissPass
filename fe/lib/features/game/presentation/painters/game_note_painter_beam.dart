@@ -113,7 +113,7 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
   for (var i = 0; i < visible.length; i++) {
     final note = visible[i];
     final onsetTrackKey =
-        '${note.adjustedHitMs}-${note.isTreble ? 't' : 'b'}-${note.note.voice}';
+        '${note.adjustedHitMs}-${note.isUpperStaff ? 't' : 'b'}-${note.note.voice}';
     onsetTrackBuckets.putIfAbsent(onsetTrackKey, () => <int>[]).add(i);
   }
 
@@ -151,7 +151,7 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
       onsetTrackBuckets.values.map(pickRepresentativeIndex).toList()..sort();
 
   _ExplicitBeamTrackState stateFor(_RenderNote note) {
-    final key = '${note.isTreble ? 't' : 'b'}-${note.note.voice}';
+    final key = '${note.isUpperStaff ? 't' : 'b'}-${note.note.voice}';
     return states.putIfAbsent(key, _ExplicitBeamTrackState.new);
   }
 

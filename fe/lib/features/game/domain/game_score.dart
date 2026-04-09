@@ -63,11 +63,11 @@ void logParsedMxlTrace(
         note.notatedBeats ?? (note.holdMs / (60000.0 / score.bpm)),
       );
       print(
-        'm=$measure voice=${note.voice} staff=${note.isTrebleFromMxl == true
-            ? 1
-            : note.isTrebleFromMxl == false
-            ? 2
-            : -1} '
+        'm=$measure voice=${note.voice} staff=${note.staffNumber ?? (note.isTrebleFromMxl == true
+                ? 1
+                : note.isTrebleFromMxl == false
+                ? 2
+                : -1)} '
         'hit=${note.hitTimeMs} hold=${note.holdMs} beats=${note.notatedBeats?.toStringAsFixed(3) ?? 'null'} '
         'type=$durationLabel midi=${note.midi} step=${note.staffStep} accidental=${note.accidental ?? '-'}',
       );
@@ -114,6 +114,7 @@ class MusicNote {
     required this.voice,
     this.accidental,
     this.isTrebleFromMxl,
+    this.staffNumber,
     required this.measureIndex,
     this.notatedBeats,
     this.primaryBeam,
@@ -132,6 +133,7 @@ class MusicNote {
   final int voice;
   final String? accidental;
   final bool? isTrebleFromMxl;
+  final int? staffNumber;
   final int measureIndex;
   final double? notatedBeats;
   final String? primaryBeam;
