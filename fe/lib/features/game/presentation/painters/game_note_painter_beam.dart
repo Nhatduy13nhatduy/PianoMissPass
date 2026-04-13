@@ -1,10 +1,13 @@
 part of 'game_note_painter.dart';
 
+// Hàm tính toán hình học cho beam (gạch nối thân nốt)
+// Trả về độ nghiêng (slope) và vị trí tham chiếu của beam dựa trên các đầu thân nốt
 _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
   List<_RenderNote> allNotes,
   List<int> indexes, {
   required double lineSpacing,
 }) {
+  // Nếu chỉ có 1 nốt thì beam là đường ngang qua đầu stem của nốt đó
   if (indexes.length < 2) {
     final single = allNotes[indexes.first];
     final singleTip = _notePainterBeamStemTipForNote(
@@ -16,8 +19,10 @@ _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
   }
 
   final first = allNotes[indexes.first];
+  // Lấy hướng stem của nhóm (lên hoặc xuống)
   final direction = first.stemDirection;
 
+  // Tính toán danh sách các điểm đầu thân nốt (stem tip) cho từng nốt trong nhóm
   final tips = <Offset>[
     for (final idx in indexes)
       _notePainterBeamStemTipForNote(
@@ -33,9 +38,11 @@ _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
       ? 1.0
       : lastTip.dx - firstTip.dx;
   final endpointSlope = (lastTip.dy - firstTip.dy) / dx;
+  // Tính độ nghiêng hồi quy tuyến tính và độ nghiêng tối đa cho beam
   final regressionSlope = _notePainterRegressionSlope(tips);
   final maxSlope = _notePainterMaxBeamSlope(allNotes, indexes);
 
+  // Đếm số lần đảo chiều contour để điều chỉnh độ nghiêng beam cho hợp lý
   final contourReversals = _notePainterCountContourReversals(allNotes, indexes);
   var contourDamping = 1.0;
   if (contourReversals >= 3) {
@@ -46,14 +53,17 @@ _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
     contourDamping = 0.7;
   }
 
+  // Tính độ nghiêng cuối cùng của beam, có clamp để không vượt quá maxSlope
   var slope = (regressionSlope * 0.65 + endpointSlope * 0.35) * contourDamping;
   slope = slope.clamp(-maxSlope, maxSlope);
 
   final xMean = tips.fold<double>(0.0, (sum, p) => sum + p.dx) / tips.length;
   final yMean = tips.fold<double>(0.0, (sum, p) => sum + p.dy) / tips.length;
+  // Tính vị trí y của beam tại điểm đầu tiên
   var yAtFirst = yMean + slope * (firstTip.dx - xMean);
 
   // Beam must stay outside all existing stem tips so stems only extend to meet it.
+  // Hàm phụ: tính vị trí y của beam tại hoành độ x bất kỳ
   double beamYAt(double x, double referenceY) {
     return referenceY + slope * (x - firstTip.dx);
   }
@@ -86,6 +96,11 @@ _LockedBeamGeometry _notePainterBuildLockedBeamGeometry(
   );
 }
 
+// Hàm tính toán vị trí đầu thân nốt (stem tip) cho một nốt
+// direction: hướng stem (lên/xuống)
+// spacing: khoảng cách giữa các dòng khuông
+// stemX: vị trí x của stem (bên phải nếu lên, bên trái nếu xuống)
+// stemY: vị trí y của đầu stem (lên thì trừ, xuống thì cộng)
 Offset _notePainterBeamStemTipForNote(
   _RenderNote note, {
   required _StemDirection direction,
@@ -94,11 +109,14 @@ Offset _notePainterBeamStemTipForNote(
   final stemHeight = _notePainterBaseStemHeight(spacing);
   final stemCenterX = note.x + note.headDx;
   final stemX = note.stemXAxisDirection == _StemDirection.up
-      ? stemCenterX + spacing * 0.55
-      : stemCenterX - spacing * 0.55;
+      ? stemCenterX +
+            spacing *
+                0.55 // stem bên phải
+      : stemCenterX - spacing * 0.55; // stem bên trái
   final stemY = direction == _StemDirection.up
-      ? note.y - stemHeight
-      : note.y + stemHeight;
+      ? note.y -
+            stemHeight // hướng lên thì trừ
+      : note.y + stemHeight; // hướng xuống thì cộng
   return Offset(stemX, stemY);
 }
 
@@ -210,6 +228,8 @@ List<List<int>> _notePainterBuildExplicitBeamGroups(List<_RenderNote> visible) {
   return groups;
 }
 
+// Hàm chuẩn hóa hướng stem cho từng nhóm beam
+// Nếu dữ liệu nhạc có chỉ định rõ hướng stem thì dùng, nếu không sẽ tự động xác định dựa vào vị trí các nốt trong nhóm
 void _notePainterNormalizeBeamGroupStemDirections(
   List<_RenderNote> visible,
   List<List<int>> groups,
@@ -219,6 +239,7 @@ void _notePainterNormalizeBeamGroupStemDirections(
       continue;
     }
 
+    // Nếu có stem chỉ định từ file nhạc (MusicXML) thì ưu tiên dùng
     final explicitStem = group
         .map((idx) => visible[idx].note.stemFromMxl)
         .firstWhere(
@@ -235,6 +256,7 @@ void _notePainterNormalizeBeamGroupStemDirections(
       continue;
     }
 
+    // Nếu không có chỉ định, xác định hướng stem dựa vào vị trí các nốt so với dòng giữa khuông
     final first = visible[group.first];
     final bottomLine = first.isTreble
         ? GameNotePainter._trebleBottomLineStep
@@ -255,6 +277,10 @@ void _notePainterNormalizeBeamGroupStemDirections(
       sum += step;
     }
 
+    // Quy tắc xác định hướng stem:
+    // - Nếu tất cả nốt dưới dòng giữa: stem lên
+    // - Nếu tất cả nốt trên dòng giữa: stem xuống
+    // - Nếu cả hai phía: so sánh khoảng cách để quyết định
     final direction = (() {
       if (maxStep < middleLine) {
         return _StemDirection.up;
@@ -290,6 +316,7 @@ void _notePainterDrawBeamGroup(
   required double lockedSlope,
   required Offset lockedReferenceStemTip,
   required Map<int, Color> stemColorByVisibleIndex,
+  required Map<int, Offset> beamStemStartByVisibleIndex,
 }) {
   final first = visible[indexes.first];
   final last = visible[indexes.last];
@@ -328,22 +355,23 @@ void _notePainterDrawBeamGroup(
 
   for (final idx in indexes) {
     final item = visible[idx];
-    final targetY = beamYAt(item.stemTip!.dx);
+    final stemStart = beamStemStartByVisibleIndex[idx] ?? item.stemTip;
+    if (stemStart == null) {
+      continue;
+    }
+
+    final targetY = beamYAt(stemStart.dx);
     final stemColor = stemColorByVisibleIndex[idx] ?? const Color(0xFF0E1620);
     final stemPaint = Paint()
       ..color = stemColor
       ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = StrokeCap.butt;
-    canvas.drawLine(
-      item.stemTip!,
-      Offset(item.stemTip!.dx, targetY),
-      stemPaint,
-    );
-    item.stemTip = Offset(item.stemTip!.dx, targetY);
+    canvas.drawLine(stemStart, Offset(stemStart.dx, targetY), stemPaint);
+    item.stemTip = Offset(stemStart.dx, targetY);
 
-    topEdgePoints.add(Offset(item.stemTip!.dx, targetY));
+    topEdgePoints.add(Offset(stemStart.dx, targetY));
     bottomEdgePoints.add(
-      Offset(item.stemTip!.dx, targetY + primaryBeamThickness * sign),
+      Offset(stemStart.dx, targetY + primaryBeamThickness * sign),
     );
   }
 
