@@ -255,6 +255,13 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               .length;
           final isStaccato =
               _firstDescendantByName(note.raw, 'staccato') != null;
+          final fingering = _firstDescendantByName(
+            note.raw,
+            'fingering',
+          )?.innerText?.trim();
+          final normalizedFingering = (fingering == null || fingering.isEmpty)
+              ? null
+              : fingering;
           notes.add(
             MusicNote(
               midi: midi,
@@ -275,6 +282,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               slurStops: note.slurStops,
               dotCount: dotCount,
               isStaccato: isStaccato,
+              fingering: normalizedFingering,
             ),
           );
         }

@@ -125,6 +125,7 @@ class MusicNote {
     this.slurStops = const <int>[],
     this.dotCount = 0,
     this.isStaccato = false,
+    this.fingering,
   });
 
   final int midi;
@@ -145,6 +146,7 @@ class MusicNote {
   final List<int> slurStops;
   final int dotCount;
   final bool isStaccato;
+  final String? fingering;
 }
 
 class MusicSymbol {

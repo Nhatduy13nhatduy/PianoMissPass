@@ -293,8 +293,32 @@ class GameNotePainter {
       headDxByVisibleIndex: resolvedHeadDxByVisibleIndex,
       spacing: lineSpacing,
     );
+    final staccatoAnchorByVisibleIndex = _layoutStaccatoAnchors(
+      visible,
+      chordLayout: chordLayout,
+      chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+      headDxByVisibleIndex: resolvedHeadDxByVisibleIndex,
+      spacing: lineSpacing,
+    );
+    final beamEdgeYByVisibleIndex = _layoutBeamEdgeYByVisibleIndex(
+      visible,
+      beamGroups,
+      spacing: lineSpacing,
+    );
+    final fingeringAnchorByVisibleIndex = _layoutFingeringAnchors(
+      visible,
+      chordLayout: chordLayout,
+      chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+      headDxByVisibleIndex: resolvedHeadDxByVisibleIndex,
+      staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
+      beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
+      trebleTop: trebleTop,
+      bassTop: bassTop,
+      spacing: lineSpacing,
+    );
     final stemColorByVisibleIndex = <int, Color>{};
     final beamStemStartByVisibleIndex = <int, Offset>{};
+    final pendingFingerings = <({String text, Offset center, Color color})>[];
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final item = visible[visibleIndex];
@@ -492,6 +516,36 @@ class GameNotePainter {
           isTreble: referenceItem.isTreble,
         );
       }
+
+      final fingering = item.note.fingering;
+      if (fingering != null && fingering.isNotEmpty) {
+        final chordIndexesForFingering = chordKey != null
+            ? chordVisibleIndexesByKey[chordKey]
+            : null;
+
+        final shouldRenderFingeringForThisItem =
+            chordIndexesForFingering == null
+            ? true
+            : (() {
+                final sortedChordIndexes =
+                    List<int>.from(chordIndexesForFingering)..sort(
+                      (a, b) =>
+                          visible[a].noteStep.compareTo(visible[b].noteStep),
+                    );
+                return sortedChordIndexes.contains(visibleIndex);
+              })();
+
+        if (shouldRenderFingeringForThisItem) {
+          final anchor = fingeringAnchorByVisibleIndex[visibleIndex];
+          if (anchor != null) {
+            pendingFingerings.add((
+              text: fingering,
+              center: anchor,
+              color: noteColor,
+            ));
+          }
+        }
+      }
     }
 
     _drawSlurs(
@@ -511,6 +565,16 @@ class GameNotePainter {
         lockedReferenceStemTip: group.lockedReferenceStemTip,
         stemColorByVisibleIndex: stemColorByVisibleIndex,
         beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
+      );
+    }
+
+    for (final fingering in pendingFingerings) {
+      _drawFingering(
+        canvas,
+        text: fingering.text,
+        center: fingering.center,
+        spacing: lineSpacing,
+        color: fingering.color,
       );
     }
   }
@@ -791,6 +855,224 @@ class GameNotePainter {
         }
         anchors[idx] = chosenAnchor;
         placedDotAnchors.add(chosenAnchor);
+      }
+    }
+
+    return anchors;
+  }
+
+  Map<int, Offset> _layoutStaccatoAnchors(
+    List<_RenderNote> visible, {
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required Map<int, double> headDxByVisibleIndex,
+    required double spacing,
+  }) {
+    final anchors = <int, Offset>{};
+
+    for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
+      final item = visible[visibleIndex];
+      final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
+      final chordIndexes = chordKey != null
+          ? chordVisibleIndexesByKey[chordKey]
+          : null;
+      final chordHasStaccato = chordIndexes == null
+          ? item.note.isStaccato
+          : chordIndexes.any((idx) => visible[idx].note.isStaccato);
+
+      if (!chordHasStaccato) {
+        continue;
+      }
+
+      final referenceVisibleIndex = chordIndexes == null
+          ? visibleIndex
+          : (item.stemDirection == _StemDirection.up
+                ? chordIndexes.reduce(
+                    (a, b) =>
+                        visible[a].noteStep <= visible[b].noteStep ? a : b,
+                  )
+                : chordIndexes.reduce(
+                    (a, b) =>
+                        visible[a].noteStep >= visible[b].noteStep ? a : b,
+                  ));
+
+      if (anchors.containsKey(referenceVisibleIndex)) {
+        continue;
+      }
+
+      final referenceItem = visible[referenceVisibleIndex];
+      final referenceCenter = Offset(
+        referenceItem.x + (headDxByVisibleIndex[referenceVisibleIndex] ?? 0.0),
+        referenceItem.y,
+      );
+      anchors[referenceVisibleIndex] = referenceCenter;
+    }
+
+    return anchors;
+  }
+
+  Map<int, double> _layoutBeamEdgeYByVisibleIndex(
+    List<_RenderNote> visible,
+    List<_ProjectedBeamGroup> beamGroups, {
+    required double spacing,
+  }) {
+    final beamEdgeYByVisibleIndex = <int, double>{};
+
+    for (final group in beamGroups) {
+      final x1 = group.lockedReferenceStemTip.dx;
+      final y1 = group.lockedReferenceStemTip.dy;
+
+      double beamYAt(double x) => y1 + group.lockedSlope * (x - x1);
+
+      for (final visibleIndex in group.indexes) {
+        final item = visible[visibleIndex];
+        final stemCenterX = item.x + item.headDx;
+        final stemX = item.stemXAxisDirection == _StemDirection.up
+            ? stemCenterX + spacing * 0.55
+            : stemCenterX - spacing * 0.55;
+        beamEdgeYByVisibleIndex[visibleIndex] = beamYAt(stemX);
+      }
+    }
+
+    return beamEdgeYByVisibleIndex;
+  }
+
+  Map<int, Offset> _layoutFingeringAnchors(
+    List<_RenderNote> visible, {
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required Map<int, double> headDxByVisibleIndex,
+    required Map<int, Offset> staccatoAnchorByVisibleIndex,
+    required Map<int, double> beamEdgeYByVisibleIndex,
+    required double trebleTop,
+    required double bassTop,
+    required double spacing,
+  }) {
+    final anchors = <int, Offset>{};
+
+    final fingeringVisibleIndexes = <int>[
+      for (var i = 0; i < visible.length; i++)
+        if ((visible[i].note.fingering ?? '').isNotEmpty) i,
+    ];
+
+    final groups = <String, List<int>>{};
+    for (final visibleIndex in fingeringVisibleIndexes) {
+      final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
+      final groupKey = chordKey ?? 'single:$visibleIndex';
+      groups.putIfAbsent(groupKey, () => <int>[]).add(visibleIndex);
+    }
+
+    for (final entry in groups.entries) {
+      final group = entry.value;
+      if (group.isEmpty) {
+        continue;
+      }
+
+      final isSingleGroup = entry.key.startsWith('single:');
+      final chordIndexes = isSingleGroup
+          ? group
+          : (chordVisibleIndexesByKey[entry.key] ?? group);
+      if (chordIndexes.isEmpty) {
+        continue;
+      }
+
+      final sortedByPitch = List<int>.from(chordIndexes)
+        ..sort((a, b) => visible[a].noteStep.compareTo(visible[b].noteStep));
+
+      final isUpperStaff = visible[chordIndexes.first].isUpperStaff;
+      final staffTop = isUpperStaff ? trebleTop : bassTop;
+      final staffBottom = staffTop + spacing * 4;
+
+      final chordCenterX =
+          chordIndexes
+              .map((idx) => visible[idx].x + (headDxByVisibleIndex[idx] ?? 0.0))
+              .reduce((a, b) => a + b) /
+          chordIndexes.length;
+
+      final staccatoAnchors = <Offset>[
+        for (final idx in chordIndexes)
+          if (staccatoAnchorByVisibleIndex[idx] != null)
+            staccatoAnchorByVisibleIndex[idx]!,
+      ];
+      final staccatoClearance = spacing * 1.65;
+      final beamClearance = spacing * 1.1;
+
+      final beamYsForChord = <double>[
+        for (final idx in chordIndexes)
+          if (beamEdgeYByVisibleIndex[idx] != null)
+            beamEdgeYByVisibleIndex[idx]!,
+      ];
+
+      if (isUpperStaff) {
+        final staccatoTopY = staccatoAnchors.isEmpty
+            ? null
+            : staccatoAnchors
+                  .map((anchor) => anchor.dy)
+                  .reduce((a, b) => a < b ? a : b);
+        final beamTopY = beamYsForChord.isEmpty
+            ? null
+            : beamYsForChord.reduce((a, b) => a < b ? a : b);
+
+        for (var order = 0; order < sortedByPitch.length; order++) {
+          final idx = sortedByPitch[sortedByPitch.length - 1 - order];
+          final note = visible[idx];
+          final isAboveStaff = note.y < staffTop;
+          var anchorY = isAboveStaff
+              ? note.y - spacing * 1.1 - order * spacing * 0.78
+              : staffTop - spacing * 1.1 - order * spacing * 0.78;
+
+          if (staccatoTopY != null) {
+            final maxY =
+                staccatoTopY - staccatoClearance - order * spacing * 0.78;
+            if (anchorY > maxY) {
+              anchorY = maxY;
+            }
+          }
+
+          if (beamTopY != null) {
+            final maxY = beamTopY - beamClearance - order * spacing * 0.78;
+            if (anchorY > maxY) {
+              anchorY = maxY;
+            }
+          }
+
+          anchors[idx] = Offset(chordCenterX, anchorY);
+        }
+      } else {
+        final staccatoBottomY = staccatoAnchors.isEmpty
+            ? null
+            : staccatoAnchors
+                  .map((anchor) => anchor.dy)
+                  .reduce((a, b) => a > b ? a : b);
+        final beamBottomY = beamYsForChord.isEmpty
+            ? null
+            : beamYsForChord.reduce((a, b) => a > b ? a : b);
+
+        for (var order = 0; order < sortedByPitch.length; order++) {
+          final idx = sortedByPitch[order];
+          final note = visible[idx];
+          final isBelowStaff = note.y > staffBottom;
+          var anchorY = isBelowStaff
+              ? note.y + spacing * 1.1 + order * spacing * 0.78
+              : staffBottom + spacing * 1.1 + order * spacing * 0.78;
+
+          if (staccatoBottomY != null) {
+            final minY =
+                staccatoBottomY + staccatoClearance + order * spacing * 0.78;
+            if (anchorY < minY) {
+              anchorY = minY;
+            }
+          }
+
+          if (beamBottomY != null) {
+            final minY = beamBottomY + beamClearance + order * spacing * 0.78;
+            if (anchorY < minY) {
+              anchorY = minY;
+            }
+          }
+
+          anchors[idx] = Offset(chordCenterX, anchorY);
+        }
       }
     }
 
@@ -1644,6 +1926,32 @@ class GameNotePainter {
       final dotX = firstDotX + (i * interDotDx);
       canvas.drawCircle(Offset(dotX, dotY), dotRadius, dotPaint);
     }
+  }
+
+  void _drawFingering(
+    Canvas canvas, {
+    required String text,
+    required Offset center,
+    required double spacing,
+    required Color color,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: (spacing * 0.95).clamp(9.0, 16.0),
+          fontWeight: FontWeight.w500,
+          height: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    tp.paint(
+      canvas,
+      Offset(center.dx - tp.width / 2, center.dy - tp.height / 2),
+    );
   }
 
   void _drawStaccatoMark(
