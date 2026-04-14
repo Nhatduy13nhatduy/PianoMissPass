@@ -124,6 +124,7 @@ class MusicNote {
     this.slurStarts = const <int>[],
     this.slurStops = const <int>[],
     this.dotCount = 0,
+    this.isStaccato = false,
   });
 
   final int midi;
@@ -143,6 +144,7 @@ class MusicNote {
   final List<int> slurStarts;
   final List<int> slurStops;
   final int dotCount;
+  final bool isStaccato;
 }
 
 class MusicSymbol {

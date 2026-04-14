@@ -188,6 +188,12 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         continue;
       }
       final note = measure.notes[noteCursor++];
+      final isGrace = note.raw.children.any(
+        (child) => _localName(child.name).toLowerCase() == 'grace',
+      );
+      if (isGrace) {
+        continue;
+      }
       final isChord = note.isChord;
       final isRest = note.isRest;
       final duration = note.durationDivisions ?? 0;
@@ -247,6 +253,8 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           final dotCount = note.raw.children
               .where((child) => _nameEquals(child.name, 'dot'))
               .length;
+          final isStaccato =
+              _firstDescendantByName(note.raw, 'staccato') != null;
           notes.add(
             MusicNote(
               midi: midi,
@@ -266,6 +274,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               slurStarts: note.slurStarts,
               slurStops: note.slurStops,
               dotCount: dotCount,
+              isStaccato: isStaccato,
             ),
           );
         }

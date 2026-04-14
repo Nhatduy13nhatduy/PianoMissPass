@@ -434,6 +434,64 @@ class GameNotePainter {
         isActive: isActive,
         anchor: dotAnchorByVisibleIndex[visibleIndex],
       );
+
+      final chordIndexesForStaccato = chordKey != null
+          ? chordVisibleIndexesByKey[chordKey]
+          : null;
+      final chordHasStaccato = chordIndexesForStaccato == null
+          ? item.note.isStaccato
+          : chordIndexesForStaccato.any((idx) => visible[idx].note.isStaccato);
+
+      final shouldRenderStaccatoForThisItem = chordIndexesForStaccato == null
+          ? chordHasStaccato
+          : (() {
+              if (!chordHasStaccato) {
+                return false;
+              }
+
+              final representativeVisibleIndex =
+                  effectiveStemDirection == _StemDirection.up
+                  ? chordIndexesForStaccato.reduce(
+                      (a, b) =>
+                          visible[a].noteStep <= visible[b].noteStep ? a : b,
+                    )
+                  : chordIndexesForStaccato.reduce(
+                      (a, b) =>
+                          visible[a].noteStep >= visible[b].noteStep ? a : b,
+                    );
+
+              return representativeVisibleIndex == visibleIndex;
+            })();
+
+      if (shouldRenderStaccatoForThisItem) {
+        final referenceVisibleIndex = chordIndexesForStaccato == null
+            ? visibleIndex
+            : (effectiveStemDirection == _StemDirection.up
+                  ? chordIndexesForStaccato.reduce(
+                      (a, b) =>
+                          visible[a].noteStep <= visible[b].noteStep ? a : b,
+                    )
+                  : chordIndexesForStaccato.reduce(
+                      (a, b) =>
+                          visible[a].noteStep >= visible[b].noteStep ? a : b,
+                    ));
+
+        final referenceItem = visible[referenceVisibleIndex];
+        final referenceCenter = Offset(
+          referenceItem.x + referenceItem.headDx,
+          referenceItem.y,
+        );
+
+        _drawStaccatoMark(
+          canvas,
+          center: referenceCenter,
+          direction: effectiveStemDirection,
+          spacing: lineSpacing,
+          color: noteColor,
+          referenceNoteStep: referenceItem.noteStep,
+          isTreble: referenceItem.isTreble,
+        );
+      }
     }
 
     _drawSlurs(
@@ -1418,11 +1476,6 @@ class GameNotePainter {
       ..strokeWidth = (spacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
-    final stemX =
-        stemXOverride ??
-        (xAxisDirection == _StemDirection.up
-            ? center.dx + spacing * 0.55
-            : center.dx - spacing * 0.55);
     final stemStart = _stemStartForGeometry(
       center: center,
       direction: direction,
@@ -1593,6 +1646,43 @@ class GameNotePainter {
     }
   }
 
+  void _drawStaccatoMark(
+    Canvas canvas, {
+    required Offset center,
+    required _StemDirection direction,
+    required double spacing,
+    required Color color,
+    required int referenceNoteStep,
+    required bool isTreble,
+  }) {
+    final radius = (spacing * 0.16).clamp(1.2, 2.8).toDouble();
+
+    var yOffset = direction == _StemDirection.up ? spacing : -spacing;
+
+    // Xác định phạm vi staff (5 dòng)
+    final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
+    final topLine = bottomLine + 7;
+
+    final isOutsideStaff =
+        referenceNoteStep < bottomLine || referenceNoteStep > topLine;
+
+    // Chỉ áp dụng shift khi nằm TRONG staff
+    if (!isOutsideStaff) {
+      final needsHalfStepShift = referenceNoteStep.isEven;
+
+      if (needsHalfStepShift) {
+        yOffset += direction == _StemDirection.up ? spacing / 2 : -spacing / 2;
+      }
+    }
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    canvas.drawCircle(Offset(center.dx, center.dy + yOffset), radius, paint);
+  }
+
   Offset _defaultDotAnchor({
     required Offset center,
     required int noteStep,
@@ -1600,7 +1690,6 @@ class GameNotePainter {
     required _DurationType durationType,
     required double spacing,
   }) {
-    // If note head is on a staff line, shift dots up one note step so they stay visible.
     final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
     final onStaffLine = (noteStep - bottomLine).isEven;
     final dotBaseY = onStaffLine ? center.dy - (spacing / 2) : center.dy;
