@@ -13,7 +13,6 @@ class ScoreData {
     required this.beatsPerMeasure,
     required this.beatUnit,
     required this.notes,
-    required this.slurs,
     required this.symbols,
     required this.keySignatures,
     required this.minMidi,
@@ -24,18 +23,10 @@ class ScoreData {
   final int beatsPerMeasure;
   final int beatUnit;
   final List<MusicNote> notes;
-  final List<SlurSpan> slurs;
   final List<MusicSymbol> symbols;
   final List<KeySignatureChange> keySignatures;
   final int minMidi;
   final int maxMidi;
-}
-
-class SlurSpan {
-  const SlurSpan({required this.startNoteIndex, required this.endNoteIndex});
-
-  final int startNoteIndex;
-  final int endNoteIndex;
 }
 
 void logParsedMxlTrace(
@@ -121,8 +112,6 @@ class MusicNote {
     this.secondaryBeam,
     this.tertiaryBeam,
     this.stemFromMxl,
-    this.slurStarts = const <int>[],
-    this.slurStops = const <int>[],
     this.dotCount = 0,
     this.isStaccato = false,
     this.fingering,
@@ -142,8 +131,6 @@ class MusicNote {
   final String? secondaryBeam;
   final String? tertiaryBeam;
   final String? stemFromMxl;
-  final List<int> slurStarts;
-  final List<int> slurStops;
   final int dotCount;
   final bool isStaccato;
   final String? fingering;
@@ -244,8 +231,6 @@ class MxlNoteNode {
     required this.stem,
     required this.accidental,
     required this.beams,
-    required this.slurStarts,
-    required this.slurStops,
     required this.raw,
   });
 
@@ -261,8 +246,6 @@ class MxlNoteNode {
   final String? stem;
   final String? accidental;
   final List<MxlBeamNode> beams;
-  final List<int> slurStarts;
-  final List<int> slurStops;
   final MxlElementNode raw;
 }
 
@@ -295,17 +278,6 @@ MxlDocumentData parseMxlDocument(Uint8List bytes) {
             .toList();
 
         final pitch = noteElement.getElement('pitch');
-        final slurStarts = <int>[];
-        final slurStops = <int>[];
-        for (final slur in noteElement.findAllElements('slur')) {
-          final type = slur.getAttribute('type')?.trim().toLowerCase();
-          final number = int.tryParse(slur.getAttribute('number') ?? '') ?? 1;
-          if (type == 'start') {
-            slurStarts.add(number);
-          } else if (type == 'stop') {
-            slurStops.add(number);
-          }
-        }
         noteNodes.add(
           MxlNoteNode(
             isChord: noteElement.getElement('chord') != null,
@@ -338,8 +310,6 @@ MxlDocumentData parseMxlDocument(Uint8List bytes) {
                 .trim()
                 .toLowerCase(),
             beams: beams,
-            slurStarts: slurStarts,
-            slurStops: slurStops,
             raw: _mapXmlElement(noteElement),
           ),
         );

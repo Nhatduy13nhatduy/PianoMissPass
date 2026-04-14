@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +16,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   static const String sampleMxlUrl =
-      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776143480/wa-mozart-marche-turque-turkish-march-fingered_iisfuq.mxl';
+      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776160428/nocturne-in-c-sharp-minor_oqimmm.mxl';
 
   static const int initialLeadInMs = 4500;
   static const int hitWindowMs = 180;
@@ -27,8 +28,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   MidiDevice? _connectedDevice;
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
+  final ValueNotifier<int> _elapsedMsNotifier = ValueNotifier<int>(0);
   int _baseElapsedMs = 0;
   int _nextMissScanIndex = 0;
+  int _maxDurationMs = 10000;
 
   Future<void> initialize() async {
     _ticker.stop();
@@ -36,6 +39,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..stop()
       ..reset();
     _baseElapsedMs = -initialLeadInMs;
+    _elapsedMsNotifier.value = _baseElapsedMs;
     _nextMissScanIndex = 0;
 
     emit(const GamePrototypeState(isLoading: true));
@@ -162,12 +166,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           isLoading: false,
           clearErrorMessage: true,
           score: score,
-          elapsedMs: _baseElapsedMs,
           passedNoteIndexes: const <int>{},
           missedNoteIndexes: const <int>{},
         ),
       );
 
+      _maxDurationMs = _computeMaxDurationMs(score);
       _play();
     } catch (error) {
       if (isClosed) {
@@ -202,11 +206,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     _baseElapsedMs += _stopwatch.elapsedMilliseconds;
+    _elapsedMsNotifier.value = _baseElapsedMs;
     _stopwatch
       ..stop()
       ..reset();
     _ticker.stop();
-    emit(state.copyWith(isPlaying: false, elapsedMs: _baseElapsedMs));
+    emit(state.copyWith(isPlaying: false));
   }
 
   void _onTick(Duration _) {
@@ -222,11 +227,18 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    if (updatedMisses == null && current == state.elapsedMs) {
+    if (_elapsedMsNotifier.value == current) {
+      if (updatedMisses == null) {
+        return;
+      }
+      emit(state.copyWith(missedNoteIndexes: updatedMisses));
       return;
     }
 
-    emit(state.copyWith(elapsedMs: current, missedNoteIndexes: updatedMisses));
+    _elapsedMsNotifier.value = current;
+    if (updatedMisses != null) {
+      emit(state.copyWith(missedNoteIndexes: updatedMisses));
+    }
   }
 
   Set<int>? _updateMissesIncremental(int currentMs) {
@@ -298,9 +310,14 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     return _baseElapsedMs + _stopwatch.elapsedMilliseconds;
   }
 
+  ValueListenable<int> get elapsedMsListenable => _elapsedMsNotifier;
+
   int get maxDurationMs {
-    final score = state.score;
-    if (score == null || score.notes.isEmpty) {
+    return _maxDurationMs;
+  }
+
+  int _computeMaxDurationMs(ScoreData score) {
+    if (score.notes.isEmpty) {
       return 10000;
     }
 
@@ -321,6 +338,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _stopwatch
       ..stop()
       ..reset();
+    _elapsedMsNotifier.dispose();
     return super.close();
   }
 }

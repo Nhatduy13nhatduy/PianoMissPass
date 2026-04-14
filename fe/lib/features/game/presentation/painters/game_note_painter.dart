@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
+import '../notation/notation_metrics.dart';
+import 'game_text_painter.dart';
 
 part 'game_note_painter_models.dart';
 part 'game_note_painter_paths.dart';
@@ -28,6 +30,30 @@ class GameNotePainter {
   static final Set<int> _debugLoggedNoteIndexes = <int>{};
   static final Expando<_PrecomputedScoreRenderData> _precomputedScoreCache =
       Expando<_PrecomputedScoreRenderData>('game-note-precomputed');
+  static final GameTextPainter _sharedTextPainter = GameTextPainter();
+  static final Path _quarterHeadTemplateCached = _notePainterQuarterHeadTemplate();
+  static final Rect _quarterHeadBoundsCached =
+      _quarterHeadTemplateCached.getBounds();
+  static final Path _halfHeadTemplateCached = _notePainterHalfHeadTemplate();
+  static final Rect _halfHeadBoundsCached = _halfHeadTemplateCached.getBounds();
+  static final Path _wholeHeadTemplateCached = _notePainterWholeHeadTemplate();
+  static final Rect _wholeHeadBoundsCached =
+      _wholeHeadTemplateCached.getBounds();
+  static final Map<_StemDirection, Path> _flagTemplateByDirection = <_StemDirection, Path>{
+    _StemDirection.up: _notePainterBuildLegacyFlagTemplate(
+      direction: _StemDirection.up,
+    ),
+    _StemDirection.down: _notePainterBuildLegacyFlagTemplate(
+      direction: _StemDirection.down,
+    ),
+  };
+  static final Map<_StemDirection, Rect> _flagBoundsByDirection =
+      <_StemDirection, Rect>{
+        _StemDirection.up: _flagTemplateByDirection[_StemDirection.up]!
+            .getBounds(),
+        _StemDirection.down: _flagTemplateByDirection[_StemDirection.down]!
+            .getBounds(),
+      };
 
   void paintNotes(
     Canvas canvas,
@@ -39,9 +65,9 @@ class GameNotePainter {
     required double playheadX,
     required double trebleTop,
     required double bassTop,
-    required double lineSpacing,
+    required NotationMetrics metrics,
   }) {
-    final allNotes = <_RenderNote>[];
+    final lineSpacing = metrics.staffSpace;
     final precomputedScore = _getPrecomputedScoreRenderData(score);
     final precomputedNotes = precomputedScore.notes;
     final beatMs = 60000.0 / score.bpm;
@@ -56,30 +82,36 @@ class GameNotePainter {
       windowStartMs,
     );
     final endIndex = _upperBoundAdjustedHitMs(precomputedNotes, windowEndMs);
+    final visible = <_RenderNote>[];
 
     for (var i = startIndex; i < endIndex; i++) {
       final note = score.notes[i];
       final precomputed = precomputedNotes[i];
       final adjustedHitMs = precomputed.adjustedHitMs;
-      final delta = adjustedHitMs - currentMs;
-      if (delta > previewWindowMs + _renderWindowPaddingMs) {
-        break;
+      final anchorTime =
+          precomputedScore.beamAnchorAdjustedHitMsByScoreIndex[i] ??
+          adjustedHitMs;
+      final anchorDelta = anchorTime - currentMs;
+      if (anchorDelta > previewWindowMs || anchorDelta < -cleanupWindowMs) {
+        continue;
       }
 
-      final x = playheadX + delta * notePxPerMs;
-      final isUpperStaff = precomputed.isUpperStaff;
-      final isTreble = precomputed.isTreble;
-      final staffTop = isUpperStaff ? trebleTop : bassTop;
-      final y = _yForStaffStep(note.staffStep, isTreble, staffTop, lineSpacing);
       final status = passedNoteIndexes.contains(i)
           ? _NoteJudge.pass
           : missedNoteIndexes.contains(i)
           ? _NoteJudge.miss
           : _NoteJudge.pending;
-      final durationType = precomputed.durationType;
-      final stemDirection = precomputed.stemDirection;
+      final x = playheadX + (adjustedHitMs - currentMs) * notePxPerMs;
+      if (x < -30 || x > size.width + preRenderRightPx) {
+        continue;
+      }
 
-      allNotes.add(
+      final isUpperStaff = precomputed.isUpperStaff;
+      final isTreble = precomputed.isTreble;
+      final staffTop = isUpperStaff ? trebleTop : bassTop;
+      final y = _yForStaffStep(note.staffStep, isTreble, staffTop, lineSpacing);
+
+      visible.add(
         _RenderNote(
           index: i,
           x: x,
@@ -90,38 +122,12 @@ class GameNotePainter {
           note: note,
           adjustedHitMs: adjustedHitMs,
           status: status,
-          durationType: durationType,
-          stemDirection: stemDirection,
-          stemXAxisDirection: stemDirection,
+          durationType: precomputed.durationType,
+          accidentalToRender: precomputed.accidentalToRender,
+          stemDirection: precomputed.stemDirection,
+          stemXAxisDirection: precomputed.stemDirection,
         ),
       );
-    }
-
-    final allBeamGroups = _buildBeamGroups(allNotes);
-    _normalizeBeamGroupStemDirections(allNotes, allBeamGroups);
-
-    final beamAnchorByIndex = <int, int>{};
-    for (final group in allBeamGroups) {
-      final anchorIndex = group.last;
-      final anchorTime = allNotes[anchorIndex].adjustedHitMs;
-      for (final index in group) {
-        beamAnchorByIndex[allNotes[index].index] = anchorTime;
-      }
-    }
-
-    final visible = <_RenderNote>[];
-    for (final item in allNotes) {
-      final anchorTime = beamAnchorByIndex[item.index] ?? item.adjustedHitMs;
-      final anchorDelta = anchorTime - currentMs;
-      if (anchorDelta > previewWindowMs || anchorDelta < -cleanupWindowMs) {
-        continue;
-      }
-
-      if (item.x < -30 || item.x > size.width + preRenderRightPx) {
-        continue;
-      }
-
-      visible.add(item);
     }
 
     final chordLayout = _buildChordLayout(visible, spacing: lineSpacing);
@@ -148,12 +154,11 @@ class GameNotePainter {
 
     final beamGroups = <_ProjectedBeamGroup>[];
     final beamStemDirectionByVisibleIndex = <int, _StemDirection>{};
-    for (final group in allBeamGroups) {
+    for (final group in precomputedScore.beamGroupsByScoreIndex) {
       final projected = <int>[];
       final projectedChordKeys = <String>{};
-      final groupStemDirection = allNotes[group.first].stemDirection;
-      for (final allIndex in group) {
-        final scoreIndex = allNotes[allIndex].index;
+      final groupStemDirection = precomputedNotes[group.first].stemDirection;
+      for (final scoreIndex in group) {
         final visibleIndex = visibleIndexByScoreIndex[scoreIndex];
         if (visibleIndex != null) {
           final isChordMember = chordLayout.chordMemberVisibleIndexes.contains(
@@ -260,22 +265,8 @@ class GameNotePainter {
     }
 
     final accidentalByVisibleIndex = <int, String>{};
-    final keyChanges = score.keySignatures;
-    var keyChangeIndex = 0;
-    var activeKeyFifths = 0;
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
-      final note = visible[visibleIndex];
-      final noteTimeMs = note.note.hitTimeMs;
-      while (keyChangeIndex < keyChanges.length &&
-          keyChanges[keyChangeIndex].timeMs <= noteTimeMs) {
-        activeKeyFifths = keyChanges[keyChangeIndex].fifths;
-        keyChangeIndex++;
-      }
-
-      final accidentalToRender = _accidentalToRender(
-        note.note,
-        keyFifths: activeKeyFifths,
-      );
+      final accidentalToRender = visible[visibleIndex].accidentalToRender;
       if (accidentalToRender != null) {
         accidentalByVisibleIndex[visibleIndex] = accidentalToRender;
       }
@@ -322,7 +313,7 @@ class GameNotePainter {
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {
       final item = visible[visibleIndex];
-      final accidentalToRender = accidentalByVisibleIndex[visibleIndex];
+      final accidentalToRender = item.accidentalToRender;
       final headDx = item.headDx;
       final center = Offset(item.x + headDx, item.y);
       final isActive = (item.adjustedHitMs - currentMs).abs() <= 70;
@@ -360,7 +351,7 @@ class GameNotePainter {
         judge: item.status,
         isActive: isActive,
         durationType: item.durationType,
-        spacing: lineSpacing,
+        metrics: metrics,
       );
 
       final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
@@ -548,13 +539,6 @@ class GameNotePainter {
       }
     }
 
-    _drawSlurs(
-      canvas,
-      score: score,
-      visible: visible,
-      lineSpacing: lineSpacing,
-    );
-
     for (final group in beamGroups) {
       _drawBeamGroup(
         canvas,
@@ -586,8 +570,11 @@ class GameNotePainter {
     }
 
     final clefChangesByStaff = _buildClefChangeTimelineByStaff(score);
+    final keyChanges = score.keySignatures;
     bool? previousIsUpperStaff;
     final precomputedNotes = <_PrecomputedRenderNote>[];
+    var keyChangeIndex = 0;
+    var activeKeyFifths = 0;
     for (final note in score.notes) {
       final isUpperStaff = note.staffNumber != null
           ? note.staffNumber == 1
@@ -604,6 +591,11 @@ class GameNotePainter {
         note.hitTimeMs,
         fallbackIsTreble: fallbackIsTreble,
       );
+      while (keyChangeIndex < keyChanges.length &&
+          keyChanges[keyChangeIndex].timeMs <= note.hitTimeMs) {
+        activeKeyFifths = keyChanges[keyChangeIndex].fifths;
+        keyChangeIndex++;
+      }
 
       precomputedNotes.add(
         _PrecomputedRenderNote(
@@ -611,12 +603,70 @@ class GameNotePainter {
           isUpperStaff: isUpperStaff,
           isTreble: isTreble,
           durationType: _durationTypeFromNote(note, score.bpm),
+          accidentalToRender: _accidentalToRender(
+            note,
+            keyFifths: activeKeyFifths,
+          ),
           stemDirection: _stemDirectionFromNote(note, isTreble: isTreble),
         ),
       );
     }
 
-    final built = _PrecomputedScoreRenderData(notes: precomputedNotes);
+    final beamSeedNotes = <_RenderNote>[
+      for (var i = 0; i < score.notes.length; i++)
+        _RenderNote(
+          index: i,
+          x: 0,
+          y: 0,
+          isUpperStaff: precomputedNotes[i].isUpperStaff,
+          isTreble: precomputedNotes[i].isTreble,
+          noteStep: score.notes[i].staffStep,
+          note: score.notes[i],
+          adjustedHitMs: precomputedNotes[i].adjustedHitMs,
+          status: _NoteJudge.pending,
+          durationType: precomputedNotes[i].durationType,
+          accidentalToRender: precomputedNotes[i].accidentalToRender,
+          stemDirection: precomputedNotes[i].stemDirection,
+          stemXAxisDirection: precomputedNotes[i].stemDirection,
+        ),
+    ];
+    final beamGroups = _buildBeamGroups(beamSeedNotes);
+    _normalizeBeamGroupStemDirections(beamSeedNotes, beamGroups);
+    final beamAnchorAdjustedHitMsByScoreIndex = List<int?>.filled(
+      score.notes.length,
+      null,
+    );
+    for (final group in beamGroups) {
+      if (group.isEmpty) {
+        continue;
+      }
+      final anchorTime = beamSeedNotes[group.last].adjustedHitMs;
+      for (final scoreIndex in group) {
+        beamAnchorAdjustedHitMsByScoreIndex[scoreIndex] = anchorTime;
+      }
+    }
+    for (var i = 0; i < precomputedNotes.length; i++) {
+      final precomputed = precomputedNotes[i];
+      final normalizedStemDirection = beamSeedNotes[i].stemDirection;
+      precomputedNotes[i] = _PrecomputedRenderNote(
+        adjustedHitMs: precomputed.adjustedHitMs,
+        isUpperStaff: precomputed.isUpperStaff,
+        isTreble: precomputed.isTreble,
+        durationType: precomputed.durationType,
+        accidentalToRender: precomputed.accidentalToRender,
+        stemDirection: normalizedStemDirection,
+      );
+    }
+
+    final built = _PrecomputedScoreRenderData(
+      notes: List<_PrecomputedRenderNote>.unmodifiable(precomputedNotes),
+      beamGroupsByScoreIndex: List<List<int>>.unmodifiable(
+        beamGroups.map((group) => List<int>.unmodifiable(group)),
+      ),
+      beamAnchorAdjustedHitMsByScoreIndex: List<int?>.unmodifiable(
+        beamAnchorAdjustedHitMsByScoreIndex,
+      ),
+    );
     _precomputedScoreCache[score] = built;
     return built;
   }
@@ -1294,76 +1344,6 @@ class GameNotePainter {
     );
   }
 
-  void _drawSlurs(
-    Canvas canvas, {
-    required ScoreData score,
-    required List<_RenderNote> visible,
-    required double lineSpacing,
-  }) {
-    final byScoreIndex = <int, _RenderNote>{
-      for (final note in visible) note.index: note,
-    };
-
-    for (final slur in score.slurs) {
-      final start = byScoreIndex[slur.startNoteIndex];
-      final end = byScoreIndex[slur.endNoteIndex];
-      if (start == null || end == null) {
-        continue;
-      }
-
-      final isUp =
-          start.stemDirection == _StemDirection.down ||
-          end.stemDirection == _StemDirection.down;
-      final baseY = isUp
-          ? (start.y < end.y ? start.y : end.y) - lineSpacing * 2.2
-          : (start.y > end.y ? start.y : end.y) + lineSpacing * 2.2;
-      final startX = start.x + lineSpacing * 0.7;
-      final endX = end.x - lineSpacing * 0.7;
-      final width = endX - startX;
-      if (width < lineSpacing * 1.4) {
-        continue;
-      }
-
-      final curvature = (width / 6).clamp(lineSpacing * 0.8, lineSpacing * 3);
-      final topY = isUp ? baseY - curvature : baseY + curvature;
-      final bottomOffset = lineSpacing * 0.22;
-
-      final path = Path()
-        ..moveTo(startX, baseY)
-        ..cubicTo(
-          startX + width * 0.25,
-          topY,
-          endX - width * 0.25,
-          topY,
-          endX,
-          baseY,
-        )
-        ..cubicTo(
-          endX - width * 0.25,
-          topY + (isUp ? bottomOffset : -bottomOffset),
-          startX + width * 0.25,
-          topY + (isUp ? bottomOffset : -bottomOffset),
-          startX,
-          baseY,
-        )
-        ..close();
-
-      final slurColor = switch (end.status) {
-        _NoteJudge.pass => const Color(0xFF1E5D31),
-        _NoteJudge.miss => const Color(0xFF98273B),
-        _NoteJudge.pending => const Color(0xFF0E1620),
-      };
-
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = slurColor
-          ..style = PaintingStyle.fill
-          ..isAntiAlias = true,
-      );
-    }
-  }
-
   bool _chooseStaffForNote(
     int staffStep, {
     required bool? previousIsUpperStaff,
@@ -1512,9 +1492,9 @@ class GameNotePainter {
     final ledgerPaint = Paint()
       ..color = color
       ..strokeWidth = 1.6;
-    final halfLength = (spacing * 0.95).clamp(8.0, 14.0);
+    final halfLength = (spacing * 1.12).clamp(9.4, 16.4);
     final leftHalfLength = durationType == _DurationType.whole
-        ? halfLength * 1.45
+        ? halfLength * 1.49
         : halfLength;
 
     if (noteStep > topLine) {
@@ -1554,11 +1534,10 @@ class GameNotePainter {
     required _NoteJudge judge,
     required bool isActive,
     required _DurationType durationType,
-    required double spacing,
+    required NotationMetrics metrics,
   }) {
+    final spacing = metrics.staffSpace;
     final strokeColor = _noteInkColor(judge, isActive);
-    final wholeTargetHeight = (spacing * 1.15).clamp(8.0, 20.0);
-    final headTargetHeight = (spacing * 1.07).clamp(7.5, 18.0);
     final fillPaint = Paint()
       ..color = strokeColor
       ..style = PaintingStyle.fill
@@ -1566,80 +1545,65 @@ class GameNotePainter {
     final borderPaint = Paint()
       ..color = strokeColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = (spacing * 0.12).clamp(1.1, 1.9)
+      ..strokeWidth = metrics.noteHeadStrokeWidth
       ..isAntiAlias = true;
 
     if (durationType == _DurationType.whole) {
-      final wholeHead = _wholeHeadTemplate();
-      final refBounds = wholeHead.getBounds();
-      final wholeScaledTargetHeight = (wholeTargetHeight * 1.2).clamp(
-        9.6,
-        24.0,
-      );
-
       _drawTemplatePathAligned(
         canvas,
-        wholeHead,
-        referenceBounds: refBounds,
+        _wholeHeadTemplateCached,
+        referenceBounds: _wholeHeadBoundsCached,
         center: center,
-        targetHeight: wholeScaledTargetHeight,
+        targetHeight: metrics.wholeNoteHeadHeight,
         paint: fillPaint,
       );
       _drawTemplatePathAligned(
         canvas,
-        wholeHead,
-        referenceBounds: refBounds,
+        _wholeHeadTemplateCached,
+        referenceBounds: _wholeHeadBoundsCached,
         center: center,
-        targetHeight: wholeScaledTargetHeight,
+        targetHeight: metrics.wholeNoteHeadHeight,
         paint: borderPaint,
       );
       return;
     }
 
     if (durationType == _DurationType.half) {
-      final halfHead = _halfHeadTemplate();
-      final refBounds = halfHead.getBounds();
-      final halfTargetHeight = (headTargetHeight * 1).clamp(9.0, 21.6);
-
       _drawTemplatePathAligned(
         canvas,
-        halfHead,
-        referenceBounds: refBounds,
+        _halfHeadTemplateCached,
+        referenceBounds: _halfHeadBoundsCached,
         center: center,
-        targetHeight: halfTargetHeight,
+        targetHeight: metrics.noteHeadHeight,
         paint: fillPaint,
       );
 
       _drawTemplatePathAligned(
         canvas,
-        halfHead,
-        referenceBounds: refBounds,
+        _halfHeadTemplateCached,
+        referenceBounds: _halfHeadBoundsCached,
         center: center,
-        targetHeight: halfTargetHeight,
+        targetHeight: metrics.noteHeadHeight,
         paint: borderPaint,
       );
       return;
     }
 
-    final quarterHead = _quarterHeadTemplate();
-    final refBounds = quarterHead.getBounds();
-    final quarterTargetHeight = (headTargetHeight * 1).clamp(9.0, 21.6);
-
     _drawTemplatePathAligned(
       canvas,
-      quarterHead,
-      referenceBounds: refBounds,
+      _quarterHeadTemplateCached,
+      referenceBounds: _quarterHeadBoundsCached,
       center: center,
-      targetHeight: quarterTargetHeight,
+      targetHeight: metrics.noteHeadHeight,
       paint: fillPaint,
     );
 
     _drawTemplatePathAligned(
       canvas,
-      quarterHead,
-      referenceBounds: refBounds,
+      _quarterHeadTemplateCached,
+      referenceBounds: _quarterHeadBoundsCached,
       center: center,
-      targetHeight: quarterTargetHeight,
+      targetHeight: metrics.noteHeadHeight,
       paint: borderPaint,
     );
   }
@@ -1803,8 +1767,8 @@ class GameNotePainter {
           ? Offset(stemTip.dx, stemTip.dy + stemDirectionNudge + yOffset)
           : Offset(stemTip.dx, stemTip.dy - stemDirectionNudge - yOffset);
 
-      final template = _buildLegacyFlagTemplate(direction: direction);
-      final bounds = template.getBounds();
+      final template = _flagTemplateByDirection[direction]!;
+      final bounds = _flagBoundsByDirection[direction]!;
       if (bounds.height == 0) {
         continue;
       }
@@ -1845,26 +1809,27 @@ class GameNotePainter {
     final fontSize = (68.0 * scale).clamp(10.0, 56.0);
     final baselineNudge = accidental == '♭' ? fontSize * 0.025 : 0.0;
 
-    final tp = TextPainter(
-      text: TextSpan(
-        text: smuflGlyph,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w400,
-          fontFamily: _bravuraFontFamily,
-          height: 1.0,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final glyphSize = _sharedTextPainter.measureText(
+      smuflGlyph,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w400,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
+    );
 
-    tp.paint(
+    _sharedTextPainter.paintText(
       canvas,
       Offset(
-        center.dx - tp.width / 2,
-        center.dy - tp.height * 0.53 + baselineNudge,
+        center.dx - glyphSize.width / 2,
+        center.dy - glyphSize.height * 0.53 + baselineNudge,
       ),
+      smuflGlyph,
+      color: color,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w400,
+      maxWidth: glyphSize.width + 2,
+      fontFamily: _bravuraFontFamily,
+      height: 1.0,
     );
   }
 
@@ -1935,22 +1900,23 @@ class GameNotePainter {
     required double spacing,
     required Color color,
   }) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: (spacing * 0.95).clamp(9.0, 16.0),
-          fontWeight: FontWeight.w500,
-          height: 1.0,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final fontSize = (spacing * 0.95).clamp(9.0, 16.0);
+    final textSize = _sharedTextPainter.measureText(
+      text,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w500,
+      height: 1.0,
+    );
 
-    tp.paint(
+    _sharedTextPainter.paintText(
       canvas,
-      Offset(center.dx - tp.width / 2, center.dy - tp.height / 2),
+      Offset(center.dx - textSize.width / 2, center.dy - textSize.height / 2),
+      text,
+      color: color,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w500,
+      maxWidth: textSize.width + 2,
+      height: 1.0,
     );
   }
 

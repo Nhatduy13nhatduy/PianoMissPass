@@ -8,7 +8,6 @@ class GamePrototypeState extends Equatable {
     this.errorMessage,
     this.score,
     this.isPlaying = false,
-    this.elapsedMs = 0,
     this.passedNoteIndexes = const <int>{},
     this.missedNoteIndexes = const <int>{},
   });
@@ -17,7 +16,6 @@ class GamePrototypeState extends Equatable {
   final String? errorMessage;
   final ScoreData? score;
   final bool isPlaying;
-  final int elapsedMs;
   final Set<int> passedNoteIndexes;
   final Set<int> missedNoteIndexes;
 
@@ -27,7 +25,6 @@ class GamePrototypeState extends Equatable {
     bool clearErrorMessage = false,
     ScoreData? score,
     bool? isPlaying,
-    int? elapsedMs,
     Set<int>? passedNoteIndexes,
     Set<int>? missedNoteIndexes,
   }) {
@@ -38,7 +35,6 @@ class GamePrototypeState extends Equatable {
           : errorMessage ?? this.errorMessage,
       score: score ?? this.score,
       isPlaying: isPlaying ?? this.isPlaying,
-      elapsedMs: elapsedMs ?? this.elapsedMs,
       passedNoteIndexes: passedNoteIndexes ?? this.passedNoteIndexes,
       missedNoteIndexes: missedNoteIndexes ?? this.missedNoteIndexes,
     );
@@ -50,7 +46,6 @@ class GamePrototypeState extends Equatable {
     errorMessage,
     score,
     isPlaying,
-    elapsedMs,
     passedNoteIndexes,
     missedNoteIndexes,
   ];

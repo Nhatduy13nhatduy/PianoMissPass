@@ -12,6 +12,7 @@ class _RenderNote {
     required this.adjustedHitMs,
     required this.status,
     required this.durationType,
+    required this.accidentalToRender,
     required this.stemDirection,
     required this.stemXAxisDirection,
   });
@@ -26,6 +27,7 @@ class _RenderNote {
   final int adjustedHitMs;
   final _NoteJudge status;
   final _DurationType durationType;
+  final String? accidentalToRender;
   _StemDirection stemDirection;
   _StemDirection stemXAxisDirection;
   double headDx = 0;
@@ -85,6 +87,7 @@ class _PrecomputedRenderNote {
     required this.isUpperStaff,
     required this.isTreble,
     required this.durationType,
+    required this.accidentalToRender,
     required this.stemDirection,
   });
 
@@ -92,13 +95,20 @@ class _PrecomputedRenderNote {
   final bool isUpperStaff;
   final bool isTreble;
   final _DurationType durationType;
+  final String? accidentalToRender;
   final _StemDirection stemDirection;
 }
 
 class _PrecomputedScoreRenderData {
-  const _PrecomputedScoreRenderData({required this.notes});
+  const _PrecomputedScoreRenderData({
+    required this.notes,
+    required this.beamGroupsByScoreIndex,
+    required this.beamAnchorAdjustedHitMsByScoreIndex,
+  });
 
   final List<_PrecomputedRenderNote> notes;
+  final List<List<int>> beamGroupsByScoreIndex;
+  final List<int?> beamAnchorAdjustedHitMsByScoreIndex;
 }
 
 enum _NoteJudge { pending, pass, miss }

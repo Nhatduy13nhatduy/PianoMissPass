@@ -14,7 +14,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       beatsPerMeasure: 4,
       beatUnit: 4,
       notes: <MusicNote>[],
-      slurs: <SlurSpan>[],
       symbols: <MusicSymbol>[],
       keySignatures: <KeySignatureChange>[],
       minMidi: 48,
@@ -278,8 +277,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               secondaryBeam: secondaryBeam,
               tertiaryBeam: tertiaryBeam,
               stemFromMxl: stemFromMxl,
-              slurStarts: note.slurStarts,
-              slurStops: note.slurStops,
               dotCount: dotCount,
               isStaccato: isStaccato,
               fingering: normalizedFingering,
@@ -330,7 +327,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   }
 
   notes.sort((a, b) => a.hitTimeMs.compareTo(b.hitTimeMs));
-  final slurs = _buildSlurSpans(notes);
   symbols.sort((a, b) => a.timeMs.compareTo(b.timeMs));
 
   final midiValues = notes.map((note) => note.midi).toList();
@@ -342,7 +338,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     beatsPerMeasure: beats,
     beatUnit: beatType,
     notes: notes,
-    slurs: slurs,
     symbols: symbols,
     keySignatures: keySignatures,
     minMidi: minMidi,
@@ -424,33 +419,6 @@ String _restTypeFromNoteNode(
     '32nd' => '32th',
     _ => 'quarter',
   };
-}
-
-List<SlurSpan> _buildSlurSpans(List<MusicNote> notes) {
-  final slurs = <SlurSpan>[];
-  final open = <String, int>{};
-
-  String keyFor(MusicNote note, int number) {
-    return '${note.voice}:$number';
-  }
-
-  for (var i = 0; i < notes.length; i++) {
-    final note = notes[i];
-
-    for (final number in note.slurStops) {
-      final key = keyFor(note, number);
-      final startIndex = open.remove(key);
-      if (startIndex != null && startIndex < i) {
-        slurs.add(SlurSpan(startNoteIndex: startIndex, endNoteIndex: i));
-      }
-    }
-
-    for (final number in note.slurStarts) {
-      open[keyFor(note, number)] = i;
-    }
-  }
-
-  return slurs;
 }
 
 String? _secondaryBeamFromNoteNode(MxlNoteNode note) {
