@@ -13,6 +13,7 @@ class ScoreData {
     required this.beatsPerMeasure,
     required this.beatUnit,
     required this.notes,
+    required this.slurs,
     required this.symbols,
     required this.keySignatures,
     required this.minMidi,
@@ -23,6 +24,7 @@ class ScoreData {
   final int beatsPerMeasure;
   final int beatUnit;
   final List<MusicNote> notes;
+  final List<SlurSpan> slurs;
   final List<MusicSymbol> symbols;
   final List<KeySignatureChange> keySignatures;
   final int minMidi;
@@ -143,6 +145,94 @@ class MusicSymbol {
   final int timeMs;
 }
 
+enum SlurEventType { start, stop, continuation }
+
+class SlurEvent {
+  const SlurEvent({
+    required this.partId,
+    required this.number,
+    required this.eventType,
+    required this.noteIndex,
+    required this.timeMs,
+    required this.measureIndex,
+    required this.voice,
+    required this.staffNumber,
+    required this.staffStep,
+    required this.isChord,
+    this.placement,
+    this.orientation,
+    this.defaultX,
+    this.defaultY,
+    this.relativeX,
+    this.relativeY,
+    this.bezierX,
+    this.bezierY,
+    this.bezierX2,
+    this.bezierY2,
+    this.lineType,
+    this.dashLength,
+    this.spaceLength,
+  });
+
+  final String partId;
+  final int number;
+  final SlurEventType eventType;
+  final int noteIndex;
+  final int timeMs;
+  final int measureIndex;
+  final int voice;
+  final int? staffNumber;
+  final int staffStep;
+  final bool isChord;
+  final String? placement;
+  final String? orientation;
+  final double? defaultX;
+  final double? defaultY;
+  final double? relativeX;
+  final double? relativeY;
+  final double? bezierX;
+  final double? bezierY;
+  final double? bezierX2;
+  final double? bezierY2;
+  final String? lineType;
+  final double? dashLength;
+  final double? spaceLength;
+}
+
+class SlurSegment {
+  const SlurSegment({
+    required this.startEventIndex,
+    required this.endEventIndex,
+    required this.startNoteIndex,
+    required this.endNoteIndex,
+    required this.isCrossSystemContinuation,
+  });
+
+  final int startEventIndex;
+  final int endEventIndex;
+  final int startNoteIndex;
+  final int endNoteIndex;
+  final bool isCrossSystemContinuation;
+}
+
+class SlurSpan {
+  const SlurSpan({
+    required this.partId,
+    required this.number,
+    required this.voice,
+    required this.staffNumber,
+    required this.events,
+    required this.segments,
+  });
+
+  final String partId;
+  final int number;
+  final int voice;
+  final int? staffNumber;
+  final List<SlurEvent> events;
+  final List<SlurSegment> segments;
+}
+
 class MxlDocumentData {
   const MxlDocumentData({
     required this.scorePath,
@@ -230,6 +320,7 @@ class MxlNoteNode {
     required this.alter,
     required this.stem,
     required this.accidental,
+    required this.slurs,
     required this.beams,
     required this.raw,
   });
@@ -245,8 +336,45 @@ class MxlNoteNode {
   final int? alter;
   final String? stem;
   final String? accidental;
+  final List<MxlSlurNode> slurs;
   final List<MxlBeamNode> beams;
   final MxlElementNode raw;
+}
+
+class MxlSlurNode {
+  const MxlSlurNode({
+    required this.type,
+    required this.number,
+    this.placement,
+    this.orientation,
+    this.defaultX,
+    this.defaultY,
+    this.relativeX,
+    this.relativeY,
+    this.bezierX,
+    this.bezierY,
+    this.bezierX2,
+    this.bezierY2,
+    this.lineType,
+    this.dashLength,
+    this.spaceLength,
+  });
+
+  final String type;
+  final int number;
+  final String? placement;
+  final String? orientation;
+  final double? defaultX;
+  final double? defaultY;
+  final double? relativeX;
+  final double? relativeY;
+  final double? bezierX;
+  final double? bezierY;
+  final double? bezierX2;
+  final double? bezierY2;
+  final String? lineType;
+  final double? dashLength;
+  final double? spaceLength;
 }
 
 class MxlBeamNode {
@@ -267,6 +395,7 @@ MxlDocumentData parseMxlDocument(Uint8List bytes) {
     for (final measureElement in partElement.findElements('measure')) {
       final noteNodes = <MxlNoteNode>[];
       for (final noteElement in measureElement.findElements('note')) {
+        final slurs = _extractSlurs(noteElement);
         final beams = noteElement
             .findElements('beam')
             .map(
@@ -309,6 +438,7 @@ MxlDocumentData parseMxlDocument(Uint8List bytes) {
                 ?.innerText
                 .trim()
                 .toLowerCase(),
+            slurs: slurs,
             beams: beams,
             raw: _mapXmlElement(noteElement),
           ),
@@ -589,4 +719,51 @@ MxlElementNode _mapXmlElement(XmlElement element) {
         .toList(),
     rawXml: element.toXmlString(pretty: false),
   );
+}
+
+List<MxlSlurNode> _extractSlurs(XmlElement noteElement) {
+  final slurs = noteElement
+      .findElements('notations')
+      .expand((notations) => notations.findElements('slur'))
+      .map(
+        (slur) => MxlSlurNode(
+          type: (slur.getAttribute('type') ?? '').trim().toLowerCase(),
+          number: int.tryParse(slur.getAttribute('number') ?? '') ?? 1,
+          placement: slur.getAttribute('placement')?.trim().toLowerCase(),
+          orientation: slur.getAttribute('orientation')?.trim().toLowerCase(),
+          defaultX: double.tryParse(slur.getAttribute('default-x') ?? ''),
+          defaultY: double.tryParse(slur.getAttribute('default-y') ?? ''),
+          relativeX: double.tryParse(slur.getAttribute('relative-x') ?? ''),
+          relativeY: double.tryParse(slur.getAttribute('relative-y') ?? ''),
+          bezierX: double.tryParse(slur.getAttribute('bezier-x') ?? ''),
+          bezierY: double.tryParse(slur.getAttribute('bezier-y') ?? ''),
+          bezierX2: double.tryParse(slur.getAttribute('bezier-x2') ?? ''),
+          bezierY2: double.tryParse(slur.getAttribute('bezier-y2') ?? ''),
+          lineType: slur.getAttribute('line-type')?.trim().toLowerCase(),
+          dashLength: double.tryParse(slur.getAttribute('dash-length') ?? ''),
+          spaceLength: double.tryParse(slur.getAttribute('space-length') ?? ''),
+        ),
+      )
+      .where((slur) => slur.type.isNotEmpty)
+      .toList();
+
+  slurs.sort((a, b) {
+    final typeComparison = _slurTypePriority(a.type).compareTo(
+      _slurTypePriority(b.type),
+    );
+    if (typeComparison != 0) {
+      return typeComparison;
+    }
+    return a.number.compareTo(b.number);
+  });
+  return slurs;
+}
+
+int _slurTypePriority(String type) {
+  return switch (type) {
+    'stop' => 0,
+    'continue' => 1,
+    'start' => 2,
+    _ => 3,
+  };
 }

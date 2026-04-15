@@ -31,22 +31,24 @@ class GameNotePainter {
   static final Expando<_PrecomputedScoreRenderData> _precomputedScoreCache =
       Expando<_PrecomputedScoreRenderData>('game-note-precomputed');
   static final GameTextPainter _sharedTextPainter = GameTextPainter();
-  static final Path _quarterHeadTemplateCached = _notePainterQuarterHeadTemplate();
-  static final Rect _quarterHeadBoundsCached =
-      _quarterHeadTemplateCached.getBounds();
+  static final Path _quarterHeadTemplateCached =
+      _notePainterQuarterHeadTemplate();
+  static final Rect _quarterHeadBoundsCached = _quarterHeadTemplateCached
+      .getBounds();
   static final Path _halfHeadTemplateCached = _notePainterHalfHeadTemplate();
   static final Rect _halfHeadBoundsCached = _halfHeadTemplateCached.getBounds();
   static final Path _wholeHeadTemplateCached = _notePainterWholeHeadTemplate();
-  static final Rect _wholeHeadBoundsCached =
-      _wholeHeadTemplateCached.getBounds();
-  static final Map<_StemDirection, Path> _flagTemplateByDirection = <_StemDirection, Path>{
-    _StemDirection.up: _notePainterBuildLegacyFlagTemplate(
-      direction: _StemDirection.up,
-    ),
-    _StemDirection.down: _notePainterBuildLegacyFlagTemplate(
-      direction: _StemDirection.down,
-    ),
-  };
+  static final Rect _wholeHeadBoundsCached = _wholeHeadTemplateCached
+      .getBounds();
+  static final Map<_StemDirection, Path> _flagTemplateByDirection =
+      <_StemDirection, Path>{
+        _StemDirection.up: _notePainterBuildLegacyFlagTemplate(
+          direction: _StemDirection.up,
+        ),
+        _StemDirection.down: _notePainterBuildLegacyFlagTemplate(
+          direction: _StemDirection.down,
+        ),
+      };
   static final Map<_StemDirection, Rect> _flagBoundsByDirection =
       <_StemDirection, Rect>{
         _StemDirection.up: _flagTemplateByDirection[_StemDirection.up]!
@@ -551,6 +553,19 @@ class GameNotePainter {
         beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
       );
     }
+
+    _drawSlurs(
+      canvas,
+      score: score,
+      visible: visible,
+      visibleIndexByScoreIndex: visibleIndexByScoreIndex,
+      chordLayout: chordLayout,
+      chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+      accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+      fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
+      beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
+      metrics: metrics,
+    );
 
     for (final fingering in pendingFingerings) {
       _drawFingering(
@@ -1342,6 +1357,464 @@ class GameNotePainter {
       indexes,
       lineSpacing: lineSpacing,
     );
+  }
+
+  void _drawSlurs(
+    Canvas canvas, {
+    required ScoreData score,
+    required List<_RenderNote> visible,
+    required Map<int, int> visibleIndexByScoreIndex,
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required Map<int, Offset> accidentalCenterByVisibleIndex,
+    required Map<int, Offset> fingeringAnchorByVisibleIndex,
+    required Map<int, double> beamEdgeYByVisibleIndex,
+    required NotationMetrics metrics,
+  }) {
+    if (score.slurs.isEmpty || visible.isEmpty) {
+      return;
+    }
+
+    final spacing = metrics.staffSpace;
+
+    for (final span in score.slurs) {
+      for (final segment in span.segments) {
+        final startEvent = span.events[segment.startEventIndex];
+        final endEvent = span.events[segment.endEventIndex];
+        final startVisibleIndex =
+            visibleIndexByScoreIndex[segment.startNoteIndex];
+        final endVisibleIndex = visibleIndexByScoreIndex[segment.endNoteIndex];
+        if (startVisibleIndex == null || endVisibleIndex == null) {
+          continue;
+        }
+
+        final slurAbove = _resolveSlurIsAbove(
+          startEvent,
+          endEvent,
+          startVisible: visible[startVisibleIndex],
+          endVisible: visible[endVisibleIndex],
+        );
+        final startAnchor = _resolveSlurAnchor(
+          event: startEvent,
+          noteVisibleIndex: startVisibleIndex,
+          visible: visible,
+          chordLayout: chordLayout,
+          chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+          accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+          fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
+          beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
+          isAbove: slurAbove,
+          isStart: true,
+          metrics: metrics,
+        );
+        final endAnchor = _resolveSlurAnchor(
+          event: endEvent,
+          noteVisibleIndex: endVisibleIndex,
+          visible: visible,
+          chordLayout: chordLayout,
+          chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+          accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+          fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
+          beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
+          isAbove: slurAbove,
+          isStart: false,
+          metrics: metrics,
+        );
+
+        final dx = endAnchor.dx - startAnchor.dx;
+        if (dx.abs() < spacing * 0.9) {
+          continue;
+        }
+
+        final spanWidth = dx.abs();
+        final arcLift = (spanWidth * metrics.slurArcHeightRatio)
+            .clamp(metrics.slurArcHeightMin, metrics.slurArcHeightMax)
+            .toDouble();
+        final direction = slurAbove ? -1.0 : 1.0;
+        final segmentHang = segment.isCrossSystemContinuation
+            ? arcLift * metrics.slurPartialHangRatio
+            : 0.0;
+        final anchorMidY = (startAnchor.dy + endAnchor.dy) * 0.5;
+        final anchorMidX = (startAnchor.dx + endAnchor.dx) * 0.5;
+        final quadraticControl = Offset(
+          anchorMidX,
+          anchorMidY + direction * arcLift + direction * segmentHang,
+        );
+
+        // Convert a quadratic Bezier to cubic Bezier.
+        var control1 = Offset(
+          startAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - startAnchor.dx),
+          startAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - startAnchor.dy),
+        );
+        var control2 = Offset(
+          endAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - endAnchor.dx),
+          endAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - endAnchor.dy),
+        );
+
+        control1 = _overrideSlurControlPoint(
+          fallback: control1,
+          anchor: startAnchor,
+          event: startEvent,
+          isOutgoing: true,
+        );
+        control2 = _overrideSlurControlPoint(
+          fallback: control2,
+          anchor: endAnchor,
+          event: endEvent,
+          isOutgoing: false,
+        );
+
+        final slurPath = _buildSlurPath(
+          startAnchor: startAnchor,
+          control1: control1,
+          control2: control2,
+          endAnchor: endAnchor,
+          endThickness: metrics.slurEndThickness,
+          middleThickness: metrics.slurMiddleThickness,
+          outerThicknessRatio: metrics.slurOuterThicknessRatio,
+          innerThicknessRatio: metrics.slurInnerThicknessRatio,
+          isAbove: slurAbove,
+        );
+        final slurColor = _slurColorForSegment(
+          visible[startVisibleIndex].status,
+          visible[endVisibleIndex].status,
+        );
+        canvas.drawPath(
+          slurPath,
+          Paint()
+            ..color = slurColor
+            ..style = PaintingStyle.fill
+            ..isAntiAlias = true,
+        );
+      }
+    }
+  }
+
+  bool _resolveSlurIsAbove(
+    SlurEvent startEvent,
+    SlurEvent endEvent, {
+    required _RenderNote startVisible,
+    required _RenderNote endVisible,
+  }) {
+    final placement = startEvent.placement ?? endEvent.placement;
+    if (placement == 'above') {
+      return true;
+    }
+    if (placement == 'below') {
+      return false;
+    }
+
+    final orientation = startEvent.orientation ?? endEvent.orientation;
+    if (orientation == 'over') {
+      return true;
+    }
+    if (orientation == 'under') {
+      return false;
+    }
+
+    if (startEvent.voice != endEvent.voice) {
+      return startEvent.voice <= endEvent.voice;
+    }
+
+    final sameStemDirection =
+        startVisible.stemDirection == endVisible.stemDirection;
+    if (sameStemDirection) {
+      return startVisible.stemDirection == _StemDirection.down;
+    }
+    return startEvent.voice <= 1;
+  }
+
+  Offset _resolveSlurAnchor({
+    required SlurEvent event,
+    required int noteVisibleIndex,
+    required List<_RenderNote> visible,
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required Map<int, Offset> accidentalCenterByVisibleIndex,
+    required Map<int, Offset> fingeringAnchorByVisibleIndex,
+    required Map<int, double> beamEdgeYByVisibleIndex,
+    required bool isAbove,
+    required bool isStart,
+    required NotationMetrics metrics,
+  }) {
+    final noteHeadHeight = metrics.noteHeadHeight;
+    final noteHeadWidth = noteHeadHeight * 1.36;
+    final anchorVisibleIndex = _resolveSlurAnchorVisibleIndex(
+      noteVisibleIndex: noteVisibleIndex,
+      visible: visible,
+      chordLayout: chordLayout,
+      chordVisibleIndexesByKey: chordVisibleIndexesByKey,
+      isAbove: isAbove,
+    );
+    final note = visible[anchorVisibleIndex];
+    final center = Offset(note.x + note.headDx, note.y);
+    final horizontalSign = isStart ? 1.0 : -1.0;
+    var anchor = Offset(
+      center.dx + horizontalSign * (noteHeadWidth * 0.24),
+      center.dy + (isAbove ? -noteHeadHeight * 0.48 : noteHeadHeight * 0.48),
+    );
+
+    final stemTip = note.stemTip;
+    if (stemTip != null) {
+      final stemIsOnSlurSide =
+          isAbove == (note.stemDirection == _StemDirection.down);
+      if (stemIsOnSlurSide) {
+        anchor = Offset(
+          anchor.dx + horizontalSign * metrics.slurStemSideNudgeX,
+          isAbove
+              ? math.min(anchor.dy, stemTip.dy - metrics.slurStemClearanceY)
+              : math.max(anchor.dy, stemTip.dy + metrics.slurStemClearanceY),
+        );
+      }
+    }
+
+    final accidentalCenter = accidentalCenterByVisibleIndex[anchorVisibleIndex];
+    if (accidentalCenter != null && isStart) {
+      anchor = Offset(
+        math.max(
+          anchor.dx,
+          accidentalCenter.dx +
+              metrics.slurAccidentalClearanceX +
+              metrics.slurAutoplaceMinDistance,
+        ),
+        anchor.dy,
+      );
+    }
+
+    final beamEdgeY = beamEdgeYByVisibleIndex[anchorVisibleIndex];
+    if (beamEdgeY != null) {
+      anchor = Offset(
+        anchor.dx,
+        isAbove
+            ? math.min(
+                anchor.dy,
+                beamEdgeY -
+                    metrics.slurBeamClearanceY -
+                    metrics.slurAutoplaceMinDistance,
+              )
+            : math.max(
+                anchor.dy,
+                beamEdgeY +
+                    metrics.slurBeamClearanceY +
+                    metrics.slurAutoplaceMinDistance,
+              ),
+      );
+    }
+
+    final fingeringAnchor = fingeringAnchorByVisibleIndex[anchorVisibleIndex];
+    if (fingeringAnchor != null) {
+      anchor = Offset(
+        anchor.dx,
+        isAbove
+            ? math.min(
+                anchor.dy,
+                fingeringAnchor.dy -
+                    metrics.slurFingeringClearanceY -
+                    metrics.slurAutoplaceMinDistance,
+              )
+            : math.max(
+                anchor.dy,
+                fingeringAnchor.dy +
+                    metrics.slurFingeringClearanceY +
+                    metrics.slurAutoplaceMinDistance,
+              ),
+      );
+    }
+
+    anchor = Offset(
+      isStart
+          ? math.min(anchor.dx, center.dx + noteHeadWidth * 0.4)
+          : math.max(anchor.dx, center.dx - noteHeadWidth * 0.4),
+      anchor.dy,
+    );
+
+    final overrideOffset = _musicXmlVisualOffset(event);
+    return anchor + overrideOffset;
+  }
+
+  int _resolveSlurAnchorVisibleIndex({
+    required int noteVisibleIndex,
+    required List<_RenderNote> visible,
+    required _ChordLayout chordLayout,
+    required Map<String, List<int>> chordVisibleIndexesByKey,
+    required bool isAbove,
+  }) {
+    final chordKey = chordLayout.chordKeyByVisibleIndex[noteVisibleIndex];
+    if (chordKey == null) {
+      return noteVisibleIndex;
+    }
+
+    final chordIndexes = chordVisibleIndexesByKey[chordKey];
+    if (chordIndexes == null || chordIndexes.isEmpty) {
+      return noteVisibleIndex;
+    }
+
+    return isAbove
+        ? chordIndexes.reduce(
+            (a, b) => visible[a].noteStep >= visible[b].noteStep ? a : b,
+          )
+        : chordIndexes.reduce(
+            (a, b) => visible[a].noteStep <= visible[b].noteStep ? a : b,
+          );
+  }
+
+  Offset _overrideSlurControlPoint({
+    required Offset fallback,
+    required Offset anchor,
+    required SlurEvent event,
+    required bool isOutgoing,
+  }) {
+    final useX = isOutgoing ? event.bezierX2 ?? event.bezierX : event.bezierX;
+    final useY = isOutgoing ? event.bezierY2 ?? event.bezierY : event.bezierY;
+    if (useX == null && useY == null) {
+      return fallback;
+    }
+    return anchor + _musicXmlOffset(useX ?? 0.0, useY ?? 0.0);
+  }
+
+  Offset _musicXmlVisualOffset(SlurEvent event) {
+    final dx = (event.defaultX ?? 0.0) + (event.relativeX ?? 0.0);
+    final dy = (event.defaultY ?? 0.0) + (event.relativeY ?? 0.0);
+    return _musicXmlOffset(dx, dy);
+  }
+
+  Offset _musicXmlOffset(double dx, double dy) => Offset(dx, -dy);
+
+  Path _buildSlurPath({
+    required Offset startAnchor,
+    required Offset control1,
+    required Offset control2,
+    required Offset endAnchor,
+    required double endThickness,
+    required double middleThickness,
+    required double outerThicknessRatio,
+    required double innerThicknessRatio,
+    required bool isAbove,
+  }) {
+    final fallbackDirection = Offset(
+      endAnchor.dx >= startAnchor.dx ? 1.0 : -1.0,
+      0.0,
+    );
+    final startTangent = _normalizeOffset(
+      control1 - startAnchor,
+      fallback: fallbackDirection,
+    );
+    final endTangent = _normalizeOffset(
+      endAnchor - control2,
+      fallback: fallbackDirection,
+    );
+    final midTangent = _normalizeOffset(
+      _cubicTangentAt(
+        0.5,
+        p0: startAnchor,
+        p1: control1,
+        p2: control2,
+        p3: endAnchor,
+      ),
+      fallback: fallbackDirection,
+    );
+
+    final startNormal = isAbove
+        ? Offset(startTangent.dy, -startTangent.dx)
+        : Offset(-startTangent.dy, startTangent.dx);
+    final endNormal = isAbove
+        ? Offset(endTangent.dy, -endTangent.dx)
+        : Offset(-endTangent.dy, endTangent.dx);
+    final midNormal = isAbove
+        ? Offset(midTangent.dy, -midTangent.dx)
+        : Offset(-midTangent.dy, midTangent.dx);
+
+    final outerStart =
+        startAnchor + startNormal * (endThickness * outerThicknessRatio);
+    final outerEnd =
+        endAnchor + endNormal * (endThickness * outerThicknessRatio);
+    final innerEnd =
+        endAnchor - endNormal * (endThickness * innerThicknessRatio);
+    final innerStart =
+        startAnchor - startNormal * (endThickness * innerThicknessRatio);
+
+    final outerControl1 =
+        control1 + (startNormal * 0.62 + midNormal * 0.38) * middleThickness;
+    final outerControl2 =
+        control2 + (endNormal * 0.62 + midNormal * 0.38) * middleThickness;
+    final innerControl2 =
+        control2 - (endNormal * 0.62 + midNormal * 0.38) * middleThickness;
+    final innerControl1 =
+        control1 - (startNormal * 0.62 + midNormal * 0.38) * middleThickness;
+
+    return Path()
+      ..moveTo(outerStart.dx, outerStart.dy)
+      ..cubicTo(
+        outerControl1.dx,
+        outerControl1.dy,
+        outerControl2.dx,
+        outerControl2.dy,
+        outerEnd.dx,
+        outerEnd.dy,
+      )
+      ..cubicTo(
+        innerControl2.dx,
+        innerControl2.dy,
+        innerControl1.dx,
+        innerControl1.dy,
+        innerStart.dx,
+        innerStart.dy,
+      )
+      ..close();
+  }
+
+  Offset _cubicPointAt(
+    double t, {
+    required Offset p0,
+    required Offset p1,
+    required Offset p2,
+    required Offset p3,
+  }) {
+    final mt = 1.0 - t;
+    final mt2 = mt * mt;
+    final t2 = t * t;
+    return Offset(
+      mt2 * mt * p0.dx +
+          3 * mt2 * t * p1.dx +
+          3 * mt * t2 * p2.dx +
+          t2 * t * p3.dx,
+      mt2 * mt * p0.dy +
+          3 * mt2 * t * p1.dy +
+          3 * mt * t2 * p2.dy +
+          t2 * t * p3.dy,
+    );
+  }
+
+  Offset _cubicTangentAt(
+    double t, {
+    required Offset p0,
+    required Offset p1,
+    required Offset p2,
+    required Offset p3,
+  }) {
+    final mt = 1.0 - t;
+    final a = (p1 - p0) * (3 * mt * mt);
+    final b = (p2 - p1) * (6 * mt * t);
+    final c = (p3 - p2) * (3 * t * t);
+    return a + b + c;
+  }
+
+  Offset _normalizeOffset(Offset value, {required Offset fallback}) {
+    final length = value.distance;
+    if (length <= 0.0001) {
+      return fallback;
+    }
+    return Offset(value.dx / length, value.dy / length);
+  }
+
+  Color _slurColorForSegment(_NoteJudge start, _NoteJudge end) {
+    if (start == _NoteJudge.miss || end == _NoteJudge.miss) {
+      return const Color(0xFF98273B);
+    }
+    if (start == _NoteJudge.pass && end == _NoteJudge.pass) {
+      return const Color(0xFF1E5D31);
+    }
+    return const Color(0xFF0E1620);
   }
 
   bool _chooseStaffForNote(

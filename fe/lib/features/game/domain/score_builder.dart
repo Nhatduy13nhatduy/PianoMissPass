@@ -14,6 +14,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       beatsPerMeasure: 4,
       beatUnit: 4,
       notes: <MusicNote>[],
+      slurs: <SlurSpan>[],
       symbols: <MusicSymbol>[],
       keySignatures: <KeySignatureChange>[],
       minMidi: 48,
@@ -30,11 +31,14 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   final staffClefIsTreble = <int, bool>{1: true, 2: false};
 
   final notes = <MusicNote>[];
+  final noteSourceOrders = <int>[];
+  final rawSlurEvents = <_PendingSlurEvent>[];
   final symbols = <MusicSymbol>[];
   final keySignatures = <KeySignatureChange>[];
   final globalStaffByVoice = <int, int>{};
   int? globalLastExplicitStaff;
   var elapsedMs = 0;
+  var sourceNoteOrder = 0;
 
   for (
     var measureIndex = 0;
@@ -282,6 +286,41 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               fingering: normalizedFingering,
             ),
           );
+          final noteSourceOrder = sourceNoteOrder++;
+          noteSourceOrders.add(noteSourceOrder);
+          for (final slur in note.slurs) {
+            final slurEventType = _slurEventTypeFromMxl(slur.type);
+            if (slurEventType == null) {
+              continue;
+            }
+            rawSlurEvents.add(
+              _PendingSlurEvent(
+                sourceOrder: noteSourceOrder,
+                partId: part.id ?? '',
+                number: slur.number,
+                eventType: slurEventType,
+                timeMs: onsetMs,
+                measureIndex: measureIndex,
+                voice: voice,
+                staffNumber: staffNumber,
+                staffStep: staffStep,
+                isChord: isChord,
+                placement: slur.placement,
+                orientation: slur.orientation,
+                defaultX: slur.defaultX,
+                defaultY: slur.defaultY,
+                relativeX: slur.relativeX,
+                relativeY: slur.relativeY,
+                bezierX: slur.bezierX,
+                bezierY: slur.bezierY,
+                bezierX2: slur.bezierX2,
+                bezierY2: slur.bezierY2,
+                lineType: slur.lineType,
+                dashLength: slur.dashLength,
+                spaceLength: slur.spaceLength,
+              ),
+            );
+          }
         }
       } else {
         final restStaff = staffNumber ?? 1;
@@ -326,8 +365,44 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         );
   }
 
-  notes.sort((a, b) => a.hitTimeMs.compareTo(b.hitTimeMs));
+  final sortedNoteEntries = notes.indexed
+      .map(
+        (entry) => (
+          note: entry.$2,
+          sourceOrder: noteSourceOrders[entry.$1],
+        ),
+      )
+      .toList();
+  sortedNoteEntries.sort((a, b) {
+    final timeComparison = a.note.hitTimeMs.compareTo(b.note.hitTimeMs);
+    if (timeComparison != 0) {
+      return timeComparison;
+    }
+    final measureComparison = a.note.measureIndex.compareTo(b.note.measureIndex);
+    if (measureComparison != 0) {
+      return measureComparison;
+    }
+    final voiceComparison = a.note.voice.compareTo(b.note.voice);
+    if (voiceComparison != 0) {
+      return voiceComparison;
+    }
+    final staffComparison = (a.note.staffNumber ?? 0).compareTo(
+      b.note.staffNumber ?? 0,
+    );
+    if (staffComparison != 0) {
+      return staffComparison;
+    }
+    return a.note.staffStep.compareTo(b.note.staffStep);
+  });
+  notes
+    ..clear()
+    ..addAll(sortedNoteEntries.map((entry) => entry.note));
   symbols.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+  final slurs = _buildSlurSpans(
+    notes: notes,
+    rawEvents: rawSlurEvents,
+    sortedNoteEntries: sortedNoteEntries,
+  );
 
   final midiValues = notes.map((note) => note.midi).toList();
   final minMidi = midiValues.isEmpty ? 48 : midiValues.reduce(math.min);
@@ -338,11 +413,307 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     beatsPerMeasure: beats,
     beatUnit: beatType,
     notes: notes,
+    slurs: slurs,
     symbols: symbols,
     keySignatures: keySignatures,
     minMidi: minMidi,
     maxMidi: maxMidi,
   );
+}
+
+List<SlurSpan> _buildSlurSpans({
+  required List<MusicNote> notes,
+  required List<_PendingSlurEvent> rawEvents,
+  required List<({MusicNote note, int sourceOrder})> sortedNoteEntries,
+}) {
+  if (rawEvents.isEmpty || notes.isEmpty) {
+    return const <SlurSpan>[];
+  }
+
+  final sourceOrderToSortedIndex = <int, int>{};
+  for (var i = 0; i < sortedNoteEntries.length; i++) {
+    sourceOrderToSortedIndex[sortedNoteEntries[i].sourceOrder] = i;
+  }
+
+  final sortedEvents = rawEvents
+      .map((event) {
+        final noteIndex = sourceOrderToSortedIndex[event.sourceOrder];
+        if (noteIndex == null) {
+          return null;
+        }
+        return SlurEvent(
+          partId: event.partId,
+          number: event.number,
+          eventType: event.eventType,
+          noteIndex: noteIndex,
+          timeMs: event.timeMs,
+          measureIndex: event.measureIndex,
+          voice: event.voice,
+          staffNumber: event.staffNumber,
+          staffStep: event.staffStep,
+          isChord: event.isChord,
+          placement: event.placement,
+          orientation: event.orientation,
+          defaultX: event.defaultX,
+          defaultY: event.defaultY,
+          relativeX: event.relativeX,
+          relativeY: event.relativeY,
+          bezierX: event.bezierX,
+          bezierY: event.bezierY,
+          bezierX2: event.bezierX2,
+          bezierY2: event.bezierY2,
+          lineType: event.lineType,
+          dashLength: event.dashLength,
+          spaceLength: event.spaceLength,
+        );
+      })
+      .nonNulls
+      .toList();
+
+  sortedEvents.sort((a, b) {
+    final timeComparison = a.timeMs.compareTo(b.timeMs);
+    if (timeComparison != 0) {
+      return timeComparison;
+    }
+    final measureComparison = a.measureIndex.compareTo(b.measureIndex);
+    if (measureComparison != 0) {
+      return measureComparison;
+    }
+    final voiceComparison = a.voice.compareTo(b.voice);
+    if (voiceComparison != 0) {
+      return voiceComparison;
+    }
+    final staffComparison = (a.staffNumber ?? 0).compareTo(b.staffNumber ?? 0);
+    if (staffComparison != 0) {
+      return staffComparison;
+    }
+    final typeComparison = _slurEventTypePriority(
+      a.eventType,
+    ).compareTo(_slurEventTypePriority(b.eventType));
+    if (typeComparison != 0) {
+      return typeComparison;
+    }
+    final noteComparison = a.noteIndex.compareTo(b.noteIndex);
+    if (noteComparison != 0) {
+      return noteComparison;
+    }
+    return a.number.compareTo(b.number);
+  });
+
+  final activeSpanByKey = <String, _SlurSpanBuilder>{};
+  final completedSpans = <SlurSpan>[];
+
+  for (final event in sortedEvents) {
+    final spanKey = _slurSpanKey(
+      partId: event.partId,
+      number: event.number,
+      voice: event.voice,
+      staffNumber: event.staffNumber,
+    );
+
+    switch (event.eventType) {
+      case SlurEventType.start:
+        final span = activeSpanByKey.putIfAbsent(
+          spanKey,
+          () => _SlurSpanBuilder(
+            partId: event.partId,
+            number: event.number,
+            voice: event.voice,
+            staffNumber: event.staffNumber,
+          ),
+        );
+        span.pushStart(event);
+        break;
+      case SlurEventType.continuation:
+        final span = activeSpanByKey.putIfAbsent(
+          spanKey,
+          () => _SlurSpanBuilder(
+            partId: event.partId,
+            number: event.number,
+            voice: event.voice,
+            staffNumber: event.staffNumber,
+          ),
+        );
+        span.pushContinuation(event);
+        break;
+      case SlurEventType.stop:
+        final span = activeSpanByKey[spanKey];
+        if (span == null) {
+          continue;
+        }
+        span.pushStop(event);
+        if (span.isClosed) {
+          completedSpans.add(span.build());
+          activeSpanByKey.remove(spanKey);
+        }
+        break;
+    }
+  }
+
+  return completedSpans;
+}
+
+SlurEventType? _slurEventTypeFromMxl(String type) {
+  return switch (type) {
+    'start' => SlurEventType.start,
+    'stop' => SlurEventType.stop,
+    'continue' => SlurEventType.continuation,
+    _ => null,
+  };
+}
+
+int _slurEventTypePriority(SlurEventType type) {
+  return switch (type) {
+    SlurEventType.stop => 0,
+    SlurEventType.continuation => 1,
+    SlurEventType.start => 2,
+  };
+}
+
+String _slurSpanKey({
+  required String partId,
+  required int number,
+  required int voice,
+  required int? staffNumber,
+}) {
+  return '$partId|$number|$voice|${staffNumber ?? 0}';
+}
+
+class _PendingSlurEvent {
+  const _PendingSlurEvent({
+    required this.sourceOrder,
+    required this.partId,
+    required this.number,
+    required this.eventType,
+    required this.timeMs,
+    required this.measureIndex,
+    required this.voice,
+    required this.staffNumber,
+    required this.staffStep,
+    required this.isChord,
+    this.placement,
+    this.orientation,
+    this.defaultX,
+    this.defaultY,
+    this.relativeX,
+    this.relativeY,
+    this.bezierX,
+    this.bezierY,
+    this.bezierX2,
+    this.bezierY2,
+    this.lineType,
+    this.dashLength,
+    this.spaceLength,
+  });
+
+  final int sourceOrder;
+  final String partId;
+  final int number;
+  final SlurEventType eventType;
+  final int timeMs;
+  final int measureIndex;
+  final int voice;
+  final int? staffNumber;
+  final int staffStep;
+  final bool isChord;
+  final String? placement;
+  final String? orientation;
+  final double? defaultX;
+  final double? defaultY;
+  final double? relativeX;
+  final double? relativeY;
+  final double? bezierX;
+  final double? bezierY;
+  final double? bezierX2;
+  final double? bezierY2;
+  final String? lineType;
+  final double? dashLength;
+  final double? spaceLength;
+}
+
+class _SlurSpanBuilder {
+  _SlurSpanBuilder({
+    required this.partId,
+    required this.number,
+    required this.voice,
+    required this.staffNumber,
+  });
+
+  final String partId;
+  final int number;
+  final int voice;
+  final int? staffNumber;
+  final List<SlurEvent> _events = <SlurEvent>[];
+  final List<SlurSegment> _segments = <SlurSegment>[];
+  int? _lastAnchorEventIndex;
+  bool _isClosed = false;
+
+  bool get isClosed => _isClosed;
+
+  void pushStart(SlurEvent event) {
+    final eventIndex = _events.length;
+    _events.add(event);
+    _lastAnchorEventIndex = eventIndex;
+    _isClosed = false;
+  }
+
+  void pushContinuation(SlurEvent event) {
+    if (_events.isEmpty || _lastAnchorEventIndex == null) {
+      final eventIndex = _events.length;
+      _events.add(event);
+      _lastAnchorEventIndex = eventIndex;
+      return;
+    }
+
+    final eventIndex = _events.length;
+    final previousAnchorIndex = _lastAnchorEventIndex!;
+    final previousEvent = _events[previousAnchorIndex];
+    _events.add(event);
+    _segments.add(
+      SlurSegment(
+        startEventIndex: previousAnchorIndex,
+        endEventIndex: eventIndex,
+        startNoteIndex: previousEvent.noteIndex,
+        endNoteIndex: event.noteIndex,
+        isCrossSystemContinuation: true,
+      ),
+    );
+    _lastAnchorEventIndex = eventIndex;
+  }
+
+  void pushStop(SlurEvent event) {
+    if (_events.isEmpty || _lastAnchorEventIndex == null) {
+      return;
+    }
+
+    final eventIndex = _events.length;
+    final previousAnchorIndex = _lastAnchorEventIndex!;
+    final previousEvent = _events[previousAnchorIndex];
+    _events.add(event);
+    _segments.add(
+      SlurSegment(
+        startEventIndex: previousAnchorIndex,
+        endEventIndex: eventIndex,
+        startNoteIndex: previousEvent.noteIndex,
+        endNoteIndex: event.noteIndex,
+        isCrossSystemContinuation:
+            previousEvent.eventType == SlurEventType.continuation,
+      ),
+    );
+    _lastAnchorEventIndex = eventIndex;
+    _isClosed = true;
+  }
+
+  SlurSpan build() {
+    return SlurSpan(
+      partId: partId,
+      number: number,
+      voice: voice,
+      staffNumber: staffNumber,
+      events: List<SlurEvent>.unmodifiable(_events),
+      segments: List<SlurSegment>.unmodifiable(_segments),
+    );
+  }
 }
 
 void _applyClefChangesFromAttributes({

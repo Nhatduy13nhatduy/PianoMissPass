@@ -63,6 +63,40 @@ class NotationMetrics {
       (staffSpace * 1.38).clamp(11.0, 28.0).toDouble();
   double get noteHeadStrokeWidth =>
       (staffSpace * 0.12).clamp(1.1, 2.4).toDouble();
+  double get slurAnchorHorizontalInset =>
+      (staffSpace * 0.54).clamp(4.8, 10.0).toDouble();
+  double get slurAnchorVerticalInset =>
+      (staffSpace * 0.72).clamp(5.6, 11.2).toDouble();
+  double get slurStemSideNudgeX =>
+      (staffSpace * 0.12).clamp(1.0, 2.4).toDouble();
+  double get slurStemClearanceY =>
+      (staffSpace * 0.34).clamp(2.8, 6.0).toDouble();
+  double get slurBeamClearanceY =>
+      (staffSpace * 0.42).clamp(3.4, 7.2).toDouble();
+  double get slurFingeringClearanceY =>
+      (staffSpace * 0.52).clamp(4.0, 8.8).toDouble();
+  double get slurAccidentalClearanceX =>
+      (staffSpace * 0.92).clamp(7.4, 15.0).toDouble();
+  double get slurAutoplaceMinDistance =>
+      (staffSpace * 0.46).clamp(3.2, 7.6).toDouble();
+  double get slurControlInsetRatio => 0.28;
+  double get slurControlInsetMin =>
+      (staffSpace * 1.55).clamp(10.0, 20.0).toDouble();
+  double get slurControlInsetMax =>
+      (staffSpace * 4.6).clamp(22.0, 44.0).toDouble();
+  double get slurArcHeightRatio => 0.072;
+  double get slurArcHeightMin =>
+      (staffSpace * 0.84).clamp(6.0, 12.0).toDouble();
+  double get slurArcHeightMax =>
+      (staffSpace * 2.3).clamp(14.0, 26.0).toDouble();
+  double get slurShoulderDropRatio => 0.1;
+  double get slurEndThickness =>
+      (staffSpace * 0.12).clamp(0.9, 1.7).toDouble();
+  double get slurMiddleThickness =>
+      (staffSpace * 0.24).clamp(1.8, 3.2).toDouble();
+  double get slurOuterThicknessRatio => 0.66;
+  double get slurInnerThicknessRatio => 0.34;
+  double get slurPartialHangRatio => 0.42;
 
   double get trebleMainClefX => staffLeftInset + staffSpace * 0.68;
   double get bassMainClefX => staffLeftInset + staffSpace * 0.82;
