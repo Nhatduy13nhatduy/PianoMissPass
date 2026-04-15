@@ -399,7 +399,7 @@ class GameNotePainter {
       final accidentalToRender = item.accidentalToRender;
       final headDx = item.headDx;
       final center = Offset(item.x + headDx, item.y);
-      final isActive = (item.adjustedHitMs - currentMs).abs() <= 70;
+      final isActive = (item.adjustedHitMs - currentMs).abs() <= 45;
       final baseNoteColor = _noteInkColor(
         item.status,
         isActive,
@@ -407,7 +407,12 @@ class GameNotePainter {
       );
       final noteColor = _notePainterApplyOpacity(
         baseNoteColor,
-        _notePainterLeftFadeOpacityAtX(center.dx, playheadX, metrics),
+        _notePainterLeftFadeOpacityAtX(
+          center.dx,
+          playheadX,
+          metrics,
+          holdDistanceMultiplier: 1.8,
+        ),
       );
       final layoutStemDirection =
           chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
@@ -526,13 +531,14 @@ class GameNotePainter {
               accidentalCenterByVisibleIndex[visibleIndex] ??
               Offset(item.x - lineSpacing * 1.08, item.y),
           color: _notePainterApplyOpacity(
-            score.colors.accidentalAndSlur.accidental,
+            baseNoteColor,
             _notePainterLeftFadeOpacityAtX(
               (accidentalCenterByVisibleIndex[visibleIndex] ??
                       Offset(item.x - lineSpacing * 1.08, item.y))
                   .dx,
               playheadX,
               metrics,
+              holdDistanceMultiplier: 1.8,
             ),
           ),
         ));
@@ -550,6 +556,7 @@ class GameNotePainter {
             (dotAnchorByVisibleIndex[visibleIndex] ?? center).dx,
             playheadX,
             metrics,
+            holdDistanceMultiplier: 1.8,
           ),
         ),
         anchor: dotAnchorByVisibleIndex[visibleIndex],
@@ -613,6 +620,7 @@ class GameNotePainter {
               referenceCenter.dx,
               playheadX,
               metrics,
+              holdDistanceMultiplier: 1.8,
             ),
           ),
         ));
@@ -644,7 +652,12 @@ class GameNotePainter {
               center: anchor,
               color: _notePainterApplyOpacity(
                 score.colors.fingering.text,
-                _notePainterLeftFadeOpacityAtX(anchor.dx, playheadX, metrics),
+                _notePainterLeftFadeOpacityAtX(
+                  anchor.dx,
+                  playheadX,
+                  metrics,
+                  holdDistanceMultiplier: 1.8,
+                ),
               ),
             ));
           }
@@ -1742,15 +1755,9 @@ class GameNotePainter {
     required NotationMetrics metrics,
     required Color color,
   }) {
-    final strokeColor = color;
     final fillPaint = Paint()
-      ..color = strokeColor
+      ..color = color
       ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    final borderPaint = Paint()
-      ..color = strokeColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = metrics.noteHeadStrokeWidth
       ..isAntiAlias = true;
 
     if (durationType == _DurationType.whole) {
@@ -1761,14 +1768,6 @@ class GameNotePainter {
         center: center,
         targetHeight: metrics.wholeNoteHeadHeight,
         paint: fillPaint,
-      );
-      _drawTemplatePathAligned(
-        canvas,
-        _wholeHeadTemplateCached,
-        referenceBounds: _wholeHeadBoundsCached,
-        center: center,
-        targetHeight: metrics.wholeNoteHeadHeight,
-        paint: borderPaint,
       );
       return;
     }
@@ -1782,15 +1781,6 @@ class GameNotePainter {
         targetHeight: metrics.noteHeadHeight,
         paint: fillPaint,
       );
-
-      _drawTemplatePathAligned(
-        canvas,
-        _halfHeadTemplateCached,
-        referenceBounds: _halfHeadBoundsCached,
-        center: center,
-        targetHeight: metrics.noteHeadHeight,
-        paint: borderPaint,
-      );
       return;
     }
 
@@ -1801,15 +1791,6 @@ class GameNotePainter {
       center: center,
       targetHeight: metrics.noteHeadHeight,
       paint: fillPaint,
-    );
-
-    _drawTemplatePathAligned(
-      canvas,
-      _quarterHeadTemplateCached,
-      referenceBounds: _quarterHeadBoundsCached,
-      center: center,
-      targetHeight: metrics.noteHeadHeight,
-      paint: borderPaint,
     );
   }
 
@@ -2246,20 +2227,36 @@ double _notePainterLeftFadeDistance(
   double multiplier = 1.0,
 }) => ((metrics.staffSpace * 6.0) * multiplier).clamp(28.0, 160.0).toDouble();
 
+double _notePainterFadeHoldDistance(
+  NotationMetrics metrics, {
+  double multiplier = 1.0,
+}) => ((metrics.staffSpace * 1.45) * multiplier).clamp(8.0, 32.0).toDouble();
+
 double _notePainterLeftFadeOpacityAtX(
   double x,
   double playheadX,
   NotationMetrics metrics, {
   double fadeDistanceMultiplier = 1.0,
+  double holdDistanceMultiplier = 0.0,
 }) {
   if (x >= playheadX) {
+    return 1.0;
+  }
+  final distancePastPlayhead = playheadX - x;
+  final holdDistance = _notePainterFadeHoldDistance(
+    metrics,
+    multiplier: holdDistanceMultiplier,
+  );
+  if (distancePastPlayhead <= holdDistance) {
     return 1.0;
   }
   final fadeDistance = _notePainterLeftFadeDistance(
     metrics,
     multiplier: fadeDistanceMultiplier,
   );
-  final progress = ((playheadX - x) / fadeDistance).clamp(0.0, 1.0).toDouble();
+  final progress = ((distancePastPlayhead - holdDistance) / fadeDistance)
+      .clamp(0.0, 1.0)
+      .toDouble();
   return 1.0 - progress;
 }
 
@@ -2275,6 +2272,7 @@ void _notePainterApplyLeftFadeToPaint(
   required double playheadX,
   required NotationMetrics metrics,
   double fadeDistanceMultiplier = 1.0,
+  double holdDistanceMultiplier = 0.0,
 }) {
   if (bounds.isEmpty) {
     return;
@@ -2294,6 +2292,7 @@ void _notePainterApplyLeftFadeToPaint(
         playheadX,
         metrics,
         fadeDistanceMultiplier: fadeDistanceMultiplier,
+        holdDistanceMultiplier: holdDistanceMultiplier,
       ),
     );
     return;
@@ -2316,6 +2315,7 @@ void _notePainterApplyLeftFadeToPaint(
     playheadX,
     metrics,
     fadeDistanceMultiplier: fadeDistanceMultiplier,
+    holdDistanceMultiplier: holdDistanceMultiplier,
   );
 
   paint.shader = LinearGradient(
@@ -2338,6 +2338,7 @@ void _notePainterApplyTrailingFadeToPaint(
   required double playheadX,
   required NotationMetrics metrics,
   double fadeDistanceMultiplier = 1.0,
+  double holdDistanceMultiplier = 0.0,
 }) {
   if (bounds.isEmpty) {
     return;
@@ -2349,6 +2350,7 @@ void _notePainterApplyTrailingFadeToPaint(
     playheadX,
     metrics,
     fadeDistanceMultiplier: fadeDistanceMultiplier,
+    holdDistanceMultiplier: holdDistanceMultiplier,
   );
   paint.shader = null;
   paint.color = _notePainterApplyOpacity(baseColor, opacity);

@@ -58,9 +58,9 @@ class NotationMetrics {
 
   double get staffSpace => staffHeight / 4;
 
-  double get noteHeadHeight => (staffSpace * 1.07).clamp(10.0, 24.0).toDouble();
+  double get noteHeadHeight => (staffSpace * 1.1).clamp(10.8, 25.5).toDouble();
   double get wholeNoteHeadHeight =>
-      (staffSpace * 1.38).clamp(11.0, 28.0).toDouble();
+      (staffSpace * 1.42).clamp(12.0, 29.5).toDouble();
   double get noteHeadStrokeWidth =>
       (staffSpace * 0.12).clamp(1.1, 2.4).toDouble();
   double get slurAnchorHorizontalInset =>

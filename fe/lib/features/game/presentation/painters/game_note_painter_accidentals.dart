@@ -39,11 +39,11 @@ Map<int, Offset> _notePainterLayoutAccidentals(
           noteStepsInChord.contains(note.noteStep - 1) ||
           noteStepsInChord.contains(note.noteStep + 1);
       final extraLeftShift = hasConsecutiveAccidentalNeighbor
-          ? localShiftStep * (isDenseAccidentalChord ? 0.38 : 0.55)
+          ? spacing * (isDenseAccidentalChord ? 0.52 : 0.66)
           : 0.0;
       final accidentalBaseGap = note.durationType == _DurationType.whole
-          ? (isDenseAccidentalChord ? spacing * 1.04 : spacing * 1.18)
-          : (isDenseAccidentalChord ? spacing * 0.8 : spacing * 0.92);
+          ? (isDenseAccidentalChord ? spacing * 1.16 : spacing * 1.32)
+          : (isDenseAccidentalChord ? spacing * 0.94 : spacing * 1.08);
       final baseCenter = Offset(
         note.x + headDx - accidentalBaseGap - extraLeftShift,
         note.y,
@@ -127,8 +127,8 @@ Rect _notePainterAccidentalBounds(
 }
 
 double _notePainterAccidentalScale(double spacing) {
-  const accidentalScaleFactor = 0.93;
-  return ((spacing / 7.0) * accidentalScaleFactor).clamp(0.36, 0.67);
+  const accidentalScaleFactor = 1.02;
+  return ((spacing / 7.0) * accidentalScaleFactor).clamp(0.4, 0.74);
 }
 
 double _notePainterAccidentalCollisionPadding(double spacing) {

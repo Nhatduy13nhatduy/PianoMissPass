@@ -13,12 +13,22 @@ import '../painters/game_staff_painter.dart';
 import '../painters/game_text_painter.dart';
 
 class GamePrototypePage extends StatelessWidget {
-  const GamePrototypePage({super.key});
+  const GamePrototypePage({
+    super.key,
+    this.assetMxlPath,
+    this.songTitle,
+  });
+
+  final String? assetMxlPath;
+  final String? songTitle;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => GamePrototypeCubit()..initialize(),
+      create: (_) => GamePrototypeCubit(
+        assetMxlPath: assetMxlPath,
+        songTitle: songTitle,
+      )..initialize(),
       child: const _GamePrototypeChromeScope(),
     );
   }

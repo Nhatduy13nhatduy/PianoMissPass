@@ -65,6 +65,7 @@ flutter:
 
   assets:
     - .env
+    - assets/mxl/
 
   fonts:
     - family: Bravura

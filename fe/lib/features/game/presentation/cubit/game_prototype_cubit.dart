@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
@@ -10,7 +11,8 @@ import '../../domain/game_score.dart';
 import 'game_prototype_state.dart';
 
 class GamePrototypeCubit extends Cubit<GamePrototypeState> {
-  GamePrototypeCubit() : super(const GamePrototypeState()) {
+  GamePrototypeCubit({this.assetMxlPath, this.songTitle})
+    : super(const GamePrototypeState()) {
     _ticker = Ticker(_onTick);
   }
 
@@ -18,10 +20,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776261396/chopin-prelude-no-4-in-e-minor-op-28_yaxgbx.mxl';
 
   static const int initialLeadInMs = 4500;
-  static const int hitWindowMs = 180;
-  static const int missWindowMs = 220;
+  static const int hitWindowMs = 120;
+  static const int missWindowMs = 160;
 
   final MidiCommand _midiCommand = MidiCommand();
+  final String? assetMxlPath;
+  final String? songTitle;
   StreamSubscription<MidiPacket>? _midiSub;
   StreamSubscription<String>? _midiSetupSub;
   MidiDevice? _connectedDevice;
@@ -44,7 +48,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     emit(const GamePrototypeState(isLoading: true));
 
     await _setupMidi();
-    await _loadSampleScore();
+    await _loadScore();
   }
 
   Future<void> retry() => initialize();
@@ -139,6 +143,52 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final updatedPassed = Set<int>.from(state.passedNoteIndexes)
       ..add(bestIndex);
     emit(state.copyWith(passedNoteIndexes: updatedPassed));
+  }
+
+  Future<void> _loadScore() async {
+    if (assetMxlPath != null) {
+      await _loadAssetScore(assetMxlPath!);
+      return;
+    }
+    await _loadSampleScore();
+  }
+
+  Future<void> _loadAssetScore(String assetPath) async {
+    try {
+      final bytes = await rootBundle.load(assetPath);
+      final mxlDocument = parseMxlDocument(bytes.buffer.asUint8List());
+      final score = buildScoreDataFromMxlDocument(mxlDocument);
+      _nextMissScanIndex = 0;
+
+      if (isClosed) {
+        return;
+      }
+
+      emit(
+        state.copyWith(
+          isLoading: false,
+          clearErrorMessage: true,
+          score: score,
+          passedNoteIndexes: const <int>{},
+          missedNoteIndexes: const <int>{},
+        ),
+      );
+
+      _maxDurationMs = _computeMaxDurationMs(score);
+      _play();
+    } catch (error) {
+      if (isClosed) {
+        return;
+      }
+
+      emit(
+        state.copyWith(
+          isLoading: false,
+          errorMessage: 'Khong tai duoc bai hat tu asset: $assetPath\n$error',
+          isPlaying: false,
+        ),
+      );
+    }
   }
 
   Future<void> _loadSampleScore() async {
