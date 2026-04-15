@@ -33,8 +33,10 @@ class GameNotePainter {
       Expando<_PrecomputedScoreRenderData>('game-note-precomputed');
   static final Expando<Map<String, int>> _slurLaneCacheByScore =
       Expando<Map<String, int>>('game-note-slur-lane-cache');
-  static final Expando<Map<String, double>> _slurBodyCollisionBoostCacheByScore =
-      Expando<Map<String, double>>('game-note-slur-body-collision-cache');
+  static final Expando<Map<String, double>>
+  _slurBodyCollisionBoostCacheByScore = Expando<Map<String, double>>(
+    'game-note-slur-body-collision-cache',
+  );
   static final GameTextPainter _sharedTextPainter = GameTextPainter();
   static final Path _quarterHeadTemplateCached =
       _notePainterQuarterHeadTemplate();
@@ -168,6 +170,13 @@ class GameNotePainter {
     final beamGroups = <_ProjectedBeamGroup>[];
     final beamStemDirectionByVisibleIndex = <int, _StemDirection>{};
     for (final group in precomputedScore.beamGroupsByScoreIndex) {
+      final hasMissingBeamMember = group.any(
+        (scoreIndex) => visibleIndexByScoreIndex[scoreIndex] == null,
+      );
+      if (hasMissingBeamMember) {
+        continue;
+      }
+
       final projected = <int>[];
       final projectedChordKeys = <String>{};
       final groupStemDirection = precomputedNotes[group.first].stemDirection;
@@ -471,7 +480,7 @@ class GameNotePainter {
         );
       }
 
-      stemColorByVisibleIndex[visibleIndex] = noteColor;
+      stemColorByVisibleIndex[visibleIndex] = baseNoteColor;
 
       if (accidentalToRender != null) {
         pendingAccidentals.add((
@@ -614,6 +623,7 @@ class GameNotePainter {
         lineSpacing: lineSpacing,
         lockedSlope: group.lockedSlope,
         lockedReferenceStemTip: group.lockedReferenceStemTip,
+        colors: score.colors,
         stemColorByVisibleIndex: stemColorByVisibleIndex,
         beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
         playheadX: playheadX,
@@ -2160,6 +2170,7 @@ class GameNotePainter {
     required double lineSpacing,
     required double lockedSlope,
     required Offset lockedReferenceStemTip,
+    required GameColorScheme colors,
     required Map<int, Color> stemColorByVisibleIndex,
     required Map<int, Offset> beamStemStartByVisibleIndex,
     required double playheadX,
@@ -2172,6 +2183,7 @@ class GameNotePainter {
       lineSpacing: lineSpacing,
       lockedSlope: lockedSlope,
       lockedReferenceStemTip: lockedReferenceStemTip,
+      colors: colors,
       stemColorByVisibleIndex: stemColorByVisibleIndex,
       beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
       playheadX: playheadX,
@@ -2192,18 +2204,24 @@ class GameNotePainter {
   }
 }
 
-double _notePainterLeftFadeDistance(NotationMetrics metrics) =>
-    (metrics.staffSpace * 6.0).clamp(28.0, 96.0).toDouble();
+double _notePainterLeftFadeDistance(
+  NotationMetrics metrics, {
+  double multiplier = 1.0,
+}) => ((metrics.staffSpace * 6.0) * multiplier).clamp(28.0, 160.0).toDouble();
 
 double _notePainterLeftFadeOpacityAtX(
   double x,
   double playheadX,
-  NotationMetrics metrics,
-) {
+  NotationMetrics metrics, {
+  double fadeDistanceMultiplier = 1.0,
+}) {
   if (x >= playheadX) {
     return 1.0;
   }
-  final fadeDistance = _notePainterLeftFadeDistance(metrics);
+  final fadeDistance = _notePainterLeftFadeDistance(
+    metrics,
+    multiplier: fadeDistanceMultiplier,
+  );
   final progress = ((playheadX - x) / fadeDistance).clamp(0.0, 1.0).toDouble();
   return 1.0 - progress;
 }
@@ -2219,6 +2237,7 @@ void _notePainterApplyLeftFadeToPaint(
   required Rect bounds,
   required double playheadX,
   required NotationMetrics metrics,
+  double fadeDistanceMultiplier = 1.0,
 }) {
   if (bounds.isEmpty) {
     return;
@@ -2233,12 +2252,20 @@ void _notePainterApplyLeftFadeToPaint(
     paint.shader = null;
     paint.color = _notePainterApplyOpacity(
       baseColor,
-      _notePainterLeftFadeOpacityAtX(bounds.right, playheadX, metrics),
+      _notePainterLeftFadeOpacityAtX(
+        bounds.left,
+        playheadX,
+        metrics,
+        fadeDistanceMultiplier: fadeDistanceMultiplier,
+      ),
     );
     return;
   }
 
-  final fadeDistance = _notePainterLeftFadeDistance(metrics);
+  final fadeDistance = _notePainterLeftFadeDistance(
+    metrics,
+    multiplier: fadeDistanceMultiplier,
+  );
   final width = bounds.width;
   final fadeStartX = playheadX - fadeDistance;
   final fadeStartStop = ((fadeStartX - bounds.left) / width)
@@ -2251,6 +2278,7 @@ void _notePainterApplyLeftFadeToPaint(
     bounds.left,
     playheadX,
     metrics,
+    fadeDistanceMultiplier: fadeDistanceMultiplier,
   );
 
   paint.shader = LinearGradient(
@@ -2262,11 +2290,6 @@ void _notePainterApplyLeftFadeToPaint(
       baseColor,
       baseColor,
     ],
-    stops: <double>[
-      0.0,
-      fadeStartStop,
-      playheadStop,
-      1.0,
-    ],
+    stops: <double>[0.0, fadeStartStop, playheadStop, 1.0],
   ).createShader(bounds);
 }

@@ -315,6 +315,7 @@ void _notePainterDrawBeamGroup(
   required double lineSpacing,
   required double lockedSlope,
   required Offset lockedReferenceStemTip,
+  required GameColorScheme colors,
   required Map<int, Color> stemColorByVisibleIndex,
   required Map<int, Offset> beamStemStartByVisibleIndex,
   required double playheadX,
@@ -327,8 +328,7 @@ void _notePainterDrawBeamGroup(
   }
 
   final direction = first.stemDirection;
-  final resolvedBeamColor =
-      stemColorByVisibleIndex[indexes.first] ?? const Color(0xFF0E1620);
+  final resolvedBeamColor = colors.note.idle;
   final beamPaint = Paint()
     ..color = resolvedBeamColor
     ..style = PaintingStyle.fill
@@ -381,6 +381,7 @@ void _notePainterDrawBeamGroup(
       ),
       playheadX: playheadX,
       metrics: metrics,
+      fadeDistanceMultiplier: 10,
     );
     canvas.drawLine(stemStart, Offset(stemStart.dx, targetY), stemPaint);
     item.stemTip = Offset(stemStart.dx, targetY);
@@ -406,6 +407,7 @@ void _notePainterDrawBeamGroup(
     bounds: beamPath.getBounds(),
     playheadX: playheadX,
     metrics: metrics,
+    fadeDistanceMultiplier: 10,
   );
   canvas.drawPath(beamPath, beamPaint);
 
@@ -459,6 +461,7 @@ void _notePainterDrawBeamGroup(
       bounds: secondPath.getBounds(),
       playheadX: playheadX,
       metrics: metrics,
+      fadeDistanceMultiplier: 10,
     );
     canvas.drawPath(secondPath, beamPaint);
   }
@@ -509,6 +512,7 @@ void _notePainterDrawBeamGroup(
       bounds: thirdPath.getBounds(),
       playheadX: playheadX,
       metrics: metrics,
+      fadeDistanceMultiplier: 10,
     );
     canvas.drawPath(thirdPath, beamPaint);
   }
@@ -758,6 +762,7 @@ void _notePainterDrawParallelBeamSegment(
     bounds: path.getBounds(),
     playheadX: playheadX,
     metrics: metrics,
+    fadeDistanceMultiplier: 10,
   );
   canvas.drawPath(path, beamPaint);
 }

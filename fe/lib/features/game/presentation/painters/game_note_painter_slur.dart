@@ -348,7 +348,7 @@ extension on GameNotePainter {
         innerThicknessRatio: metrics.slurInnerThicknessRatio,
         isAbove: layout.isAbove,
       );
-      final slurColor = _slurColorForSegment(
+      final judgedSlurColor = _slurColorForSegment(
         _slurJudgeForScoreIndex(
           layout.startScoreIndex,
           passedNoteIndexes: passedNoteIndexes,
@@ -361,14 +361,36 @@ extension on GameNotePainter {
         ),
         colors: score.colors,
       );
-      final slurPaint = Paint()
-        ..color = _notePainterApplyOpacity(
-          slurColor,
-          _notePainterLeftFadeOpacityAtX(endAnchor.dx, playheadX, metrics),
-        )
+      final baseSlurPaint = Paint()
+        ..color = score.colors.accidentalAndSlur.slurIdle
         ..style = PaintingStyle.fill
         ..isAntiAlias = true;
-      canvas.drawPath(slurPath, slurPaint);
+      _notePainterApplyLeftFadeToPaint(
+        baseSlurPaint,
+        baseColor: score.colors.accidentalAndSlur.slurIdle,
+        bounds: slurPath.getBounds(),
+        playheadX: playheadX,
+        metrics: metrics,
+      );
+      canvas.drawPath(slurPath, baseSlurPaint);
+
+      if (judgedSlurColor != score.colors.accidentalAndSlur.slurIdle) {
+        final judgedPaint = Paint()
+          ..color = judgedSlurColor
+          ..style = PaintingStyle.fill
+          ..isAntiAlias = true;
+        _notePainterApplyLeftFadeToPaint(
+          judgedPaint,
+          baseColor: judgedSlurColor,
+          bounds: slurPath.getBounds(),
+          playheadX: playheadX,
+          metrics: metrics,
+        );
+        canvas.save();
+        canvas.clipRect(Rect.fromLTRB(-100000, -100000, playheadX, 100000));
+        canvas.drawPath(slurPath, judgedPaint);
+        canvas.restore();
+      }
     }
   }
 
