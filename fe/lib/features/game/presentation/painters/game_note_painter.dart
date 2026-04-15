@@ -18,7 +18,7 @@ class GameNotePainter {
   static const String _bravuraFontFamily = 'Bravura';
   static const double previewWindowMs = 9000;
   static const double cleanupWindowMs = 2500;
-  static const double _preRenderMeasuresRight = 1.25;
+  static const double _preRenderMeasuresRight = 20;
   static const double _renderWindowPaddingMs = 1400;
   static const double _accidentalCollisionPaddingTuning = 1.0;
   static const double _accidentalCollisionPaddingScale = 0.04;
@@ -75,11 +75,16 @@ class GameNotePainter {
     final precomputedNotes = precomputedScore.notes;
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
+    final preRenderRightMs = measureMs * _preRenderMeasuresRight;
     final preRenderRightPx = measureMs * notePxPerMs * _preRenderMeasuresRight;
+    final effectivePreviewWindowMs = math.max(
+      previewWindowMs,
+      preRenderRightMs,
+    );
     final windowStartMs = (currentMs - cleanupWindowMs - _renderWindowPaddingMs)
         .floor();
-    final windowEndMs = (currentMs + previewWindowMs + _renderWindowPaddingMs)
-        .ceil();
+    final windowEndMs =
+        (currentMs + effectivePreviewWindowMs + _renderWindowPaddingMs).ceil();
     final startIndex = _lowerBoundAdjustedHitMs(
       precomputedNotes,
       windowStartMs,
@@ -95,7 +100,8 @@ class GameNotePainter {
           precomputedScore.beamAnchorAdjustedHitMsByScoreIndex[i] ??
           adjustedHitMs;
       final anchorDelta = anchorTime - currentMs;
-      if (anchorDelta > previewWindowMs || anchorDelta < -cleanupWindowMs) {
+      if (anchorDelta > effectivePreviewWindowMs ||
+          anchorDelta < -cleanupWindowMs) {
         continue;
       }
 
@@ -314,24 +320,28 @@ class GameNotePainter {
     final beamStemStartByVisibleIndex = <int, Offset>{};
     final pendingAccidentals = <({String accidental, Offset center})>[];
     final pendingDots =
-        <({
-          Offset center,
-          int dotCount,
-          int noteStep,
-          bool isTreble,
-          _DurationType durationType,
-          _NoteJudge judge,
-          bool isActive,
-          Offset? anchor,
-        })>[];
+        <
+          ({
+            Offset center,
+            int dotCount,
+            int noteStep,
+            bool isTreble,
+            _DurationType durationType,
+            _NoteJudge judge,
+            bool isActive,
+            Offset? anchor,
+          })
+        >[];
     final pendingStaccatos =
-        <({
-          Offset center,
-          _StemDirection direction,
-          int referenceNoteStep,
-          bool isTreble,
-          Color color,
-        })>[];
+        <
+          ({
+            Offset center,
+            _StemDirection direction,
+            int referenceNoteStep,
+            bool isTreble,
+            Color color,
+          })
+        >[];
     final pendingFingerings = <({String text, Offset center, Color color})>[];
 
     for (var visibleIndex = 0; visibleIndex < visible.length; visibleIndex++) {

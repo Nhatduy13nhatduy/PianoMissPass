@@ -15,7 +15,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   static const String sampleMxlUrl =
-      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776143480/wa-mozart-marche-turque-turkish-march-fingered_iisfuq.mxl';
+      'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776261396/chopin-prelude-no-4-in-e-minor-op-28_yaxgbx.mxl';
 
   static const int initialLeadInMs = 4500;
   static const int hitWindowMs = 180;
