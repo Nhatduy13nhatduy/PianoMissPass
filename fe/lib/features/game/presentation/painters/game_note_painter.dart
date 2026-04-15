@@ -1376,6 +1376,23 @@ class GameNotePainter {
     }
 
     final spacing = metrics.staffSpace;
+    final pendingLayouts =
+        <
+          ({
+            int startVisibleIndex,
+            int endVisibleIndex,
+            SlurEvent startEvent,
+            SlurEvent endEvent,
+            Offset startAnchor,
+            Offset endAnchor,
+            bool isAbove,
+            bool isUpperStaff,
+            bool isCrossSystemContinuation,
+            double minX,
+            double maxX,
+          })
+        >[];
+    final seenChordToChordSlurKeys = <String>{};
 
     for (final span in score.slurs) {
       for (final segment in span.segments) {
@@ -1394,6 +1411,17 @@ class GameNotePainter {
           startVisible: visible[startVisibleIndex],
           endVisible: visible[endVisibleIndex],
         );
+        final startChordKey =
+            chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
+        final endChordKey = chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
+        final isChordToChord = startChordKey != null && endChordKey != null;
+        if (isChordToChord) {
+          final dedupeKey =
+              '$startChordKey->$endChordKey:${slurAbove ? 'above' : 'below'}';
+          if (!seenChordToChordSlurKeys.add(dedupeKey)) {
+            continue;
+          }
+        }
         final startAnchor = _resolveSlurAnchor(
           event: startEvent,
           noteVisibleIndex: startVisibleIndex,
@@ -1421,72 +1449,152 @@ class GameNotePainter {
           metrics: metrics,
         );
 
-        final dx = endAnchor.dx - startAnchor.dx;
-        if (dx.abs() < spacing * 0.9) {
+        final minX = math.min(startAnchor.dx, endAnchor.dx);
+        final maxX = math.max(startAnchor.dx, endAnchor.dx);
+        if ((maxX - minX).abs() < spacing * 0.9) {
           continue;
         }
 
-        final spanWidth = dx.abs();
-        final arcLift = (spanWidth * metrics.slurArcHeightRatio)
-            .clamp(metrics.slurArcHeightMin, metrics.slurArcHeightMax)
-            .toDouble();
-        final direction = slurAbove ? -1.0 : 1.0;
-        final segmentHang = segment.isCrossSystemContinuation
-            ? arcLift * metrics.slurPartialHangRatio
-            : 0.0;
-        final anchorMidY = (startAnchor.dy + endAnchor.dy) * 0.5;
-        final anchorMidX = (startAnchor.dx + endAnchor.dx) * 0.5;
-        final quadraticControl = Offset(
-          anchorMidX,
-          anchorMidY + direction * arcLift + direction * segmentHang,
-        );
-
-        // Convert a quadratic Bezier to cubic Bezier.
-        var control1 = Offset(
-          startAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - startAnchor.dx),
-          startAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - startAnchor.dy),
-        );
-        var control2 = Offset(
-          endAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - endAnchor.dx),
-          endAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - endAnchor.dy),
-        );
-
-        control1 = _overrideSlurControlPoint(
-          fallback: control1,
-          anchor: startAnchor,
-          event: startEvent,
-          isOutgoing: true,
-        );
-        control2 = _overrideSlurControlPoint(
-          fallback: control2,
-          anchor: endAnchor,
-          event: endEvent,
-          isOutgoing: false,
-        );
-
-        final slurPath = _buildSlurPath(
+        pendingLayouts.add((
+          startVisibleIndex: startVisibleIndex,
+          endVisibleIndex: endVisibleIndex,
+          startEvent: startEvent,
+          endEvent: endEvent,
           startAnchor: startAnchor,
-          control1: control1,
-          control2: control2,
           endAnchor: endAnchor,
-          endThickness: metrics.slurEndThickness,
-          middleThickness: metrics.slurMiddleThickness,
-          outerThicknessRatio: metrics.slurOuterThicknessRatio,
-          innerThicknessRatio: metrics.slurInnerThicknessRatio,
           isAbove: slurAbove,
-        );
-        final slurColor = _slurColorForSegment(
-          visible[startVisibleIndex].status,
-          visible[endVisibleIndex].status,
-        );
-        canvas.drawPath(
-          slurPath,
-          Paint()
-            ..color = slurColor
-            ..style = PaintingStyle.fill
-            ..isAntiAlias = true,
-        );
+          isUpperStaff: visible[startVisibleIndex].isUpperStaff,
+          isCrossSystemContinuation: segment.isCrossSystemContinuation,
+          minX: minX,
+          maxX: maxX,
+        ));
       }
+    }
+
+    pendingLayouts.sort((a, b) {
+      final sideComparison = a.isAbove == b.isAbove ? 0 : (a.isAbove ? -1 : 1);
+      if (sideComparison != 0) {
+        return sideComparison;
+      }
+      final staffComparison = (a.isUpperStaff ? 0 : 1).compareTo(
+        b.isUpperStaff ? 0 : 1,
+      );
+      if (staffComparison != 0) {
+        return staffComparison;
+      }
+      final xComparison = a.minX.compareTo(b.minX);
+      if (xComparison != 0) {
+        return xComparison;
+      }
+      return a.maxX.compareTo(b.maxX);
+    });
+
+    final occupiedMaxXByLaneKey = <String, List<double>>{};
+    for (final layout in pendingLayouts) {
+      final laneKey =
+          '${layout.isUpperStaff ? 'upper' : 'lower'}:${layout.isAbove ? 'above' : 'below'}';
+      final occupiedLanes = occupiedMaxXByLaneKey.putIfAbsent(
+        laneKey,
+        () => <double>[],
+      );
+      final paddedMinX = layout.minX - metrics.slurStackOverlapPadding;
+      final paddedMaxX = layout.maxX + metrics.slurStackOverlapPadding;
+
+      var lane = 0;
+      while (lane < occupiedLanes.length && paddedMinX <= occupiedLanes[lane]) {
+        lane++;
+      }
+      if (lane == occupiedLanes.length) {
+        occupiedLanes.add(paddedMaxX);
+      } else {
+        occupiedLanes[lane] = paddedMaxX;
+      }
+
+      final direction = layout.isAbove ? -1.0 : 1.0;
+      final laneOffsetY = direction * lane * metrics.slurStackGap;
+      final startAnchor = layout.startAnchor.translate(0.0, laneOffsetY);
+      final endAnchor = layout.endAnchor.translate(0.0, laneOffsetY);
+      final dx = endAnchor.dx - startAnchor.dx;
+      if (dx.abs() < spacing * 0.9) {
+        continue;
+      }
+
+      final spanWidth = dx.abs();
+      final baseArcLift = (spanWidth * metrics.slurArcHeightRatio).toDouble();
+      final shortSpanProgress =
+          (1.0 - (spanWidth / metrics.slurShortSpanBoostThreshold))
+              .clamp(0.0, 1.0)
+              .toDouble();
+      final shortSpanBoost =
+          metrics.slurShortSpanBoostMax *
+          math.pow(shortSpanProgress, 1.35).toDouble();
+      final slopeProgress =
+          (((endAnchor.dy - startAnchor.dy).abs() / metrics.staffSpace)
+                      .clamp(0.0, 1.7)
+                      .toDouble()) /
+              1.7;
+      final slopeBoost =
+          metrics.slurSlopeBoostMax * math.pow(slopeProgress, 1.0).toDouble();
+      final arcLift =
+          (math.max(baseArcLift, metrics.slurArcHeightMin) +
+                  shortSpanBoost +
+                  slopeBoost)
+          .clamp(metrics.slurArcHeightMin, metrics.slurArcHeightMax)
+          .toDouble();
+      final segmentHang = layout.isCrossSystemContinuation
+          ? arcLift * metrics.slurPartialHangRatio
+          : 0.0;
+      final anchorMidY = (startAnchor.dy + endAnchor.dy) * 0.5;
+      final anchorMidX = (startAnchor.dx + endAnchor.dx) * 0.5;
+      final quadraticControl = Offset(
+        anchorMidX,
+        anchorMidY + direction * arcLift + direction * segmentHang,
+      );
+
+      var control1 = Offset(
+        startAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - startAnchor.dx),
+        startAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - startAnchor.dy),
+      );
+      var control2 = Offset(
+        endAnchor.dx + (2.0 / 3.0) * (quadraticControl.dx - endAnchor.dx),
+        endAnchor.dy + (2.0 / 3.0) * (quadraticControl.dy - endAnchor.dy),
+      );
+
+      control1 = _overrideSlurControlPoint(
+        fallback: control1,
+        anchor: startAnchor,
+        event: layout.startEvent,
+        isOutgoing: true,
+      );
+      control2 = _overrideSlurControlPoint(
+        fallback: control2,
+        anchor: endAnchor,
+        event: layout.endEvent,
+        isOutgoing: false,
+      );
+
+      final slurPath = _buildSlurPath(
+        startAnchor: startAnchor,
+        control1: control1,
+        control2: control2,
+        endAnchor: endAnchor,
+        endThickness: metrics.slurEndThickness,
+        middleThickness: metrics.slurMiddleThickness,
+        outerThicknessRatio: metrics.slurOuterThicknessRatio,
+        innerThicknessRatio: metrics.slurInnerThicknessRatio,
+        isAbove: layout.isAbove,
+      );
+      final slurColor = _slurColorForSegment(
+        visible[layout.startVisibleIndex].status,
+        visible[layout.endVisibleIndex].status,
+      );
+      canvas.drawPath(
+        slurPath,
+        Paint()
+          ..color = slurColor
+          ..style = PaintingStyle.fill
+          ..isAntiAlias = true,
+      );
     }
   }
 
@@ -1552,8 +1660,12 @@ class GameNotePainter {
     final horizontalInset = isStart
         ? metrics.slurStartAnchorHorizontalInset
         : metrics.slurEndAnchorHorizontalInset;
+    final slurOnStemSide = isAbove == (note.stemDirection == _StemDirection.up);
+    final anchorX = slurOnStemSide
+        ? center.dx + horizontalSign * horizontalInset
+        : center.dx;
     var anchor = Offset(
-      center.dx + horizontalSign * horizontalInset,
+      anchorX,
       center.dy +
           (isAbove
               ? -metrics.slurAnchorVerticalInset
@@ -1627,18 +1739,26 @@ class GameNotePainter {
       );
     }
 
-    anchor = Offset(
-      isStart
-          ? math.min(
-              anchor.dx,
-              center.dx + noteHeadWidth * 0.82 + metrics.slurNoteHeadClearance,
-            )
-          : math.max(
-              anchor.dx,
-              center.dx - noteHeadWidth * 0.82 - metrics.slurNoteHeadClearance,
-            ),
-      anchor.dy,
-    );
+    if (slurOnStemSide) {
+      anchor = Offset(
+        isStart
+            ? math.min(
+                anchor.dx,
+                center.dx +
+                    noteHeadWidth * 0.82 +
+                    metrics.slurNoteHeadClearance,
+              )
+            : math.max(
+                anchor.dx,
+                center.dx -
+                    noteHeadWidth * 0.56 -
+                    metrics.slurNoteHeadClearance * 0.35,
+              ),
+        anchor.dy,
+      );
+    } else {
+      anchor = Offset(center.dx, anchor.dy);
+    }
 
     final overrideOffset = _musicXmlVisualOffset(event);
     return anchor + overrideOffset;
