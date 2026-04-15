@@ -238,19 +238,20 @@ class _StaffScrollerPainter extends CustomPainter {
         : bassTop + staffHeight;
     final lineSpacing = metrics.staffSpace;
     final staffLeftInset = metrics.staffLeftInset;
-    final staffRightInset = metrics.staffRightInset;
-    final staffWidth = size.width - staffLeftInset - staffRightInset;
+    final staffWidth = size.width - staffLeftInset;
 
     _staffPainter.paint(
       canvas,
       Rect.fromLTWH(staffLeftInset, trebleTop, staffWidth, staffHeight),
       lineSpacing,
+      colors: score.colors,
     );
     if (!_debugHideLowerStaff) {
       _staffPainter.paint(
         canvas,
         Rect.fromLTWH(staffLeftInset, bassTop, staffWidth, staffHeight),
         lineSpacing,
+        colors: score.colors,
       );
     }
 
@@ -263,6 +264,7 @@ class _StaffScrollerPainter extends CustomPainter {
     final keySignatureEndX = _paintKeySignature(
       canvas,
       fifths: activeKeyFifths,
+      colors: score.colors,
       metrics: metrics,
       trebleTop: trebleTop,
       bassTop: bassTop,
@@ -273,6 +275,7 @@ class _StaffScrollerPainter extends CustomPainter {
       top: score.beatsPerMeasure,
       bottom: score.beatUnit,
       startX: keySignatureEndX + metrics.keyToTimeSignatureGap,
+      colors: score.colors,
       metrics: metrics,
       trebleTop: trebleTop,
       bassTop: bassTop,
@@ -281,17 +284,12 @@ class _StaffScrollerPainter extends CustomPainter {
     final playheadX = timeSignatureEndX + metrics.timeSignatureToPlayheadGap;
 
     final symbolPaint = Paint()
-      ..color = const Color(0xFF0D3750)
+      ..color = score.colors.staff.judgeLine
       ..strokeWidth = metrics.playheadStrokeWidth;
     final measureLinePaint = Paint()
-      ..color = const Color(0xFF506473)
+      ..color = score.colors.staff.measureLine
       ..strokeWidth = metrics.measureLineStrokeWidth;
     final measureLineOffsetX = metrics.measureLineOffsetX;
-    canvas.drawLine(
-      Offset(playheadX, trebleTop),
-      Offset(playheadX, stavesBottomY),
-      symbolPaint,
-    );
 
     final trebleActiveClef = _mainClefSignForStaffAtAnchor(
       visuals.clefEventsByStaff[1] ?? const <_ClefSymbolEvent>[],
@@ -328,7 +326,7 @@ class _StaffScrollerPainter extends CustomPainter {
       Offset(trebleMainClefX, trebleClefY),
       _glyphForClefSign(trebleActiveClef),
       metrics.clefFontSize,
-      color: _withOpacity(const Color(0xFF111111), trebleMainClefOpacity),
+      color: _withOpacity(score.colors.notation.clef, trebleMainClefOpacity),
     );
     if (!_debugHideLowerStaff) {
       _textPainter.paintClef(
@@ -336,7 +334,7 @@ class _StaffScrollerPainter extends CustomPainter {
         Offset(bassMainClefX, bassClefY),
         _glyphForClefSign(bassActiveClef),
         metrics.clefFontSize,
-        color: _withOpacity(const Color(0xFF111111), bassMainClefOpacity),
+        color: _withOpacity(score.colors.notation.clef, bassMainClefOpacity),
       );
     }
 
@@ -447,7 +445,7 @@ class _StaffScrollerPainter extends CustomPainter {
             restY - fontSize * 0.55 + baselineNudge,
           ),
           glyph,
-          color: const Color(0xFF0E1620),
+          color: score.colors.rest.glyph,
           fontSize: fontSize,
           fontWeight: FontWeight.w400,
           maxWidth: fontSize * 1.5,
@@ -490,7 +488,7 @@ class _StaffScrollerPainter extends CustomPainter {
           Offset(clefX, y),
           glyph,
           metrics.clefFontSize,
-          color: _withOpacity(const Color(0xFF111111), movingOpacity),
+          color: _withOpacity(score.colors.notation.clef, movingOpacity),
         );
         continue;
       }
@@ -508,6 +506,12 @@ class _StaffScrollerPainter extends CustomPainter {
       trebleTop: trebleTop,
       bassTop: effectiveBassTop,
       metrics: metrics,
+    );
+
+    canvas.drawLine(
+      Offset(playheadX, trebleTop),
+      Offset(playheadX, stavesBottomY),
+      symbolPaint,
     );
 
     _keyboardPainter.paintKeyboard(
@@ -974,6 +978,7 @@ class _StaffScrollerPainter extends CustomPainter {
   double _paintKeySignature(
     Canvas canvas, {
     required int fifths,
+    required GameColorScheme colors,
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
@@ -1020,7 +1025,7 @@ class _StaffScrollerPainter extends CustomPainter {
         canvas,
         Offset(x, trebleY - glyphFontSize * 0.55 + glyphBaselineNudge),
         glyph,
-        color: const Color(0xFF0E1620),
+        color: colors.notation.keySignature,
         fontSize: glyphFontSize,
         fontWeight: FontWeight.w400,
         maxWidth: glyphFontSize * 1.4,
@@ -1032,7 +1037,7 @@ class _StaffScrollerPainter extends CustomPainter {
           canvas,
           Offset(x, bassY - glyphFontSize * 0.55 + glyphBaselineNudge),
           glyph,
-          color: const Color(0xFF0E1620),
+          color: colors.notation.keySignature,
           fontSize: glyphFontSize,
           fontWeight: FontWeight.w400,
           maxWidth: glyphFontSize * 1.4,
@@ -1050,6 +1055,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required int top,
     required int bottom,
     required double startX,
+    required GameColorScheme colors,
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
@@ -1106,7 +1112,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(topX, trebleTopY),
       topText,
-      color: const Color(0xFF0E1620),
+      color: colors.notation.timeSignature,
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -1117,7 +1123,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(bottomX, trebleBottomY),
       bottomText,
-      color: const Color(0xFF0E1620),
+      color: colors.notation.timeSignature,
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -1139,7 +1145,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(topX, bassTopY),
       topText,
-      color: const Color(0xFF0E1620),
+      color: colors.notation.timeSignature,
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -1150,7 +1156,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(bottomX, bassBottomY),
       bottomText,
-      color: const Color(0xFF0E1620),
+      color: colors.notation.timeSignature,
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,

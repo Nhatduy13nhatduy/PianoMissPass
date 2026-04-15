@@ -55,11 +55,13 @@ class GameKeyboardPainter {
       );
       final isActive = active.contains(midi);
       final fill = Paint()
-        ..color = isActive ? const Color(0xFF8A6DB8) : const Color(0xFFE7EBF0);
+        ..color = isActive
+            ? score.colors.keyboard.whiteActive
+            : score.colors.keyboard.white;
       final border = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
-        ..color = const Color(0xFF0F1720);
+        ..color = score.colors.keyboard.whiteBorder;
 
       canvas.drawRRect(rect, fill);
       canvas.drawRRect(rect, border);
@@ -77,8 +79,8 @@ class GameKeyboardPainter {
         final isActive = active.contains(midi);
         final fill = Paint()
           ..color = isActive
-              ? const Color(0xFF4E5BFF)
-              : const Color(0xFF1A1A1C);
+              ? score.colors.keyboard.blackActive
+              : score.colors.keyboard.black;
         canvas.drawRRect(rect, fill);
       } else {
         whiteIndex++;

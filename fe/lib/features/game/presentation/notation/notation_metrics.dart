@@ -46,7 +46,7 @@ class NotationMetrics {
       topPadding: (staffHeight * 0.78).clamp(30.0, 56.0).toDouble(),
       staffGap: (staffHeight * 1.45).clamp(74.0, 112.0).toDouble(),
       staffLeftInset: (staffHeight * 0.3).clamp(16.0, 28.0).toDouble(),
-      staffRightInset: (staffHeight * 0.04).clamp(0.0, 8.0).toDouble(),
+      staffRightInset: 0.0,
     );
   }
 

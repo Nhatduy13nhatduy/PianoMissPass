@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/material.dart';
 import 'package:xml/xml.dart';
 
 part 'score_builder.dart';
@@ -16,6 +17,7 @@ class ScoreData {
     required this.slurs,
     required this.symbols,
     required this.keySignatures,
+    required this.colors,
     required this.minMidi,
     required this.maxMidi,
   });
@@ -27,8 +29,149 @@ class ScoreData {
   final List<SlurSpan> slurs;
   final List<MusicSymbol> symbols;
   final List<KeySignatureChange> keySignatures;
+  final GameColorScheme colors;
   final int minMidi;
   final int maxMidi;
+}
+
+class GameColorScheme {
+  const GameColorScheme({
+    required this.staff,
+    required this.note,
+    required this.accidentalAndSlur,
+    required this.fingering,
+    required this.rest,
+    required this.notation,
+    required this.keyboard,
+  });
+
+  static const GameColorScheme classic = GameColorScheme(
+    staff: GameStaffColorScheme(
+      background: Color(0xE6F4F4F4),
+      border: Color(0xFF111111),
+      line: Color(0xFF111111),
+      measureLine: Color(0xFF506473),
+      judgeLine: Color(0xFF0D3750),
+    ),
+    note: GameNoteColorScheme(
+      idle: Color(0xFF111111),
+      active: Color(0xFF111111),
+      pass: Color(0xFF1E5D31),
+      miss: Color(0xFF98273B),
+    ),
+    accidentalAndSlur: GameAccidentalSlurColorScheme(
+      accidental: Color(0xFF222222),
+      slurIdle: Color(0xFF222222),
+      slurPass: Color(0xFF1E5D31),
+      slurMiss: Color(0xFF98273B),
+    ),
+    fingering: GameFingeringColorScheme(text: Color(0xFF111111)),
+    rest: GameRestColorScheme(glyph: Color(0xFF111111)),
+    notation: GameNotationColorScheme(
+      keySignature: Color(0xFF111111),
+      clef: Color(0xFF111111),
+      timeSignature: Color(0xFF111111),
+    ),
+    keyboard: GameKeyboardColorScheme(
+      white: Color(0xFFE7EBF0),
+      whiteActive: Color(0xFF8A6DB8),
+      whiteBorder: Color(0xFF0F1720),
+      black: Color(0xFF1A1A1C),
+      blackActive: Color(0xFF4E5BFF),
+    ),
+  );
+
+  final GameStaffColorScheme staff;
+  final GameNoteColorScheme note;
+  final GameAccidentalSlurColorScheme accidentalAndSlur;
+  final GameFingeringColorScheme fingering;
+  final GameRestColorScheme rest;
+  final GameNotationColorScheme notation;
+  final GameKeyboardColorScheme keyboard;
+}
+
+class GameStaffColorScheme {
+  const GameStaffColorScheme({
+    required this.background,
+    required this.border,
+    required this.line,
+    required this.measureLine,
+    required this.judgeLine,
+  });
+
+  final Color background;
+  final Color border;
+  final Color line;
+  final Color measureLine;
+  final Color judgeLine;
+}
+
+class GameNoteColorScheme {
+  const GameNoteColorScheme({
+    required this.idle,
+    required this.active,
+    required this.pass,
+    required this.miss,
+  });
+
+  final Color idle;
+  final Color active;
+  final Color pass;
+  final Color miss;
+}
+
+class GameAccidentalSlurColorScheme {
+  const GameAccidentalSlurColorScheme({
+    required this.accidental,
+    required this.slurIdle,
+    required this.slurPass,
+    required this.slurMiss,
+  });
+
+  final Color accidental;
+  final Color slurIdle;
+  final Color slurPass;
+  final Color slurMiss;
+}
+
+class GameFingeringColorScheme {
+  const GameFingeringColorScheme({required this.text});
+
+  final Color text;
+}
+
+class GameRestColorScheme {
+  const GameRestColorScheme({required this.glyph});
+
+  final Color glyph;
+}
+
+class GameNotationColorScheme {
+  const GameNotationColorScheme({
+    required this.keySignature,
+    required this.clef,
+    required this.timeSignature,
+  });
+
+  final Color keySignature;
+  final Color clef;
+  final Color timeSignature;
+}
+
+class GameKeyboardColorScheme {
+  const GameKeyboardColorScheme({
+    required this.white,
+    required this.whiteActive,
+    required this.whiteBorder,
+    required this.black,
+    required this.blackActive,
+  });
+
+  final Color white;
+  final Color whiteActive;
+  final Color whiteBorder;
+  final Color black;
+  final Color blackActive;
 }
 
 void logParsedMxlTrace(

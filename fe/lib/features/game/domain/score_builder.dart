@@ -17,6 +17,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       slurs: <SlurSpan>[],
       symbols: <MusicSymbol>[],
       keySignatures: <KeySignatureChange>[],
+      colors: GameColorScheme.classic,
       minMidi: 48,
       maxMidi: 72,
     );
@@ -416,6 +417,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     slurs: slurs,
     symbols: symbols,
     keySignatures: keySignatures,
+    colors: GameColorScheme.classic,
     minMidi: minMidi,
     maxMidi: maxMidi,
   );

@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/game_score.dart';
+
 class GameStaffPainter {
-  void paint(Canvas canvas, Rect rect, double spacing) {
-    final boxPaint = Paint()..color = const Color(0xE6F4F4F4);
+  void paint(
+    Canvas canvas,
+    Rect rect,
+    double spacing, {
+    required GameColorScheme colors,
+  }) {
+    final boxPaint = Paint()..color = colors.staff.background;
     final border = Paint()
-      ..color = const Color(0xFF111111)
+      ..color = colors.staff.border
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     final linePaint = Paint()
-      ..color = const Color(0xFF111111)
+      ..color = colors.staff.line
       ..strokeWidth = 1.1;
 
     canvas.drawRect(rect, boxPaint);

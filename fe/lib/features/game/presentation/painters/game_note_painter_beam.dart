@@ -325,8 +325,10 @@ void _notePainterDrawBeamGroup(
   }
 
   final direction = first.stemDirection;
+  final resolvedBeamColor =
+      stemColorByVisibleIndex[indexes.first] ?? const Color(0xFF0E1620);
   final beamPaint = Paint()
-    ..color = const Color(0xFF0E1620)
+    ..color = resolvedBeamColor
     ..style = PaintingStyle.fill
     ..isAntiAlias = true;
   final beamThickness = (lineSpacing * 0.48).clamp(3.0, 6.0);
@@ -361,7 +363,7 @@ void _notePainterDrawBeamGroup(
     }
 
     final targetY = beamYAt(stemStart.dx);
-    final stemColor = stemColorByVisibleIndex[idx] ?? const Color(0xFF0E1620);
+    final stemColor = stemColorByVisibleIndex[idx] ?? resolvedBeamColor;
     final stemPaint = Paint()
       ..color = stemColor
       ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
