@@ -495,16 +495,6 @@ class _StaffScrollerPainter extends CustomPainter {
         continue;
       }
 
-      _textPainter.paintText(
-        canvas,
-        Offset(
-          x + metrics.symbolLabelOffsetX,
-          trebleTop - metrics.symbolLabelTopOffset,
-        ),
-        symbol.label,
-        color: const Color(0xFF0B2F44),
-        fontSize: metrics.symbolLabelFontSize,
-      );
     }
 
     _notePainter.paintNotes(

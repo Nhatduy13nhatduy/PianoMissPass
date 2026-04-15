@@ -15,15 +15,22 @@ Map<int, Offset> _notePainterLayoutAccidentals(
   }
   final sortedTimes = groupsByTime.keys.toList()..sort();
 
-  final shiftStep = spacing * 0.75;
   for (final time in sortedTimes) {
     final chordIndexes = groupsByTime[time]!;
     chordIndexes.sort((a, b) => visible[a].y.compareTo(visible[b].y));
+    final accidentalCountInChord = chordIndexes.length;
+    final isDenseAccidentalChord = accidentalCountInChord >= 2;
     final noteStepsInChord = chordIndexes
         .map((visibleIndex) => visible[visibleIndex].noteStep)
         .toSet();
 
     final chordRects = <Rect>[];
+    final localShiftStep = isDenseAccidentalChord
+        ? spacing * 0.38
+        : spacing * 0.58;
+    final localPadding = isDenseAccidentalChord
+        ? _notePainterAccidentalCollisionPadding(spacing) * 0.68
+        : _notePainterAccidentalCollisionPadding(spacing);
     for (final visibleIndex in chordIndexes) {
       final note = visible[visibleIndex];
       final accidental = accidentalByVisibleIndex[visibleIndex]!;
@@ -32,11 +39,11 @@ Map<int, Offset> _notePainterLayoutAccidentals(
           noteStepsInChord.contains(note.noteStep - 1) ||
           noteStepsInChord.contains(note.noteStep + 1);
       final extraLeftShift = hasConsecutiveAccidentalNeighbor
-          ? shiftStep * 1.3
+          ? localShiftStep * (isDenseAccidentalChord ? 0.38 : 0.55)
           : 0.0;
       final accidentalBaseGap = note.durationType == _DurationType.whole
-          ? spacing * 1.48
-          : spacing * 1.16;
+          ? (isDenseAccidentalChord ? spacing * 1.04 : spacing * 1.18)
+          : (isDenseAccidentalChord ? spacing * 0.8 : spacing * 0.92);
       final baseCenter = Offset(
         note.x + headDx - accidentalBaseGap - extraLeftShift,
         note.y,
@@ -50,7 +57,7 @@ Map<int, Offset> _notePainterLayoutAccidentals(
       );
       for (var column = 0; column <= 8; column++) {
         final candidateCenter = Offset(
-          baseCenter.dx - column * shiftStep,
+          baseCenter.dx - column * localShiftStep,
           baseCenter.dy,
         );
         final candidateBounds = _notePainterAccidentalBounds(
@@ -67,9 +74,7 @@ Map<int, Offset> _notePainterLayoutAccidentals(
       }
 
       centers[visibleIndex] = resolvedCenter;
-      final padded = resolvedBounds.inflate(
-        _notePainterAccidentalCollisionPadding(spacing),
-      );
+      final padded = resolvedBounds.inflate(localPadding);
       chordRects.add(padded);
       occupied.add(padded);
     }

@@ -71,6 +71,12 @@ class NotationMetrics {
       (slurAnchorHorizontalInset * 1.0).toDouble();
   double get slurEndAnchorHorizontalInset =>
       (slurAnchorHorizontalInset * 0.86).toDouble();
+  double get slurOutsideHeadHorizontalInset =>
+      (staffSpace * 0.24).clamp(2.0, 5.0).toDouble();
+  double get slurChordHorizontalInsetExtra =>
+      (staffSpace * 0.32).clamp(2.4, 6.4).toDouble();
+  double get slurChordVerticalInsetExtra =>
+      (staffSpace * 0.28).clamp(2.0, 5.2).toDouble();
   double get slurNoteHeadClearance =>
       (staffSpace * 0.34).clamp(2.8, 6.2).toDouble();
   double get slurStemSideNudgeX =>
@@ -85,22 +91,41 @@ class NotationMetrics {
       (staffSpace * 0.92).clamp(7.4, 15.0).toDouble();
   double get slurAutoplaceMinDistance =>
       (staffSpace * 0.46).clamp(3.2, 7.6).toDouble();
+  double get slurAnchorLocalCollisionZoneX =>
+      (staffSpace * 2.1).clamp(14.0, 32.0).toDouble();
+  double get slurAccidentalXWeight => 1.2;
+  double get slurBeamAnchorYWeight => 1.08;
+  double get slurFingeringAnchorYWeight => 1.12;
+  double get slurDotAnchorYWeight => 0.96;
+  double get slurStaccatoAnchorYWeight => 1.0;
+  double get slurAnchorDotClearanceY =>
+      (staffSpace * 0.32).clamp(2.4, 5.6).toDouble();
+  double get slurAnchorStaccatoClearanceY =>
+      (staffSpace * 0.38).clamp(2.8, 6.4).toDouble();
+  double get slurBodyNoteClearance =>
+      (staffSpace * 0.5).clamp(3.6, 8.0).toDouble();
+  double get slurBodyNoteArcLiftWeight => 1.0;
+  double get slurBodyNoteArcLiftMax =>
+      (staffSpace * 0.75).clamp(5.0, 10.0).toDouble();
+  double get slurNoteCollisionClearance =>
+      (staffSpace * 0.42).clamp(3.0, 7.0).toDouble();
   double get slurControlInsetRatio => 0.28;
   double get slurControlInsetMin =>
       (staffSpace * 1.55).clamp(10.0, 20.0).toDouble();
   double get slurControlInsetMax =>
       (staffSpace * 4.6).clamp(22.0, 44.0).toDouble();
-  double get slurArcHeightRatio => 0.12;
+  double get slurArcHeightRatio => 0.085;
   double get slurArcHeightMin =>
       (staffSpace * 1.18).clamp(8.0, 16.0).toDouble();
   double get slurArcHeightMax =>
-      (staffSpace * 4.2).clamp(24.0, 46.0).toDouble();
+      (staffSpace * 2.7).clamp(16.0, 30.0).toDouble();
+  double get slurArcHeightSpanRatioCap => 0.26;
   double get slurShortSpanBoostThreshold =>
       (staffSpace * 6.4).clamp(42.0, 88.0).toDouble();
   double get slurShortSpanBoostMax =>
-      (staffSpace * 2.0).clamp(14.0, 26.0).toDouble();
+      (staffSpace * 0.7).clamp(5.0, 10.0).toDouble();
   double get slurSlopeBoostMax =>
-      (staffSpace * 2.0).clamp(14.0, 24.0).toDouble();
+      (staffSpace * 0.45).clamp(3.0, 6.0).toDouble();
   double get slurStackGap => (staffSpace * 0.82).clamp(6.0, 14.0).toDouble();
   double get slurStackOverlapPadding =>
       (staffSpace * 0.55).clamp(4.0, 10.0).toDouble();

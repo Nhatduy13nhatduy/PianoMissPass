@@ -116,3 +116,15 @@ enum _NoteJudge { pending, pass, miss }
 enum _DurationType { whole, half, quarter, eighth, sixteenth, thirtySecond }
 
 enum _StemDirection { up, down }
+
+enum _SlurAnchorMode { center, outsideHead, stemSide }
+
+class _SlurAnchorResolution {
+  const _SlurAnchorResolution({
+    required this.anchor,
+    required this.mode,
+  });
+
+  final Offset anchor;
+  final _SlurAnchorMode mode;
+}

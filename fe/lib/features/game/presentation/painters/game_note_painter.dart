@@ -562,6 +562,8 @@ class GameNotePainter {
       chordLayout: chordLayout,
       chordVisibleIndexesByKey: chordVisibleIndexesByKey,
       accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+      dotAnchorByVisibleIndex: dotAnchorByVisibleIndex,
+      staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
       fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
       beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
       metrics: metrics,
@@ -1367,6 +1369,8 @@ class GameNotePainter {
     required _ChordLayout chordLayout,
     required Map<String, List<int>> chordVisibleIndexesByKey,
     required Map<int, Offset> accidentalCenterByVisibleIndex,
+    required Map<int, Offset> dotAnchorByVisibleIndex,
+    required Map<int, Offset> staccatoAnchorByVisibleIndex,
     required Map<int, Offset> fingeringAnchorByVisibleIndex,
     required Map<int, double> beamEdgeYByVisibleIndex,
     required NotationMetrics metrics,
@@ -1429,6 +1433,8 @@ class GameNotePainter {
           chordLayout: chordLayout,
           chordVisibleIndexesByKey: chordVisibleIndexesByKey,
           accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+          dotAnchorByVisibleIndex: dotAnchorByVisibleIndex,
+          staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
           fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
           beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
           isAbove: slurAbove,
@@ -1442,6 +1448,8 @@ class GameNotePainter {
           chordLayout: chordLayout,
           chordVisibleIndexesByKey: chordVisibleIndexesByKey,
           accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
+          dotAnchorByVisibleIndex: dotAnchorByVisibleIndex,
+          staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
           fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
           beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
           isAbove: slurAbove,
@@ -1530,17 +1538,24 @@ class GameNotePainter {
           math.pow(shortSpanProgress, 1.35).toDouble();
       final slopeProgress =
           (((endAnchor.dy - startAnchor.dy).abs() / metrics.staffSpace)
-                      .clamp(0.0, 1.7)
-                      .toDouble()) /
-              1.7;
+              .clamp(0.0, 1.7)
+              .toDouble()) /
+          1.7;
       final slopeBoost =
           metrics.slurSlopeBoostMax * math.pow(slopeProgress, 1.0).toDouble();
+      final spanLimitedArcMax = math.max(
+        metrics.slurArcHeightMin,
+        spanWidth * metrics.slurArcHeightSpanRatioCap,
+      );
       final arcLift =
           (math.max(baseArcLift, metrics.slurArcHeightMin) +
                   shortSpanBoost +
                   slopeBoost)
-          .clamp(metrics.slurArcHeightMin, metrics.slurArcHeightMax)
-          .toDouble();
+              .clamp(
+                metrics.slurArcHeightMin,
+                math.min(metrics.slurArcHeightMax, spanLimitedArcMax),
+              )
+              .toDouble();
       final segmentHang = layout.isCrossSystemContinuation
           ? arcLift * metrics.slurPartialHangRatio
           : 0.0;
@@ -1572,6 +1587,50 @@ class GameNotePainter {
         event: layout.endEvent,
         isOutgoing: false,
       );
+
+      final bodyCollisionBoost = _resolveSlurBodyCollisionArcLiftBoost(
+        visible: visible,
+        chordLayout: chordLayout,
+        startVisibleIndex: layout.startVisibleIndex,
+        endVisibleIndex: layout.endVisibleIndex,
+        startAnchor: startAnchor,
+        control1: control1,
+        control2: control2,
+        endAnchor: endAnchor,
+        isAbove: layout.isAbove,
+        metrics: metrics,
+      );
+      if (bodyCollisionBoost > 0) {
+        final adjustedQuadraticControl = Offset(
+          anchorMidX,
+          anchorMidY + direction * (arcLift + segmentHang + bodyCollisionBoost),
+        );
+        control1 = Offset(
+          startAnchor.dx +
+              (2.0 / 3.0) * (adjustedQuadraticControl.dx - startAnchor.dx),
+          startAnchor.dy +
+              (2.0 / 3.0) * (adjustedQuadraticControl.dy - startAnchor.dy),
+        );
+        control2 = Offset(
+          endAnchor.dx +
+              (2.0 / 3.0) * (adjustedQuadraticControl.dx - endAnchor.dx),
+          endAnchor.dy +
+              (2.0 / 3.0) * (adjustedQuadraticControl.dy - endAnchor.dy),
+        );
+
+        control1 = _overrideSlurControlPoint(
+          fallback: control1,
+          anchor: startAnchor,
+          event: layout.startEvent,
+          isOutgoing: true,
+        );
+        control2 = _overrideSlurControlPoint(
+          fallback: control2,
+          anchor: endAnchor,
+          event: layout.endEvent,
+          isOutgoing: false,
+        );
+      }
 
       final slurPath = _buildSlurPath(
         startAnchor: startAnchor,
@@ -1639,6 +1698,8 @@ class GameNotePainter {
     required _ChordLayout chordLayout,
     required Map<String, List<int>> chordVisibleIndexesByKey,
     required Map<int, Offset> accidentalCenterByVisibleIndex,
+    required Map<int, Offset> dotAnchorByVisibleIndex,
+    required Map<int, Offset> staccatoAnchorByVisibleIndex,
     required Map<int, Offset> fingeringAnchorByVisibleIndex,
     required Map<int, double> beamEdgeYByVisibleIndex,
     required bool isAbove,
@@ -1657,26 +1718,52 @@ class GameNotePainter {
     final note = visible[anchorVisibleIndex];
     final center = Offset(note.x + note.headDx, note.y);
     final horizontalSign = isStart ? 1.0 : -1.0;
-    final horizontalInset = isStart
-        ? metrics.slurStartAnchorHorizontalInset
-        : metrics.slurEndAnchorHorizontalInset;
-    final slurOnStemSide = isAbove == (note.stemDirection == _StemDirection.up);
-    final anchorX = slurOnStemSide
-        ? center.dx + horizontalSign * horizontalInset
-        : center.dx;
-    var anchor = Offset(
-      anchorX,
-      center.dy +
-          (isAbove
-              ? -metrics.slurAnchorVerticalInset
-              : metrics.slurAnchorVerticalInset),
+    final chordKey = chordLayout.chordKeyByVisibleIndex[anchorVisibleIndex];
+    final chordIndexes = chordKey == null
+        ? null
+        : chordVisibleIndexesByKey[chordKey];
+    final isChordAnchor = chordIndexes != null && chordIndexes.length > 1;
+    final chordMembers = chordIndexes ?? const <int>[];
+    final noteIndexesForCollision = chordMembers.isEmpty
+        ? <int>[anchorVisibleIndex]
+        : chordMembers;
+    final hasNearbyAccidental = noteIndexesForCollision.any(
+      (index) => accidentalCenterByVisibleIndex[index] != null,
     );
+    final hasNearbyDot = noteIndexesForCollision.any(
+      (index) => dotAnchorByVisibleIndex[index] != null,
+    );
+    final hasNearbyStaccato = noteIndexesForCollision.any(
+      (index) => staccatoAnchorByVisibleIndex[index] != null,
+    );
+    final hasNearbyFingering = noteIndexesForCollision.any(
+      (index) => fingeringAnchorByVisibleIndex[index] != null,
+    );
+    final chordTopY = noteIndexesForCollision
+        .map((index) => visible[index].y)
+        .reduce(math.min);
+    final chordBottomY = noteIndexesForCollision
+        .map((index) => visible[index].y)
+        .reduce(math.max);
+    final baseResolution = _resolveBaseSlurAnchorResolution(
+      note: note,
+      center: center,
+      isAbove: isAbove,
+      isStart: isStart,
+      isChordAnchor: isChordAnchor,
+      chordTopY: chordTopY,
+      chordBottomY: chordBottomY,
+      hasNearbyAccidental: hasNearbyAccidental,
+      hasNearbyDot: hasNearbyDot,
+      hasNearbyStaccato: hasNearbyStaccato,
+      hasNearbyFingering: hasNearbyFingering,
+      metrics: metrics,
+    );
+    var anchor = baseResolution.anchor;
 
     final stemTip = note.stemTip;
     if (stemTip != null) {
-      final stemIsOnSlurSide =
-          isAbove == (note.stemDirection == _StemDirection.down);
-      if (stemIsOnSlurSide) {
+      if (baseResolution.mode == _SlurAnchorMode.stemSide) {
         anchor = Offset(
           anchor.dx + horizontalSign * metrics.slurStemSideNudgeX,
           isAbove
@@ -1686,20 +1773,38 @@ class GameNotePainter {
       }
     }
 
-    final accidentalCenter = accidentalCenterByVisibleIndex[anchorVisibleIndex];
+    final accidentalCenter = noteIndexesForCollision
+        .map((index) => accidentalCenterByVisibleIndex[index])
+        .whereType<Offset>()
+        .fold<Offset?>(
+          null,
+          (best, current) => best == null
+              ? current
+              : (isStart
+                    ? (current.dx < best.dx ? current : best)
+                    : (current.dx > best.dx ? current : best)),
+        );
     if (accidentalCenter != null && isStart) {
       anchor = Offset(
         math.max(
           anchor.dx,
           accidentalCenter.dx +
-              metrics.slurAccidentalClearanceX +
+              metrics.slurAccidentalClearanceX * metrics.slurAccidentalXWeight +
               metrics.slurAutoplaceMinDistance,
         ),
         anchor.dy,
       );
     }
 
-    final beamEdgeY = beamEdgeYByVisibleIndex[anchorVisibleIndex];
+    final beamEdgeY = noteIndexesForCollision
+        .map((index) => beamEdgeYByVisibleIndex[index])
+        .whereType<double>()
+        .fold<double?>(
+          null,
+          (best, current) => best == null
+              ? current
+              : (isAbove ? math.min(best, current) : math.max(best, current)),
+        );
     if (beamEdgeY != null) {
       anchor = Offset(
         anchor.dx,
@@ -1707,19 +1812,29 @@ class GameNotePainter {
             ? math.min(
                 anchor.dy,
                 beamEdgeY -
-                    metrics.slurBeamClearanceY -
+                    metrics.slurBeamClearanceY * metrics.slurBeamAnchorYWeight -
                     metrics.slurAutoplaceMinDistance,
               )
             : math.max(
                 anchor.dy,
                 beamEdgeY +
-                    metrics.slurBeamClearanceY +
+                    metrics.slurBeamClearanceY * metrics.slurBeamAnchorYWeight +
                     metrics.slurAutoplaceMinDistance,
               ),
       );
     }
 
-    final fingeringAnchor = fingeringAnchorByVisibleIndex[anchorVisibleIndex];
+    final fingeringAnchor = noteIndexesForCollision
+        .map((index) => fingeringAnchorByVisibleIndex[index])
+        .whereType<Offset>()
+        .fold<Offset?>(
+          null,
+          (best, current) => best == null
+              ? current
+              : (isAbove
+                    ? (current.dy < best.dy ? current : best)
+                    : (current.dy > best.dy ? current : best)),
+        );
     if (fingeringAnchor != null) {
       anchor = Offset(
         anchor.dx,
@@ -1727,19 +1842,89 @@ class GameNotePainter {
             ? math.min(
                 anchor.dy,
                 fingeringAnchor.dy -
-                    metrics.slurFingeringClearanceY -
+                    metrics.slurFingeringClearanceY *
+                        metrics.slurFingeringAnchorYWeight -
                     metrics.slurAutoplaceMinDistance,
               )
             : math.max(
                 anchor.dy,
                 fingeringAnchor.dy +
-                    metrics.slurFingeringClearanceY +
+                    metrics.slurFingeringClearanceY *
+                        metrics.slurFingeringAnchorYWeight +
                     metrics.slurAutoplaceMinDistance,
               ),
       );
     }
 
-    if (slurOnStemSide) {
+    final dotAnchor = noteIndexesForCollision
+        .map((index) => dotAnchorByVisibleIndex[index])
+        .whereType<Offset>()
+        .fold<Offset?>(
+          null,
+          (best, current) => best == null
+              ? current
+              : (isAbove
+                    ? (current.dy < best.dy ? current : best)
+                    : (current.dy > best.dy ? current : best)),
+        );
+    if (dotAnchor != null &&
+        (dotAnchor.dx - center.dx).abs() <=
+            metrics.slurAnchorLocalCollisionZoneX) {
+      anchor = Offset(
+        anchor.dx,
+        isAbove
+            ? math.min(
+                anchor.dy,
+                dotAnchor.dy -
+                    metrics.slurAnchorDotClearanceY *
+                        metrics.slurDotAnchorYWeight -
+                    metrics.slurAutoplaceMinDistance,
+              )
+            : math.max(
+                anchor.dy,
+                dotAnchor.dy +
+                    metrics.slurAnchorDotClearanceY *
+                        metrics.slurDotAnchorYWeight +
+                    metrics.slurAutoplaceMinDistance,
+              ),
+      );
+    }
+
+    final staccatoAnchor = noteIndexesForCollision
+        .map((index) => staccatoAnchorByVisibleIndex[index])
+        .whereType<Offset>()
+        .fold<Offset?>(
+          null,
+          (best, current) => best == null
+              ? current
+              : (isAbove
+                    ? (current.dy < best.dy ? current : best)
+                    : (current.dy > best.dy ? current : best)),
+        );
+    if (staccatoAnchor != null &&
+        (staccatoAnchor.dx - center.dx).abs() <=
+            metrics.slurAnchorLocalCollisionZoneX) {
+      anchor = Offset(
+        anchor.dx,
+        isAbove
+            ? math.min(
+                anchor.dy,
+                staccatoAnchor.dy -
+                    metrics.slurAnchorStaccatoClearanceY *
+                        metrics.slurStaccatoAnchorYWeight -
+                    metrics.slurAutoplaceMinDistance,
+              )
+            : math.max(
+                anchor.dy,
+                staccatoAnchor.dy +
+                    metrics.slurAnchorStaccatoClearanceY *
+                        metrics.slurStaccatoAnchorYWeight +
+                    metrics.slurAutoplaceMinDistance,
+              ),
+      );
+    }
+
+    if (baseResolution.mode != _SlurAnchorMode.center) {
       anchor = Offset(
         isStart
             ? math.min(
@@ -1762,6 +1947,66 @@ class GameNotePainter {
 
     final overrideOffset = _musicXmlVisualOffset(event);
     return anchor + overrideOffset;
+  }
+
+  _SlurAnchorResolution _resolveBaseSlurAnchorResolution({
+    required _RenderNote note,
+    required Offset center,
+    required bool isAbove,
+    required bool isStart,
+    required bool isChordAnchor,
+    required double chordTopY,
+    required double chordBottomY,
+    required bool hasNearbyAccidental,
+    required bool hasNearbyDot,
+    required bool hasNearbyStaccato,
+    required bool hasNearbyFingering,
+    required NotationMetrics metrics,
+  }) {
+    final horizontalSign = isStart ? 1.0 : -1.0;
+    final isStemSide = isAbove == (note.stemDirection == _StemDirection.up);
+    final hasStemSideGeometry =
+        note.durationType != _DurationType.whole && note.stemTip != null;
+    final preferOutsideHead =
+        isChordAnchor ||
+        note.durationType == _DurationType.whole ||
+        hasNearbyAccidental ||
+        hasNearbyDot ||
+        hasNearbyStaccato ||
+        hasNearbyFingering;
+    final mode = isStemSide
+        ? _SlurAnchorMode.stemSide
+        : (preferOutsideHead || hasStemSideGeometry)
+        ? _SlurAnchorMode.outsideHead
+        : _SlurAnchorMode.center;
+    final horizontalInset = switch (mode) {
+      _SlurAnchorMode.stemSide =>
+        isStart
+            ? metrics.slurStartAnchorHorizontalInset
+            : metrics.slurEndAnchorHorizontalInset,
+      _SlurAnchorMode.outsideHead =>
+        metrics.slurOutsideHeadHorizontalInset +
+            (isChordAnchor ? metrics.slurChordHorizontalInsetExtra : 0.0),
+      _SlurAnchorMode.center => 0.0,
+    };
+    final anchorBaseY = isChordAnchor
+        ? (isAbove ? chordTopY : chordBottomY)
+        : center.dy;
+
+    final anchor = Offset(
+      mode == _SlurAnchorMode.center
+          ? center.dx
+          : center.dx + horizontalSign * horizontalInset,
+      anchorBaseY +
+          (isAbove
+              ? -(metrics.slurAnchorVerticalInset +
+                    (isChordAnchor ? metrics.slurChordVerticalInsetExtra : 0.0))
+              : metrics.slurAnchorVerticalInset +
+                    (isChordAnchor
+                        ? metrics.slurChordVerticalInsetExtra
+                        : 0.0)),
+    );
+    return _SlurAnchorResolution(anchor: anchor, mode: mode);
   }
 
   int _resolveSlurAnchorVisibleIndex({
@@ -1788,6 +2033,83 @@ class GameNotePainter {
         : chordIndexes.reduce(
             (a, b) => visible[a].noteStep <= visible[b].noteStep ? a : b,
           );
+  }
+
+  double _resolveSlurBodyCollisionArcLiftBoost({
+    required List<_RenderNote> visible,
+    required _ChordLayout chordLayout,
+    required int startVisibleIndex,
+    required int endVisibleIndex,
+    required Offset startAnchor,
+    required Offset control1,
+    required Offset control2,
+    required Offset endAnchor,
+    required bool isAbove,
+    required NotationMetrics metrics,
+  }) {
+    final noteHeadHeight = metrics.noteHeadHeight;
+    final noteHeadHalfWidth = noteHeadHeight * 0.68;
+    final clearance = metrics.slurBodyNoteClearance;
+    final minX = math.min(startAnchor.dx, endAnchor.dx);
+    final maxX = math.max(startAnchor.dx, endAnchor.dx);
+    final startChordKey = chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
+    final endChordKey = chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
+    var requiredBoost = 0.0;
+
+    for (var i = 0; i < visible.length; i++) {
+      if (i == startVisibleIndex || i == endVisibleIndex) {
+        continue;
+      }
+      final chordKey = chordLayout.chordKeyByVisibleIndex[i];
+      if (chordKey != null &&
+          (chordKey == startChordKey || chordKey == endChordKey)) {
+        continue;
+      }
+
+      final noteCenter = Offset(visible[i].x + visible[i].headDx, visible[i].y);
+      final noteMinX = noteCenter.dx - noteHeadHalfWidth;
+      final noteMaxX = noteCenter.dx + noteHeadHalfWidth;
+      if (noteMaxX < minX || noteMinX > maxX) {
+        continue;
+      }
+
+      final noteTop = noteCenter.dy - noteHeadHeight * 0.56;
+      final noteBottom = noteCenter.dy + noteHeadHeight * 0.56;
+      const samples = 28;
+      for (var step = 0; step <= samples; step++) {
+        final progress = step / samples;
+        final t = 0.2 + progress * 0.6;
+        final point = _cubicPointAt(
+          t,
+          p0: startAnchor,
+          p1: control1,
+          p2: control2,
+          p3: endAnchor,
+        );
+        if (point.dx < noteMinX || point.dx > noteMaxX) {
+          continue;
+        }
+        if (isAbove) {
+          final overlap = point.dy - (noteTop - clearance);
+          if (overlap > requiredBoost) {
+            requiredBoost = overlap;
+          }
+        } else {
+          final overlap = (noteBottom + clearance) - point.dy;
+          if (overlap > requiredBoost) {
+            requiredBoost = overlap;
+          }
+        }
+      }
+    }
+
+    if (requiredBoost <= 0) {
+      return 0.0;
+    }
+
+    return (requiredBoost * metrics.slurBodyNoteArcLiftWeight)
+        .clamp(0.0, metrics.slurBodyNoteArcLiftMax)
+        .toDouble();
   }
 
   Offset _overrideSlurControlPoint({
@@ -1891,6 +2213,28 @@ class GameNotePainter {
         innerStart.dy,
       )
       ..close();
+  }
+
+  Offset _cubicPointAt(
+    double t, {
+    required Offset p0,
+    required Offset p1,
+    required Offset p2,
+    required Offset p3,
+  }) {
+    final mt = 1.0 - t;
+    final mt2 = mt * mt;
+    final t2 = t * t;
+    return Offset(
+      mt2 * mt * p0.dx +
+          3 * mt2 * t * p1.dx +
+          3 * mt * t2 * p2.dx +
+          t2 * t * p3.dx,
+      mt2 * mt * p0.dy +
+          3 * mt2 * t * p1.dy +
+          3 * mt * t2 * p2.dy +
+          t2 * t * p3.dy,
+    );
   }
 
   Offset _cubicTangentAt(
