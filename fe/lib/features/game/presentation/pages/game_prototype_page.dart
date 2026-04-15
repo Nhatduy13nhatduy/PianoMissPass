@@ -83,16 +83,84 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
             return const SizedBox.shrink();
           }
 
-          return CustomPaint(
-            painter: _StaffScrollerPainter(
-              score: score,
-              elapsedMsListenable: cubit.elapsedMsListenable,
-              passedNoteIndexes: state.passedNoteIndexes,
-              missedNoteIndexes: state.missedNoteIndexes,
-            ),
-            child: const SizedBox.expand(),
+          return Stack(
+            children: [
+              CustomPaint(
+                painter: _StaffScrollerPainter(
+                  score: score,
+                  elapsedMsListenable: cubit.elapsedMsListenable,
+                  passedNoteIndexes: state.passedNoteIndexes,
+                  missedNoteIndexes: state.missedNoteIndexes,
+                ),
+                child: const SizedBox.expand(),
+              ),
+              Positioned(
+                top: 16,
+                left: 16,
+                child: _PlaybackButton(
+                  isPlaying: state.isPlaying,
+                  onPressed: cubit.togglePlayback,
+                ),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _PlaybackButton extends StatelessWidget {
+  const _PlaybackButton({
+    required this.isPlaying,
+    required this.onPressed,
+  });
+
+  final bool isPlaying;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xCC0E1620),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isPlaying ? 'Pause' : 'Play',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

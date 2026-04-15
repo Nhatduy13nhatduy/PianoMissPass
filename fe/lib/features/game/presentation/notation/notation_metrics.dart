@@ -64,9 +64,15 @@ class NotationMetrics {
   double get noteHeadStrokeWidth =>
       (staffSpace * 0.12).clamp(1.1, 2.4).toDouble();
   double get slurAnchorHorizontalInset =>
-      (staffSpace * 0.54).clamp(4.8, 10.0).toDouble();
+      (staffSpace * 0.82).clamp(7.0, 14.0).toDouble();
   double get slurAnchorVerticalInset =>
-      (staffSpace * 0.72).clamp(5.6, 11.2).toDouble();
+      (staffSpace * 0.96).clamp(7.2, 14.2).toDouble();
+  double get slurStartAnchorHorizontalInset =>
+      (slurAnchorHorizontalInset * 1.0).toDouble();
+  double get slurEndAnchorHorizontalInset =>
+      (slurAnchorHorizontalInset * 1.22).toDouble();
+  double get slurNoteHeadClearance =>
+      (staffSpace * 0.34).clamp(2.8, 6.2).toDouble();
   double get slurStemSideNudgeX =>
       (staffSpace * 0.12).clamp(1.0, 2.4).toDouble();
   double get slurStemClearanceY =>

@@ -1549,9 +1549,15 @@ class GameNotePainter {
     final note = visible[anchorVisibleIndex];
     final center = Offset(note.x + note.headDx, note.y);
     final horizontalSign = isStart ? 1.0 : -1.0;
+    final horizontalInset = isStart
+        ? metrics.slurStartAnchorHorizontalInset
+        : metrics.slurEndAnchorHorizontalInset;
     var anchor = Offset(
-      center.dx + horizontalSign * (noteHeadWidth * 0.24),
-      center.dy + (isAbove ? -noteHeadHeight * 0.48 : noteHeadHeight * 0.48),
+      center.dx + horizontalSign * horizontalInset,
+      center.dy +
+          (isAbove
+              ? -metrics.slurAnchorVerticalInset
+              : metrics.slurAnchorVerticalInset),
     );
 
     final stemTip = note.stemTip;
@@ -1623,8 +1629,14 @@ class GameNotePainter {
 
     anchor = Offset(
       isStart
-          ? math.min(anchor.dx, center.dx + noteHeadWidth * 0.4)
-          : math.max(anchor.dx, center.dx - noteHeadWidth * 0.4),
+          ? math.min(
+              anchor.dx,
+              center.dx + noteHeadWidth * 0.82 + metrics.slurNoteHeadClearance,
+            )
+          : math.max(
+              anchor.dx,
+              center.dx - noteHeadWidth * 0.82 - metrics.slurNoteHeadClearance,
+            ),
       anchor.dy,
     );
 
@@ -1728,8 +1740,6 @@ class GameNotePainter {
         startAnchor + startNormal * (endThickness * outerThicknessRatio);
     final outerEnd =
         endAnchor + endNormal * (endThickness * outerThicknessRatio);
-    final innerEnd =
-        endAnchor - endNormal * (endThickness * innerThicknessRatio);
     final innerStart =
         startAnchor - startNormal * (endThickness * innerThicknessRatio);
 
@@ -1761,28 +1771,6 @@ class GameNotePainter {
         innerStart.dy,
       )
       ..close();
-  }
-
-  Offset _cubicPointAt(
-    double t, {
-    required Offset p0,
-    required Offset p1,
-    required Offset p2,
-    required Offset p3,
-  }) {
-    final mt = 1.0 - t;
-    final mt2 = mt * mt;
-    final t2 = t * t;
-    return Offset(
-      mt2 * mt * p0.dx +
-          3 * mt2 * t * p1.dx +
-          3 * mt * t2 * p2.dx +
-          t2 * t * p3.dx,
-      mt2 * mt * p0.dy +
-          3 * mt2 * t * p1.dy +
-          3 * mt * t2 * p2.dy +
-          t2 * t * p3.dy,
-    );
   }
 
   Offset _cubicTangentAt(
@@ -2009,7 +1997,6 @@ class GameNotePainter {
     required _DurationType durationType,
     required NotationMetrics metrics,
   }) {
-    final spacing = metrics.staffSpace;
     final strokeColor = _noteInkColor(judge, isActive);
     final fillPaint = Paint()
       ..color = strokeColor
@@ -2102,16 +2089,6 @@ class GameNotePainter {
     canvas.translate(-centerTemplate.dx, -centerTemplate.dy);
     canvas.drawPath(template, paint);
     canvas.restore();
-  }
-
-  Path _quarterHeadTemplate() => _notePainterQuarterHeadTemplate();
-
-  Path _halfHeadTemplate() => _notePainterHalfHeadTemplate();
-
-  Path _wholeHeadTemplate() => _notePainterWholeHeadTemplate();
-
-  Path _buildLegacyFlagTemplate({required _StemDirection direction}) {
-    return _notePainterBuildLegacyFlagTemplate(direction: direction);
   }
 
   Offset _stemTipForGeometry({

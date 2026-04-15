@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
@@ -200,6 +199,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     emit(state.copyWith(isPlaying: true));
   }
 
+  void play() => _play();
+
   void _pause() {
     if (!state.isPlaying) {
       return;
@@ -212,6 +213,16 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..reset();
     _ticker.stop();
     emit(state.copyWith(isPlaying: false));
+  }
+
+  void pause() => _pause();
+
+  void togglePlayback() {
+    if (state.isPlaying) {
+      _pause();
+      return;
+    }
+    _play();
   }
 
   void _onTick(Duration _) {

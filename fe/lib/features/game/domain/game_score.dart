@@ -36,38 +36,20 @@ void logParsedMxlTrace(
   int startMeasure = 11,
   int endMeasure = 20,
 }) {
-  print('=== MXL PARSE TRACE ===');
-  print(
-    'bpm=${score.bpm}, time=${score.beatsPerMeasure}/${score.beatUnit}, notes=${score.notes.length}, keyChanges=${score.keySignatures.length}',
-  );
-
   for (var measure = startMeasure; measure <= endMeasure; measure++) {
     final measureNotes = score.notes
         .where((note) => note.measureIndex + 1 == measure)
         .toList();
     if (measureNotes.isEmpty) {
-      print('--- measure $measure: no notes ---');
       continue;
     }
 
-    print('--- measure $measure: ${measureNotes.length} notes ---');
     for (final note in measureNotes) {
-      final durationLabel = _durationLabelFromBeats(
+      _durationLabelFromBeats(
         note.notatedBeats ?? (note.holdMs / (60000.0 / score.bpm)),
-      );
-      print(
-        'm=$measure voice=${note.voice} staff=${note.staffNumber ?? (note.isTrebleFromMxl == true
-                ? 1
-                : note.isTrebleFromMxl == false
-                ? 2
-                : -1)} '
-        'hit=${note.hitTimeMs} hold=${note.holdMs} beats=${note.notatedBeats?.toStringAsFixed(3) ?? 'null'} '
-        'type=$durationLabel midi=${note.midi} step=${note.staffStep} accidental=${note.accidental ?? '-'}',
       );
     }
   }
-
-  print('=== END MXL PARSE TRACE ===');
 }
 
 String _durationLabelFromBeats(double beats) {
@@ -485,9 +467,6 @@ void logMxlMeasureNode(
   int partIndex = 0,
 }) {
   if (document.parts.isEmpty) {
-    print('=== MXL MEASURE TRACE ===');
-    print('No parts found in document');
-    print('=== END MXL MEASURE TRACE ===');
     return;
   }
 
@@ -497,38 +476,14 @@ void logMxlMeasureNode(
       .where((m) => m.number == measureNumber)
       .firstOrNull;
 
-  print('=== MXL MEASURE TRACE ===');
-  print(
-    'scorePath=${document.scorePath} partIndex=$safePartIndex partId=${part.id ?? '-'} targetMeasure=$measureNumber',
-  );
-
   if (measure == null) {
-    print(
-      'Measure $measureNumber not found. Total measures=${part.measures.length}',
-    );
-    print('=== END MXL MEASURE TRACE ===');
     return;
   }
 
-  print(
-    'measure number=${measure.number ?? -1} width=${measure.width?.toStringAsFixed(2) ?? '-'} elements=${measure.elements.length} notes=${measure.notes.length}',
-  );
-
   for (var i = 0; i < measure.notes.length; i++) {
     final note = measure.notes[i];
-    final beams = note.beams
-        .map((beam) => '${beam.number ?? 1}:${beam.value}')
-        .join(',');
-    print(
-      'note[$i] chord=${note.isChord} rest=${note.isRest} dur=${note.durationDivisions ?? -1} '
-      'voice=${note.voice ?? -1} staff=${note.staff ?? -1} '
-      'pitch=${note.step ?? '-'}${note.alter == null || note.alter == 0 ? '' : note.alter} ${note.octave ?? -1} '
-      'type=${note.type ?? '-'} stem=${note.stem ?? '-'} acc=${note.accidental ?? '-'} '
-      'beams=[${beams.isEmpty ? '-' : beams}]',
-    );
+    note.beams.map((beam) => '${beam.number ?? 1}:${beam.value}').join(',');
   }
-
-  print('=== END MXL MEASURE TRACE ===');
 }
 
 ScoreData parseMxl(Uint8List bytes) {
@@ -748,9 +703,9 @@ List<MxlSlurNode> _extractSlurs(XmlElement noteElement) {
       .toList();
 
   slurs.sort((a, b) {
-    final typeComparison = _slurTypePriority(a.type).compareTo(
-      _slurTypePriority(b.type),
-    );
+    final typeComparison = _slurTypePriority(
+      a.type,
+    ).compareTo(_slurTypePriority(b.type));
     if (typeComparison != 0) {
       return typeComparison;
     }
