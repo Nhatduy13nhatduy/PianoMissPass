@@ -5,6 +5,8 @@ extension on GameNotePainter {
     Canvas canvas, {
     required ScoreData score,
     required _PrecomputedScoreRenderData precomputedScore,
+    required Set<int> passedNoteIndexes,
+    required Set<int> missedNoteIndexes,
     required List<_RenderNote> visible,
     required Map<int, int> visibleIndexByScoreIndex,
     required _ChordLayout chordLayout,
@@ -26,11 +28,22 @@ extension on GameNotePainter {
     }
 
     final spacing = metrics.staffSpace;
+    final slurLaneCache =
+        GameNotePainter._slurLaneCacheByScore[score] ?? <String, int>{};
+    GameNotePainter._slurLaneCacheByScore[score] = slurLaneCache;
+    final slurBodyCollisionBoostCache =
+        GameNotePainter._slurBodyCollisionBoostCacheByScore[score] ??
+        <String, double>{};
+    GameNotePainter._slurBodyCollisionBoostCacheByScore[score] =
+        slurBodyCollisionBoostCache;
     final pendingLayouts =
         <
           ({
-            int startVisibleIndex,
-            int endVisibleIndex,
+            String segmentKey,
+            int startScoreIndex,
+            int endScoreIndex,
+            int? startVisibleIndex,
+            int? endVisibleIndex,
             SlurEvent startEvent,
             SlurEvent endEvent,
             Offset startAnchor,
@@ -51,19 +64,48 @@ extension on GameNotePainter {
         final startVisibleIndex =
             visibleIndexByScoreIndex[segment.startNoteIndex];
         final endVisibleIndex = visibleIndexByScoreIndex[segment.endNoteIndex];
-        if (startVisibleIndex == null || endVisibleIndex == null) {
+        final projectedStart = _projectSlurRenderNote(
+          score: score,
+          precomputedScore: precomputedScore,
+          scoreIndex: segment.startNoteIndex,
+          currentMs: currentMs,
+          playheadX: playheadX,
+          trebleTop: trebleTop,
+          bassTop: bassTop,
+          metrics: metrics,
+        );
+        final projectedEnd = _projectSlurRenderNote(
+          score: score,
+          precomputedScore: precomputedScore,
+          scoreIndex: segment.endNoteIndex,
+          currentMs: currentMs,
+          playheadX: playheadX,
+          trebleTop: trebleTop,
+          bassTop: bassTop,
+          metrics: metrics,
+        );
+        if (projectedEnd.x < -30) {
           continue;
         }
+        if (projectedStart.x > size.width + metrics.staffSpace * 2.0) {
+          continue;
+        }
+
+        final startRenderNote = projectedStart;
+        final endRenderNote = projectedEnd;
 
         final slurAbove = _resolveSlurIsAbove(
           startEvent,
           endEvent,
-          startVisible: visible[startVisibleIndex],
-          endVisible: visible[endVisibleIndex],
+          startVisible: startRenderNote,
+          endVisible: endRenderNote,
         );
-        final startChordKey =
-            chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
-        final endChordKey = chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
+        final startChordKey = startVisibleIndex == null
+            ? null
+            : chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
+        final endChordKey = endVisibleIndex == null
+            ? null
+            : chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
         final isChordToChord = startChordKey != null && endChordKey != null;
         if (isChordToChord) {
           final dedupeKey =
@@ -72,32 +114,16 @@ extension on GameNotePainter {
             continue;
           }
         }
-        final startAnchor = _resolveSlurAnchor(
+        final startAnchor = _resolveProjectedSlurAnchor(
+          note: projectedStart,
           event: startEvent,
-          noteVisibleIndex: startVisibleIndex,
-          visible: visible,
-          chordLayout: chordLayout,
-          chordVisibleIndexesByKey: chordVisibleIndexesByKey,
-          accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
-          dotAnchorByVisibleIndex: dotAnchorByVisibleIndex,
-          staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
-          fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
-          beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
           isAbove: slurAbove,
           isStart: true,
           metrics: metrics,
         );
-        final endAnchor = _resolveSlurAnchor(
+        final endAnchor = _resolveProjectedSlurAnchor(
+          note: projectedEnd,
           event: endEvent,
-          noteVisibleIndex: endVisibleIndex,
-          visible: visible,
-          chordLayout: chordLayout,
-          chordVisibleIndexesByKey: chordVisibleIndexesByKey,
-          accidentalCenterByVisibleIndex: accidentalCenterByVisibleIndex,
-          dotAnchorByVisibleIndex: dotAnchorByVisibleIndex,
-          staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
-          fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
-          beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
           isAbove: slurAbove,
           isStart: false,
           metrics: metrics,
@@ -110,6 +136,10 @@ extension on GameNotePainter {
         }
 
         pendingLayouts.add((
+          segmentKey:
+              '${span.partId}:${span.number}:${segment.startEventIndex}:${segment.endEventIndex}:${segment.startNoteIndex}:${segment.endNoteIndex}:${slurAbove ? 'above' : 'below'}',
+          startScoreIndex: segment.startNoteIndex,
+          endScoreIndex: segment.endNoteIndex,
           startVisibleIndex: startVisibleIndex,
           endVisibleIndex: endVisibleIndex,
           startEvent: startEvent,
@@ -117,7 +147,7 @@ extension on GameNotePainter {
           startAnchor: startAnchor,
           endAnchor: endAnchor,
           isAbove: slurAbove,
-          isUpperStaff: visible[startVisibleIndex].isUpperStaff,
+          isUpperStaff: startRenderNote.isUpperStaff,
           isCrossSystemContinuation: segment.isCrossSystemContinuation,
           minX: minX,
           maxX: maxX,
@@ -159,17 +189,27 @@ extension on GameNotePainter {
       final paddedMinX = layout.minX - metrics.slurStackOverlapPadding;
       final paddedMaxX = layout.maxX + metrics.slurStackOverlapPadding;
 
-      var lane = 0;
-      while (lane < occupiedLanes.length) {
-        final overlapsExisting = occupiedLanes[lane].any(
+      bool laneIsAvailable(int lane) {
+        if (lane >= occupiedLanes.length) {
+          return true;
+        }
+        return !occupiedLanes[lane].any(
           (interval) =>
               paddedMinX <= interval.maxX && paddedMaxX >= interval.minX,
         );
-        if (!overlapsExisting) {
-          break;
-        }
-        lane++;
       }
+
+      final laneCacheKey = '$laneKey:${layout.segmentKey}';
+      final preferredLane = slurLaneCache[laneCacheKey];
+      var lane = preferredLane ?? 0;
+      if (!laneIsAvailable(lane)) {
+        lane = 0;
+        while (!laneIsAvailable(lane)) {
+          lane++;
+        }
+      }
+      slurLaneCache[laneCacheKey] = lane;
+
       if (lane == occupiedLanes.length) {
         occupiedLanes.add(<({double minX, double maxX})>[
           (minX: paddedMinX, maxX: paddedMaxX),
@@ -248,18 +288,23 @@ extension on GameNotePainter {
         isOutgoing: false,
       );
 
-      final bodyCollisionBoost = _resolveSlurBodyCollisionArcLiftBoost(
-        visible: visible,
-        chordLayout: chordLayout,
-        startVisibleIndex: layout.startVisibleIndex,
-        endVisibleIndex: layout.endVisibleIndex,
-        startAnchor: startAnchor,
-        control1: control1,
-        control2: control2,
-        endAnchor: endAnchor,
-        isAbove: layout.isAbove,
-        metrics: metrics,
-      );
+      final bodyCollisionBoostCacheKey = layout.segmentKey;
+      final bodyCollisionBoost =
+          slurBodyCollisionBoostCache[bodyCollisionBoostCacheKey] ??
+          _resolveSlurBodyCollisionArcLiftBoost(
+            visible: visible,
+            chordLayout: chordLayout,
+            startVisibleIndex: layout.startVisibleIndex,
+            endVisibleIndex: layout.endVisibleIndex,
+            startAnchor: startAnchor,
+            control1: control1,
+            control2: control2,
+            endAnchor: endAnchor,
+            isAbove: layout.isAbove,
+            metrics: metrics,
+          );
+      slurBodyCollisionBoostCache[bodyCollisionBoostCacheKey] =
+          bodyCollisionBoost;
       if (bodyCollisionBoost > 0) {
         final adjustedQuadraticControl = Offset(
           anchorMidX,
@@ -304,18 +349,92 @@ extension on GameNotePainter {
         isAbove: layout.isAbove,
       );
       final slurColor = _slurColorForSegment(
-        visible[layout.startVisibleIndex].status,
-        visible[layout.endVisibleIndex].status,
+        _slurJudgeForScoreIndex(
+          layout.startScoreIndex,
+          passedNoteIndexes: passedNoteIndexes,
+          missedNoteIndexes: missedNoteIndexes,
+        ),
+        _slurJudgeForScoreIndex(
+          layout.endScoreIndex,
+          passedNoteIndexes: passedNoteIndexes,
+          missedNoteIndexes: missedNoteIndexes,
+        ),
         colors: score.colors,
       );
-      canvas.drawPath(
-        slurPath,
-        Paint()
-          ..color = slurColor
-          ..style = PaintingStyle.fill
-          ..isAntiAlias = true,
-      );
+      final slurPaint = Paint()
+        ..color = _notePainterApplyOpacity(
+          slurColor,
+          _notePainterLeftFadeOpacityAtX(endAnchor.dx, playheadX, metrics),
+        )
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = true;
+      canvas.drawPath(slurPath, slurPaint);
     }
+  }
+
+  _RenderNote _projectSlurRenderNote({
+    required ScoreData score,
+    required _PrecomputedScoreRenderData precomputedScore,
+    required int scoreIndex,
+    required int currentMs,
+    required double playheadX,
+    required double trebleTop,
+    required double bassTop,
+    required NotationMetrics metrics,
+  }) {
+    final note = score.notes[scoreIndex];
+    final precomputed = precomputedScore.notes[scoreIndex];
+    final x =
+        playheadX +
+        (precomputed.adjustedHitMs - currentMs) * GameNotePainter.notePxPerMs;
+    final staffTop = precomputed.isUpperStaff ? trebleTop : bassTop;
+    final y = _yForStaffStep(
+      note.staffStep,
+      precomputed.isTreble,
+      staffTop,
+      metrics.staffSpace,
+    );
+    return _RenderNote(
+      index: scoreIndex,
+      x: x,
+      y: y,
+      isUpperStaff: precomputed.isUpperStaff,
+      isTreble: precomputed.isTreble,
+      noteStep: note.staffStep,
+      note: note,
+      adjustedHitMs: precomputed.adjustedHitMs,
+      status: _NoteJudge.pending,
+      durationType: precomputed.durationType,
+      accidentalToRender: precomputed.accidentalToRender,
+      stemDirection: precomputed.stemDirection,
+      stemXAxisDirection: precomputed.stemDirection,
+    );
+  }
+
+  Offset _resolveProjectedSlurAnchor({
+    required _RenderNote note,
+    required SlurEvent event,
+    required bool isAbove,
+    required bool isStart,
+    required NotationMetrics metrics,
+  }) {
+    final center = Offset(note.x + note.headDx, note.y);
+    final baseResolution = _resolveBaseSlurAnchorResolution(
+      note: note,
+      center: center,
+      isAbove: isAbove,
+      isStart: isStart,
+      isChordAnchor: false,
+      chordTopY: center.dy,
+      chordBottomY: center.dy,
+      hasNearbyAccidental: note.accidentalToRender != null,
+      hasNearbyDot: note.note.dotCount > 0,
+      hasNearbyStaccato: note.note.isStaccato,
+      hasNearbyFingering:
+          note.note.fingering != null && note.note.fingering!.isNotEmpty,
+      metrics: metrics,
+    );
+    return baseResolution.anchor + _musicXmlVisualOffset(event);
   }
 
   bool _resolveSlurIsAbove(
@@ -699,8 +818,8 @@ extension on GameNotePainter {
   double _resolveSlurBodyCollisionArcLiftBoost({
     required List<_RenderNote> visible,
     required _ChordLayout chordLayout,
-    required int startVisibleIndex,
-    required int endVisibleIndex,
+    required int? startVisibleIndex,
+    required int? endVisibleIndex,
     required Offset startAnchor,
     required Offset control1,
     required Offset control2,
@@ -713,8 +832,12 @@ extension on GameNotePainter {
     final clearance = metrics.slurBodyNoteClearance;
     final minX = math.min(startAnchor.dx, endAnchor.dx);
     final maxX = math.max(startAnchor.dx, endAnchor.dx);
-    final startChordKey = chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
-    final endChordKey = chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
+    final startChordKey = startVisibleIndex == null
+        ? null
+        : chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
+    final endChordKey = endVisibleIndex == null
+        ? null
+        : chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
     var requiredBoost = 0.0;
 
     for (var i = 0; i < visible.length; i++) {
@@ -928,9 +1051,23 @@ extension on GameNotePainter {
     if (start == _NoteJudge.miss || end == _NoteJudge.miss) {
       return colors.accidentalAndSlur.slurMiss;
     }
-    if (start == _NoteJudge.pass && end == _NoteJudge.pass) {
+    if (start == _NoteJudge.pass || end == _NoteJudge.pass) {
       return colors.accidentalAndSlur.slurPass;
     }
     return colors.accidentalAndSlur.slurIdle;
+  }
+
+  _NoteJudge _slurJudgeForScoreIndex(
+    int scoreIndex, {
+    required Set<int> passedNoteIndexes,
+    required Set<int> missedNoteIndexes,
+  }) {
+    if (missedNoteIndexes.contains(scoreIndex)) {
+      return _NoteJudge.miss;
+    }
+    if (passedNoteIndexes.contains(scoreIndex)) {
+      return _NoteJudge.pass;
+    }
+    return _NoteJudge.pending;
   }
 }

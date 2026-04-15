@@ -31,6 +31,10 @@ class GameNotePainter {
   static final Set<int> _debugLoggedNoteIndexes = <int>{};
   static final Expando<_PrecomputedScoreRenderData> _precomputedScoreCache =
       Expando<_PrecomputedScoreRenderData>('game-note-precomputed');
+  static final Expando<Map<String, int>> _slurLaneCacheByScore =
+      Expando<Map<String, int>>('game-note-slur-lane-cache');
+  static final Expando<Map<String, double>> _slurBodyCollisionBoostCacheByScore =
+      Expando<Map<String, double>>('game-note-slur-body-collision-cache');
   static final GameTextPainter _sharedTextPainter = GameTextPainter();
   static final Path _quarterHeadTemplateCached =
       _notePainterQuarterHeadTemplate();
@@ -318,7 +322,8 @@ class GameNotePainter {
     );
     final stemColorByVisibleIndex = <int, Color>{};
     final beamStemStartByVisibleIndex = <int, Offset>{};
-    final pendingAccidentals = <({String accidental, Offset center})>[];
+    final pendingAccidentals =
+        <({String accidental, Offset center, Color color})>[];
     final pendingDots =
         <
           ({
@@ -327,8 +332,7 @@ class GameNotePainter {
             int noteStep,
             bool isTreble,
             _DurationType durationType,
-            _NoteJudge judge,
-            bool isActive,
+            Color color,
             Offset? anchor,
           })
         >[];
@@ -350,10 +354,14 @@ class GameNotePainter {
       final headDx = item.headDx;
       final center = Offset(item.x + headDx, item.y);
       final isActive = (item.adjustedHitMs - currentMs).abs() <= 70;
-      final noteColor = _noteInkColor(
+      final baseNoteColor = _noteInkColor(
         item.status,
         isActive,
         colors: score.colors,
+      );
+      final noteColor = _notePainterApplyOpacity(
+        baseNoteColor,
+        _notePainterLeftFadeOpacityAtX(center.dx, playheadX, metrics),
       );
       final layoutStemDirection =
           chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
@@ -385,11 +393,9 @@ class GameNotePainter {
       _drawNoteGlyph(
         canvas,
         center: center,
-        judge: item.status,
-        isActive: isActive,
         durationType: item.durationType,
         metrics: metrics,
-        colors: score.colors,
+        color: noteColor,
       );
 
       final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
@@ -424,6 +430,8 @@ class GameNotePainter {
         staffTop: item.isUpperStaff ? trebleTop : bassTop,
         spacing: lineSpacing,
         color: ledgerColor,
+        playheadX: playheadX,
+        metrics: metrics,
       );
 
       if (shouldHideTail && shouldDrawStem) {
@@ -471,6 +479,16 @@ class GameNotePainter {
           center:
               accidentalCenterByVisibleIndex[visibleIndex] ??
               Offset(item.x - lineSpacing * 1.08, item.y),
+          color: _notePainterApplyOpacity(
+            score.colors.accidentalAndSlur.accidental,
+            _notePainterLeftFadeOpacityAtX(
+              (accidentalCenterByVisibleIndex[visibleIndex] ??
+                      Offset(item.x - lineSpacing * 1.08, item.y))
+                  .dx,
+              playheadX,
+              metrics,
+            ),
+          ),
         ));
       }
 
@@ -480,8 +498,14 @@ class GameNotePainter {
         noteStep: item.noteStep,
         isTreble: item.isTreble,
         durationType: item.durationType,
-        judge: item.status,
-        isActive: isActive,
+        color: _notePainterApplyOpacity(
+          baseNoteColor,
+          _notePainterLeftFadeOpacityAtX(
+            (dotAnchorByVisibleIndex[visibleIndex] ?? center).dx,
+            playheadX,
+            metrics,
+          ),
+        ),
         anchor: dotAnchorByVisibleIndex[visibleIndex],
       ));
 
@@ -537,7 +561,14 @@ class GameNotePainter {
           direction: effectiveStemDirection,
           referenceNoteStep: referenceItem.noteStep,
           isTreble: referenceItem.isTreble,
-          color: noteColor,
+          color: _notePainterApplyOpacity(
+            baseNoteColor,
+            _notePainterLeftFadeOpacityAtX(
+              referenceCenter.dx,
+              playheadX,
+              metrics,
+            ),
+          ),
         ));
       }
 
@@ -565,7 +596,10 @@ class GameNotePainter {
             pendingFingerings.add((
               text: fingering,
               center: anchor,
-              color: score.colors.fingering.text,
+              color: _notePainterApplyOpacity(
+                score.colors.fingering.text,
+                _notePainterLeftFadeOpacityAtX(anchor.dx, playheadX, metrics),
+              ),
             ));
           }
         }
@@ -582,6 +616,8 @@ class GameNotePainter {
         lockedReferenceStemTip: group.lockedReferenceStemTip,
         stemColorByVisibleIndex: stemColorByVisibleIndex,
         beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
+        playheadX: playheadX,
+        metrics: metrics,
       );
     }
 
@@ -594,9 +630,7 @@ class GameNotePainter {
         isTreble: dot.isTreble,
         durationType: dot.durationType,
         spacing: lineSpacing,
-        judge: dot.judge,
-        isActive: dot.isActive,
-        colors: score.colors,
+        color: dot.color,
         anchor: dot.anchor,
       );
     }
@@ -629,7 +663,7 @@ class GameNotePainter {
         accidental: accidental.accidental,
         center: accidental.center,
         spacing: lineSpacing,
-        color: score.colors.accidentalAndSlur.accidental,
+        color: accidental.color,
       );
     }
 
@@ -637,6 +671,8 @@ class GameNotePainter {
       canvas,
       score: score,
       precomputedScore: precomputedScore,
+      passedNoteIndexes: passedNoteIndexes,
+      missedNoteIndexes: missedNoteIndexes,
       visible: visible,
       visibleIndexByScoreIndex: visibleIndexByScoreIndex,
       chordLayout: chordLayout,
@@ -1578,6 +1614,8 @@ class GameNotePainter {
     required double staffTop,
     required double spacing,
     required Color color,
+    required double playheadX,
+    required NotationMetrics metrics,
   }) {
     final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
     final topLine = bottomLine + 8;
@@ -1596,10 +1634,25 @@ class GameNotePainter {
         ledgerStep += 2
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
+        final fadedPaint = Paint()
+          ..color = color
+          ..strokeWidth = ledgerPaint.strokeWidth;
+        _notePainterApplyLeftFadeToPaint(
+          fadedPaint,
+          baseColor: color,
+          bounds: Rect.fromLTRB(
+            centerX - leftHalfLength,
+            y - 1.0,
+            centerX + halfLength,
+            y + 1.0,
+          ),
+          playheadX: playheadX,
+          metrics: metrics,
+        );
         canvas.drawLine(
           Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
-          ledgerPaint,
+          fadedPaint,
         );
       }
     }
@@ -1611,10 +1664,25 @@ class GameNotePainter {
         ledgerStep -= 2
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
+        final fadedPaint = Paint()
+          ..color = color
+          ..strokeWidth = ledgerPaint.strokeWidth;
+        _notePainterApplyLeftFadeToPaint(
+          fadedPaint,
+          baseColor: color,
+          bounds: Rect.fromLTRB(
+            centerX - leftHalfLength,
+            y - 1.0,
+            centerX + halfLength,
+            y + 1.0,
+          ),
+          playheadX: playheadX,
+          metrics: metrics,
+        );
         canvas.drawLine(
           Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
-          ledgerPaint,
+          fadedPaint,
         );
       }
     }
@@ -1623,13 +1691,11 @@ class GameNotePainter {
   void _drawNoteGlyph(
     Canvas canvas, {
     required Offset center,
-    required _NoteJudge judge,
-    required bool isActive,
     required _DurationType durationType,
     required NotationMetrics metrics,
-    required GameColorScheme colors,
+    required Color color,
   }) {
-    final strokeColor = _noteInkColor(judge, isActive, colors: colors);
+    final strokeColor = color;
     final fillPaint = Paint()
       ..color = strokeColor
       ..style = PaintingStyle.fill
@@ -1941,9 +2007,7 @@ class GameNotePainter {
     required bool isTreble,
     required _DurationType durationType,
     required double spacing,
-    required _NoteJudge judge,
-    required bool isActive,
-    required GameColorScheme colors,
+    required Color color,
     Offset? anchor,
   }) {
     if (dotCount <= 0) {
@@ -1951,9 +2015,8 @@ class GameNotePainter {
     }
 
     final dotRadius = (spacing * 0.2).clamp(1.5, 3.5);
-    final fillColor = _noteInkColor(judge, isActive, colors: colors);
     final dotPaint = Paint()
-      ..color = fillColor
+      ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
 
@@ -2099,6 +2162,8 @@ class GameNotePainter {
     required Offset lockedReferenceStemTip,
     required Map<int, Color> stemColorByVisibleIndex,
     required Map<int, Offset> beamStemStartByVisibleIndex,
+    required double playheadX,
+    required NotationMetrics metrics,
   }) {
     _notePainterDrawBeamGroup(
       canvas,
@@ -2109,6 +2174,8 @@ class GameNotePainter {
       lockedReferenceStemTip: lockedReferenceStemTip,
       stemColorByVisibleIndex: stemColorByVisibleIndex,
       beamStemStartByVisibleIndex: beamStemStartByVisibleIndex,
+      playheadX: playheadX,
+      metrics: metrics,
     );
   }
 
@@ -2123,4 +2190,83 @@ class GameNotePainter {
       _NoteJudge.pending => isActive ? colors.note.active : colors.note.idle,
     };
   }
+}
+
+double _notePainterLeftFadeDistance(NotationMetrics metrics) =>
+    (metrics.staffSpace * 6.0).clamp(28.0, 96.0).toDouble();
+
+double _notePainterLeftFadeOpacityAtX(
+  double x,
+  double playheadX,
+  NotationMetrics metrics,
+) {
+  if (x >= playheadX) {
+    return 1.0;
+  }
+  final fadeDistance = _notePainterLeftFadeDistance(metrics);
+  final progress = ((playheadX - x) / fadeDistance).clamp(0.0, 1.0).toDouble();
+  return 1.0 - progress;
+}
+
+Color _notePainterApplyOpacity(Color base, double opacity) {
+  final alpha = (base.alpha * opacity.clamp(0.0, 1.0)).round();
+  return base.withAlpha(alpha);
+}
+
+void _notePainterApplyLeftFadeToPaint(
+  Paint paint, {
+  required Color baseColor,
+  required Rect bounds,
+  required double playheadX,
+  required NotationMetrics metrics,
+}) {
+  if (bounds.isEmpty) {
+    return;
+  }
+  if (bounds.left >= playheadX) {
+    paint.shader = null;
+    paint.color = baseColor;
+    return;
+  }
+
+  if (bounds.right <= playheadX || (bounds.right - bounds.left).abs() < 0.001) {
+    paint.shader = null;
+    paint.color = _notePainterApplyOpacity(
+      baseColor,
+      _notePainterLeftFadeOpacityAtX(bounds.right, playheadX, metrics),
+    );
+    return;
+  }
+
+  final fadeDistance = _notePainterLeftFadeDistance(metrics);
+  final width = bounds.width;
+  final fadeStartX = playheadX - fadeDistance;
+  final fadeStartStop = ((fadeStartX - bounds.left) / width)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  final playheadStop = ((playheadX - bounds.left) / width)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  final leftOpacity = _notePainterLeftFadeOpacityAtX(
+    bounds.left,
+    playheadX,
+    metrics,
+  );
+
+  paint.shader = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: <Color>[
+      _notePainterApplyOpacity(baseColor, leftOpacity),
+      _notePainterApplyOpacity(baseColor, 0.0),
+      baseColor,
+      baseColor,
+    ],
+    stops: <double>[
+      0.0,
+      fadeStartStop,
+      playheadStop,
+      1.0,
+    ],
+  ).createShader(bounds);
 }

@@ -317,6 +317,8 @@ void _notePainterDrawBeamGroup(
   required Offset lockedReferenceStemTip,
   required Map<int, Color> stemColorByVisibleIndex,
   required Map<int, Offset> beamStemStartByVisibleIndex,
+  required double playheadX,
+  required NotationMetrics metrics,
 }) {
   final first = visible[indexes.first];
   final last = visible[indexes.last];
@@ -368,6 +370,18 @@ void _notePainterDrawBeamGroup(
       ..color = stemColor
       ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = StrokeCap.butt;
+    _notePainterApplyLeftFadeToPaint(
+      stemPaint,
+      baseColor: stemColor,
+      bounds: Rect.fromLTRB(
+        stemStart.dx - stemPaint.strokeWidth,
+        math.min(stemStart.dy, targetY),
+        stemStart.dx + stemPaint.strokeWidth,
+        math.max(stemStart.dy, targetY),
+      ),
+      playheadX: playheadX,
+      metrics: metrics,
+    );
     canvas.drawLine(stemStart, Offset(stemStart.dx, targetY), stemPaint);
     item.stemTip = Offset(stemStart.dx, targetY);
 
@@ -386,6 +400,13 @@ void _notePainterDrawBeamGroup(
     beamPath.lineTo(bottomEdgePoints[i].dx, bottomEdgePoints[i].dy);
   }
   beamPath.close();
+  _notePainterApplyLeftFadeToPaint(
+    beamPaint,
+    baseColor: resolvedBeamColor,
+    bounds: beamPath.getBounds(),
+    playheadX: playheadX,
+    metrics: metrics,
+  );
   canvas.drawPath(beamPath, beamPaint);
 
   final secondOffset = sign * (primaryBeamThickness + interBeamGap);
@@ -400,6 +421,8 @@ void _notePainterDrawBeamGroup(
     beamPaint: beamPaint,
     beamYAt: beamYAt,
     topEdgePoints: topEdgePoints,
+    playheadX: playheadX,
+    metrics: metrics,
   );
 
   final hasSecondBeam =
@@ -430,6 +453,13 @@ void _notePainterDrawBeamGroup(
       secondPath.lineTo(secondBottom[i].dx, secondBottom[i].dy);
     }
     secondPath.close();
+    _notePainterApplyLeftFadeToPaint(
+      beamPaint,
+      baseColor: resolvedBeamColor,
+      bounds: secondPath.getBounds(),
+      playheadX: playheadX,
+      metrics: metrics,
+    );
     canvas.drawPath(secondPath, beamPaint);
   }
 
@@ -446,6 +476,8 @@ void _notePainterDrawBeamGroup(
     beamPaint: beamPaint,
     beamYAt: beamYAt,
     topEdgePoints: topEdgePoints,
+    playheadX: playheadX,
+    metrics: metrics,
   );
 
   final hasThirdBeam =
@@ -471,6 +503,13 @@ void _notePainterDrawBeamGroup(
       thirdPath.lineTo(thirdBottom[i].dx, thirdBottom[i].dy);
     }
     thirdPath.close();
+    _notePainterApplyLeftFadeToPaint(
+      beamPaint,
+      baseColor: resolvedBeamColor,
+      bounds: thirdPath.getBounds(),
+      playheadX: playheadX,
+      metrics: metrics,
+    );
     canvas.drawPath(thirdPath, beamPaint);
   }
 }
@@ -486,6 +525,8 @@ bool _notePainterDrawExplicitSecondaryBeams(
   required Paint beamPaint,
   required double Function(double x) beamYAt,
   required List<Offset> topEdgePoints,
+  required double playheadX,
+  required NotationMetrics metrics,
 }) {
   var hasExplicitSecondary = false;
   int? openStartLocalIndex;
@@ -516,6 +557,8 @@ bool _notePainterDrawExplicitSecondaryBeams(
             beamThickness: beamThickness,
             sign: sign,
             beamPaint: beamPaint,
+            playheadX: playheadX,
+            metrics: metrics,
           );
         }
         openStartLocalIndex = null;
@@ -531,6 +574,8 @@ bool _notePainterDrawExplicitSecondaryBeams(
           beamThickness: beamThickness,
           sign: sign,
           beamPaint: beamPaint,
+          playheadX: playheadX,
+          metrics: metrics,
         );
         openStartLocalIndex = null;
         break;
@@ -545,6 +590,8 @@ bool _notePainterDrawExplicitSecondaryBeams(
           beamThickness: beamThickness,
           sign: sign,
           beamPaint: beamPaint,
+          playheadX: playheadX,
+          metrics: metrics,
         );
         openStartLocalIndex = null;
         break;
@@ -565,6 +612,8 @@ bool _notePainterDrawExplicitTertiaryBeams(
   required Paint beamPaint,
   required double Function(double x) beamYAt,
   required List<Offset> topEdgePoints,
+  required double playheadX,
+  required NotationMetrics metrics,
 }) {
   var hasExplicitTertiary = false;
   int? openStartLocalIndex;
@@ -595,6 +644,8 @@ bool _notePainterDrawExplicitTertiaryBeams(
             beamThickness: beamThickness,
             sign: sign,
             beamPaint: beamPaint,
+            playheadX: playheadX,
+            metrics: metrics,
           );
         }
         openStartLocalIndex = null;
@@ -610,6 +661,8 @@ bool _notePainterDrawExplicitTertiaryBeams(
           beamThickness: beamThickness,
           sign: sign,
           beamPaint: beamPaint,
+          playheadX: playheadX,
+          metrics: metrics,
         );
         openStartLocalIndex = null;
         break;
@@ -624,6 +677,8 @@ bool _notePainterDrawExplicitTertiaryBeams(
           beamThickness: beamThickness,
           sign: sign,
           beamPaint: beamPaint,
+          playheadX: playheadX,
+          metrics: metrics,
         );
         openStartLocalIndex = null;
         break;
@@ -643,6 +698,8 @@ void _notePainterDrawSecondaryBeamHook(
   required double beamThickness,
   required double sign,
   required Paint beamPaint,
+  required double playheadX,
+  required NotationMetrics metrics,
 }) {
   final hookLength = (lineSpacing * 1.35).clamp(8.0, 20.0);
   final startX = isForward ? stemX : stemX - hookLength;
@@ -657,6 +714,8 @@ void _notePainterDrawSecondaryBeamHook(
     beamThickness: beamThickness,
     sign: sign,
     beamPaint: beamPaint,
+    playheadX: playheadX,
+    metrics: metrics,
   );
 }
 
@@ -669,6 +728,8 @@ void _notePainterDrawParallelBeamSegment(
   required double beamThickness,
   required double sign,
   required Paint beamPaint,
+  required double playheadX,
+  required NotationMetrics metrics,
 }) {
   if ((endX - startX).abs() < 1) {
     return;
@@ -691,6 +752,13 @@ void _notePainterDrawParallelBeamSegment(
     ..lineTo(bottomEnd.dx, bottomEnd.dy)
     ..lineTo(bottomStart.dx, bottomStart.dy)
     ..close();
+  _notePainterApplyLeftFadeToPaint(
+    beamPaint,
+    baseColor: beamPaint.color,
+    bounds: path.getBounds(),
+    playheadX: playheadX,
+    metrics: metrics,
+  );
   canvas.drawPath(path, beamPaint);
 }
 
