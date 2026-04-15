@@ -28,6 +28,9 @@ extension on GameNotePainter {
     }
 
     final spacing = metrics.staffSpace;
+    final beatMs = 60000.0 / score.bpm;
+    final measureMs = score.beatsPerMeasure * beatMs;
+    final leftInvisibleMeasurePx = measureMs * GameNotePainter.notePxPerMs;
     final slurLaneCache =
         GameNotePainter._slurLaneCacheByScore[score] ?? <String, int>{};
     GameNotePainter._slurLaneCacheByScore[score] = slurLaneCache;
@@ -84,7 +87,8 @@ extension on GameNotePainter {
           bassTop: bassTop,
           metrics: metrics,
         );
-        if (projectedEnd.x < -30) {
+        if (projectedEnd.x <
+            -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0)) {
           continue;
         }
         if (projectedStart.x > size.width + metrics.staffSpace * 2.0) {

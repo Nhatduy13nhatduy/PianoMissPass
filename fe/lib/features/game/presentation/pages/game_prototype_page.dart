@@ -224,6 +224,9 @@ class _StaffScrollerPainter extends CustomPainter {
     final currentMs = elapsedMsListenable.value;
     final visuals = _getPrecomputedScoreVisuals(score);
     final metrics = NotationMetrics.fromCanvasSize(size);
+    final beatMs = 60000.0 / score.bpm;
+    final measureMs = score.beatsPerMeasure * beatMs;
+    final leftInvisibleMeasurePx = measureMs * GameNotePainter.notePxPerMs;
     final topPadding = metrics.topPadding;
     final staffHeight = metrics.staffHeight;
     final staffGap = metrics.staffGap;
@@ -410,7 +413,8 @@ class _StaffScrollerPainter extends CustomPainter {
                 barlineOffsetX: measureLineOffsetX,
               )
             : x;
-        if (restX < 10 || restX > size.width - 10) {
+        final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
+        if (restX < leftCullX || restX > size.width - 10) {
           continue;
         }
 
@@ -445,7 +449,10 @@ class _StaffScrollerPainter extends CustomPainter {
             restY - fontSize * 0.55 + baselineNudge,
           ),
           glyph,
-          color: score.colors.rest.glyph,
+          color: _withOpacity(
+            score.colors.rest.glyph,
+            _leftFadeOpacityAtX(restX, playheadX, metrics),
+          ),
           fontSize: fontSize,
           fontWeight: FontWeight.w400,
           maxWidth: fontSize * 1.5,
@@ -1181,6 +1188,19 @@ class _StaffScrollerPainter extends CustomPainter {
   Color _withOpacity(Color base, double opacity) {
     final alpha = (255 * opacity.clamp(0.0, 1.0)).round();
     return base.withAlpha(alpha);
+  }
+
+  double _leftFadeOpacityAtX(
+    double x,
+    double playheadX,
+    NotationMetrics metrics,
+  ) {
+    if (x >= playheadX) {
+      return 1.0;
+    }
+    final fadeDistance = ((metrics.staffSpace * 6.0)).clamp(28.0, 160.0);
+    final progress = ((playheadX - x) / fadeDistance).clamp(0.0, 1.0);
+    return 1.0 - progress;
   }
 }
 

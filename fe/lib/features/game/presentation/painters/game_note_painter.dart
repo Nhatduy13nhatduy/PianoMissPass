@@ -79,16 +79,46 @@ class GameNotePainter {
     final lineSpacing = metrics.staffSpace;
     final precomputedScore = _getPrecomputedScoreRenderData(score);
     final precomputedNotes = precomputedScore.notes;
+    final maxBeamLookbackMs = precomputedScore
+        .beamAnchorAdjustedHitMsByScoreIndex
+        .asMap()
+        .entries
+        .fold<int>(0, (currentMax, entry) {
+          final anchorMs = entry.value;
+          if (anchorMs == null) {
+            return currentMax;
+          }
+          final noteMs = precomputedNotes[entry.key].adjustedHitMs;
+          final delta = anchorMs - noteMs;
+          return delta > currentMax ? delta : currentMax;
+        });
+    final beamLastAdjustedHitMsByScoreIndex = <int, int>{};
+    for (final group in precomputedScore.beamGroupsByScoreIndex) {
+      if (group.isEmpty) {
+        continue;
+      }
+      final lastAdjustedHitMs = precomputedNotes[group.last].adjustedHitMs;
+      for (final scoreIndex in group) {
+        beamLastAdjustedHitMsByScoreIndex[scoreIndex] = lastAdjustedHitMs;
+      }
+    }
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
+    final leftInvisibleMeasureMs = measureMs;
+    final leftInvisibleMeasurePx = leftInvisibleMeasureMs * notePxPerMs;
     final preRenderRightMs = measureMs * _preRenderMeasuresRight;
     final preRenderRightPx = measureMs * notePxPerMs * _preRenderMeasuresRight;
     final effectivePreviewWindowMs = math.max(
       previewWindowMs,
       preRenderRightMs,
     );
-    final windowStartMs = (currentMs - cleanupWindowMs - _renderWindowPaddingMs)
-        .floor();
+    final effectiveLeftCleanupMs = cleanupWindowMs + leftInvisibleMeasureMs;
+    final windowStartMs =
+        (currentMs -
+                effectiveLeftCleanupMs -
+                _renderWindowPaddingMs -
+                maxBeamLookbackMs)
+            .floor();
     final windowEndMs =
         (currentMs + effectivePreviewWindowMs + _renderWindowPaddingMs).ceil();
     final startIndex = _lowerBoundAdjustedHitMs(
@@ -107,7 +137,7 @@ class GameNotePainter {
           adjustedHitMs;
       final anchorDelta = anchorTime - currentMs;
       if (anchorDelta > effectivePreviewWindowMs ||
-          anchorDelta < -cleanupWindowMs) {
+          anchorDelta < -effectiveLeftCleanupMs) {
         continue;
       }
 
@@ -117,7 +147,14 @@ class GameNotePainter {
           ? _NoteJudge.miss
           : _NoteJudge.pending;
       final x = playheadX + (adjustedHitMs - currentMs) * notePxPerMs;
-      if (x < -30 || x > size.width + preRenderRightPx) {
+      final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
+      final beamLastAdjustedHitMs = beamLastAdjustedHitMsByScoreIndex[i];
+      final beamLastX = beamLastAdjustedHitMs == null
+          ? null
+          : playheadX + (beamLastAdjustedHitMs - currentMs) * notePxPerMs;
+      final keepForBeam = beamLastX != null && beamLastX >= leftCullX;
+      if (((x < leftCullX) && !keepForBeam) ||
+          x > size.width + preRenderRightPx) {
         continue;
       }
 
@@ -2292,4 +2329,27 @@ void _notePainterApplyLeftFadeToPaint(
     ],
     stops: <double>[0.0, fadeStartStop, playheadStop, 1.0],
   ).createShader(bounds);
+}
+
+void _notePainterApplyTrailingFadeToPaint(
+  Paint paint, {
+  required Color baseColor,
+  required Rect bounds,
+  required double playheadX,
+  required NotationMetrics metrics,
+  double fadeDistanceMultiplier = 1.0,
+}) {
+  if (bounds.isEmpty) {
+    return;
+  }
+
+  final triggerX = bounds.right;
+  final opacity = _notePainterLeftFadeOpacityAtX(
+    triggerX,
+    playheadX,
+    metrics,
+    fadeDistanceMultiplier: fadeDistanceMultiplier,
+  );
+  paint.shader = null;
+  paint.color = _notePainterApplyOpacity(baseColor, opacity);
 }

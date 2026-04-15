@@ -370,7 +370,7 @@ void _notePainterDrawBeamGroup(
       ..color = stemColor
       ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
       ..strokeCap = StrokeCap.butt;
-    _notePainterApplyLeftFadeToPaint(
+    _notePainterApplyTrailingFadeToPaint(
       stemPaint,
       baseColor: stemColor,
       bounds: Rect.fromLTRB(
@@ -401,7 +401,7 @@ void _notePainterDrawBeamGroup(
     beamPath.lineTo(bottomEdgePoints[i].dx, bottomEdgePoints[i].dy);
   }
   beamPath.close();
-  _notePainterApplyLeftFadeToPaint(
+  _notePainterApplyTrailingFadeToPaint(
     beamPaint,
     baseColor: resolvedBeamColor,
     bounds: beamPath.getBounds(),
@@ -455,7 +455,7 @@ void _notePainterDrawBeamGroup(
       secondPath.lineTo(secondBottom[i].dx, secondBottom[i].dy);
     }
     secondPath.close();
-    _notePainterApplyLeftFadeToPaint(
+    _notePainterApplyTrailingFadeToPaint(
       beamPaint,
       baseColor: resolvedBeamColor,
       bounds: secondPath.getBounds(),
@@ -506,7 +506,7 @@ void _notePainterDrawBeamGroup(
       thirdPath.lineTo(thirdBottom[i].dx, thirdBottom[i].dy);
     }
     thirdPath.close();
-    _notePainterApplyLeftFadeToPaint(
+    _notePainterApplyTrailingFadeToPaint(
       beamPaint,
       baseColor: resolvedBeamColor,
       bounds: thirdPath.getBounds(),
@@ -756,7 +756,7 @@ void _notePainterDrawParallelBeamSegment(
     ..lineTo(bottomEnd.dx, bottomEnd.dy)
     ..lineTo(bottomStart.dx, bottomStart.dy)
     ..close();
-  _notePainterApplyLeftFadeToPaint(
+  _notePainterApplyTrailingFadeToPaint(
     beamPaint,
     baseColor: beamPaint.color,
     bounds: path.getBounds(),
