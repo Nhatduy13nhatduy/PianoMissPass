@@ -557,6 +557,7 @@ class GameNotePainter {
     _drawSlurs(
       canvas,
       score: score,
+      precomputedScore: precomputedScore,
       visible: visible,
       visibleIndexByScoreIndex: visibleIndexByScoreIndex,
       chordLayout: chordLayout,
@@ -566,6 +567,11 @@ class GameNotePainter {
       staccatoAnchorByVisibleIndex: staccatoAnchorByVisibleIndex,
       fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
       beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
+      size: size,
+      currentMs: currentMs,
+      playheadX: playheadX,
+      trebleTop: trebleTop,
+      bassTop: bassTop,
       metrics: metrics,
     );
 
@@ -1364,6 +1370,7 @@ class GameNotePainter {
   void _drawSlurs(
     Canvas canvas, {
     required ScoreData score,
+    required _PrecomputedScoreRenderData precomputedScore,
     required List<_RenderNote> visible,
     required Map<int, int> visibleIndexByScoreIndex,
     required _ChordLayout chordLayout,
@@ -1373,6 +1380,11 @@ class GameNotePainter {
     required Map<int, Offset> staccatoAnchorByVisibleIndex,
     required Map<int, Offset> fingeringAnchorByVisibleIndex,
     required Map<int, double> beamEdgeYByVisibleIndex,
+    required Size size,
+    required int currentMs,
+    required double playheadX,
+    required double trebleTop,
+    required double bassTop,
     required NotationMetrics metrics,
   }) {
     if (score.slurs.isEmpty || visible.isEmpty) {
@@ -1490,6 +1502,10 @@ class GameNotePainter {
       if (staffComparison != 0) {
         return staffComparison;
       }
+      final widthComparison = (a.maxX - a.minX).compareTo(b.maxX - b.minX);
+      if (widthComparison != 0) {
+        return widthComparison;
+      }
       final xComparison = a.minX.compareTo(b.minX);
       if (xComparison != 0) {
         return xComparison;
@@ -1497,25 +1513,35 @@ class GameNotePainter {
       return a.maxX.compareTo(b.maxX);
     });
 
-    final occupiedMaxXByLaneKey = <String, List<double>>{};
+    final occupiedIntervalsByLaneKey =
+        <String, List<List<({double minX, double maxX})>>>{};
     for (final layout in pendingLayouts) {
       final laneKey =
           '${layout.isUpperStaff ? 'upper' : 'lower'}:${layout.isAbove ? 'above' : 'below'}';
-      final occupiedLanes = occupiedMaxXByLaneKey.putIfAbsent(
+      final occupiedLanes = occupiedIntervalsByLaneKey.putIfAbsent(
         laneKey,
-        () => <double>[],
+        () => <List<({double minX, double maxX})>>[],
       );
       final paddedMinX = layout.minX - metrics.slurStackOverlapPadding;
       final paddedMaxX = layout.maxX + metrics.slurStackOverlapPadding;
 
       var lane = 0;
-      while (lane < occupiedLanes.length && paddedMinX <= occupiedLanes[lane]) {
+      while (lane < occupiedLanes.length) {
+        final overlapsExisting = occupiedLanes[lane].any(
+          (interval) =>
+              paddedMinX <= interval.maxX && paddedMaxX >= interval.minX,
+        );
+        if (!overlapsExisting) {
+          break;
+        }
         lane++;
       }
       if (lane == occupiedLanes.length) {
-        occupiedLanes.add(paddedMaxX);
+        occupiedLanes.add(<({double minX, double maxX})>[
+          (minX: paddedMinX, maxX: paddedMaxX),
+        ]);
       } else {
-        occupiedLanes[lane] = paddedMaxX;
+        occupiedLanes[lane].add((minX: paddedMinX, maxX: paddedMaxX));
       }
 
       final direction = layout.isAbove ? -1.0 : 1.0;
