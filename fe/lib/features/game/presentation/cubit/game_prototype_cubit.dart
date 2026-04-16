@@ -32,9 +32,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const int _midiInputAudioChannel = 1;
   static const int _songPlaybackVelocity = 92;
   static const int _midiInputVelocityFallback = 96;
-  static const int _songPlaybackPollIntervalMs = 12;
   static const int _songPlaybackMinimumHoldMs = 90;
-  static const int _songAudioLatencyCompensationMs = 260;
+  static const int _songAudioLatencyCompensationMs = 160;
   static const int _synthProgramPiano = 0;
   static const int _synthVolume = 110;
   static const int _synthPanCenter = 64;
@@ -46,10 +45,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   StreamSubscription<MidiPacket>? _midiSub;
   StreamSubscription<String>? _midiSetupSub;
   MidiDevice? _connectedInputDevice;
-  Timer? _songPlaybackTimer;
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
   final ValueNotifier<int> _elapsedMsNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<Set<int>> _passedNoteIndexesNotifier =
+      ValueNotifier<Set<int>>(const <int>{});
+  final ValueNotifier<Set<int>> _missedNoteIndexesNotifier =
+      ValueNotifier<Set<int>>(const <int>{});
   final List<_ScheduledMidiEvent> _scheduledSongEvents =
       <_ScheduledMidiEvent>[];
   final Map<int, int> _activeSongPlaybackTokenByMidi = <int, int>{};
@@ -73,9 +75,11 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..reset();
     _baseElapsedMs = -initialLeadInMs;
     _elapsedMsNotifier.value = _baseElapsedMs;
+    _passedNoteIndexesNotifier.value = const <int>{};
+    _missedNoteIndexesNotifier.value = const <int>{};
     _nextMissScanIndex = 0;
 
-    emit(
+    _emitState(
       GamePrototypeState(
         isLoading: true,
         playbackSpeed: playbackSpeed,
@@ -92,10 +96,23 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   Future<void> retry() => initialize();
 
+  void _emitState(GamePrototypeState nextState) {
+    if (nextState == state) {
+      return;
+    }
+    if (_passedNoteIndexesNotifier.value != nextState.passedNoteIndexes) {
+      _passedNoteIndexesNotifier.value = nextState.passedNoteIndexes;
+    }
+    if (_missedNoteIndexesNotifier.value != nextState.missedNoteIndexes) {
+      _missedNoteIndexesNotifier.value = nextState.missedNoteIndexes;
+    }
+    emit(nextState);
+  }
+
   Future<void> _initializeSynth() async {
     if (_isSynthReady || _isSynthLoading) {
       if (!isClosed) {
-        emit(state.copyWith(isSoundfontReady: _isSynthReady));
+        _emitState(state.copyWith(isSoundfontReady: _isSynthReady));
       }
       return;
     }
@@ -124,7 +141,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     } finally {
       _isSynthLoading = false;
       if (!isClosed) {
-        emit(state.copyWith(isSoundfontReady: _isSynthReady));
+        _emitState(state.copyWith(isSoundfontReady: _isSynthReady));
       }
     }
   }
@@ -309,7 +326,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
     final updatedPassed = Set<int>.from(state.passedNoteIndexes)
       ..add(bestIndex);
-    emit(state.copyWith(passedNoteIndexes: updatedPassed));
+    _emitState(state.copyWith(passedNoteIndexes: updatedPassed));
   }
 
   Future<void> _loadScore() async {
@@ -331,7 +348,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         return;
       }
 
-      emit(
+      _emitState(
         state.copyWith(
           isLoading: false,
           clearErrorMessage: true,
@@ -350,7 +367,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         return;
       }
 
-      emit(
+      _emitState(
         state.copyWith(
           isLoading: false,
           errorMessage: 'Khong tai duoc bai hat tu asset: $assetPath\n$error',
@@ -380,7 +397,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         return;
       }
 
-      emit(
+      _emitState(
         state.copyWith(
           isLoading: false,
           clearErrorMessage: true,
@@ -399,7 +416,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         return;
       }
 
-      emit(
+      _emitState(
         state.copyWith(
           isLoading: false,
           errorMessage: error.toString(),
@@ -419,7 +436,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..reset()
       ..start();
     _ticker.start();
-    emit(state.copyWith(isPlaying: true));
+    _emitState(state.copyWith(isPlaying: true));
     _restartSongPlaybackFromCurrentPosition();
   }
 
@@ -438,7 +455,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _ticker.stop();
     _stopSongPlaybackScheduler();
     unawaited(_silenceSongPlaybackNotes());
-    emit(state.copyWith(isPlaying: false));
+    _emitState(state.copyWith(isPlaying: false));
   }
 
   void pause() => _pause();
@@ -456,7 +473,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    emit(state.copyWith(isSongAudioEnabled: value));
+    _emitState(state.copyWith(isSongAudioEnabled: value));
     if (!value) {
       _stopSongPlaybackScheduler();
       unawaited(_silenceSongPlaybackNotes());
@@ -482,7 +499,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         ..start();
     }
 
-    emit(state.copyWith(playbackSpeed: clamped));
+    _emitState(state.copyWith(playbackSpeed: clamped));
     if (state.isPlaying && state.isSongAudioEnabled) {
       _restartSongPlaybackFromCurrentPosition();
     }
@@ -495,7 +512,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final normalized = ((value / step).round() * step)
         .clamp(minTimeline, maxTimeline)
         .toInt();
-    emit(state.copyWith(timelineMsPerDurationDivision: normalized));
+    _emitState(state.copyWith(timelineMsPerDurationDivision: normalized));
   }
 
   void _onTick(Duration _) {
@@ -504,6 +521,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     final current = currentMs;
+    if (state.isSongAudioEnabled) {
+      _pumpSongPlayback(current);
+    }
     final updatedMisses = _updateMissesIncremental(current);
 
     if (current >= maxDurationMs) {
@@ -515,13 +535,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       if (updatedMisses == null) {
         return;
       }
-      emit(state.copyWith(missedNoteIndexes: updatedMisses));
+      _emitState(state.copyWith(missedNoteIndexes: updatedMisses));
       return;
     }
 
     _elapsedMsNotifier.value = current;
     if (updatedMisses != null) {
-      emit(state.copyWith(missedNoteIndexes: updatedMisses));
+      _emitState(state.copyWith(missedNoteIndexes: updatedMisses));
     }
   }
 
@@ -596,6 +616,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   ValueListenable<int> get elapsedMsListenable => _elapsedMsNotifier;
+  ValueListenable<Set<int>> get passedNoteIndexesListenable =>
+      _passedNoteIndexesNotifier;
+  ValueListenable<Set<int>> get missedNoteIndexesListenable =>
+      _missedNoteIndexesNotifier;
 
   int get maxDurationMs {
     return _maxDurationMs;
@@ -657,8 +681,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   int _songPlaybackStartMs(MusicNote note) {
-    final adjusted = note.hitTimeMs - _songAudioLatencyCompensationMs;
-    return adjusted < 0 ? 0 : adjusted;
+    return note.hitTimeMs - _songAudioLatencyCompensationMs;
   }
 
   int _songPlaybackEndMs(MusicNote note) {
@@ -682,15 +705,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final current = currentMs;
     _restoreActiveSongPlaybackNotes(current);
     _nextSongPlaybackEventIndex = _upperBoundSongPlaybackEventTime(current);
-    _songPlaybackTimer = Timer.periodic(
-      const Duration(milliseconds: _songPlaybackPollIntervalMs),
-      (_) => _pumpSongPlayback(),
-    );
+    _pumpSongPlayback(current);
   }
 
   void _restoreActiveSongPlaybackNotes(int currentMs) {
     final score = state.score;
-    if (score == null || !_isSynthReady || currentMs < 0) {
+    if (score == null || !_isSynthReady) {
       return;
     }
 
@@ -715,7 +735,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
   }
 
-  void _pumpSongPlayback() {
+  void _pumpSongPlayback([int? currentOverrideMs]) {
     if (!state.isPlaying ||
         !state.isSongAudioEnabled ||
         state.score == null ||
@@ -723,7 +743,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    final nowMs = currentMs;
+    final nowMs = currentOverrideMs ?? currentMs;
     while (_nextSongPlaybackEventIndex < _scheduledSongEvents.length) {
       final event = _scheduledSongEvents[_nextSongPlaybackEventIndex];
       if (event.timeMs > nowMs) {
@@ -795,8 +815,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   void _stopSongPlaybackScheduler() {
-    _songPlaybackTimer?.cancel();
-    _songPlaybackTimer = null;
+    // Audio events are advanced from the frame ticker, so there is no
+    // separate timer to tear down here.
   }
 
   Future<void> _silenceSongPlaybackNotes() async {
@@ -839,6 +859,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..stop()
       ..reset();
     _elapsedMsNotifier.dispose();
+    _passedNoteIndexesNotifier.dispose();
+    _missedNoteIndexesNotifier.dispose();
     return super.close();
   }
 }

@@ -85,9 +85,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               previous.isSoundfontReady != current.isSoundfontReady ||
               previous.playbackSpeed != current.playbackSpeed ||
               previous.timelineMsPerDurationDivision !=
-                  current.timelineMsPerDurationDivision ||
-              previous.passedNoteIndexes != current.passedNoteIndexes ||
-              previous.missedNoteIndexes != current.missedNoteIndexes,
+                  current.timelineMsPerDurationDivision,
           builder: (context, state) {
             if (state.isLoading) {
               return const Center(child: CircularProgressIndicator());
@@ -111,8 +109,10 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   painter: _StaffScrollerPainter(
                     score: score,
                     elapsedMsListenable: cubit.elapsedMsListenable,
-                    passedNoteIndexes: state.passedNoteIndexes,
-                    missedNoteIndexes: state.missedNoteIndexes,
+                    passedNoteIndexesListenable:
+                        cubit.passedNoteIndexesListenable,
+                    missedNoteIndexesListenable:
+                        cubit.missedNoteIndexesListenable,
                     showKeyboard: _showKeyboard,
                     staffHeightScale: _staffHeightScale,
                     timelineMsPerDurationDivision:
@@ -533,17 +533,23 @@ class _StaffScrollerPainter extends CustomPainter {
   _StaffScrollerPainter({
     required this.score,
     required this.elapsedMsListenable,
-    required this.passedNoteIndexes,
-    required this.missedNoteIndexes,
+    required this.passedNoteIndexesListenable,
+    required this.missedNoteIndexesListenable,
     required this.showKeyboard,
     required this.staffHeightScale,
     required this.timelineMsPerDurationDivision,
-  }) : super(repaint: elapsedMsListenable);
+  }) : super(
+         repaint: Listenable.merge([
+           elapsedMsListenable,
+           passedNoteIndexesListenable,
+           missedNoteIndexesListenable,
+         ]),
+       );
 
   final ScoreData score;
   final ValueListenable<int> elapsedMsListenable;
-  final Set<int> passedNoteIndexes;
-  final Set<int> missedNoteIndexes;
+  final ValueListenable<Set<int>> passedNoteIndexesListenable;
+  final ValueListenable<Set<int>> missedNoteIndexesListenable;
   final bool showKeyboard;
   final double staffHeightScale;
   final int timelineMsPerDurationDivision;
@@ -556,6 +562,8 @@ class _StaffScrollerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final currentMs = elapsedMsListenable.value;
+    final passedNoteIndexes = passedNoteIndexesListenable.value;
+    final missedNoteIndexes = missedNoteIndexesListenable.value;
     final visuals = _getPrecomputedScoreVisuals(score);
     final baseMetrics = NotationMetrics.fromCanvasSize(size);
     final notePxPerMs = NoteTiming.notePxPerMsForScore(
@@ -888,8 +896,9 @@ class _StaffScrollerPainter extends CustomPainter {
   bool shouldRepaint(covariant _StaffScrollerPainter oldDelegate) {
     return oldDelegate.score != score ||
         oldDelegate.elapsedMsListenable != elapsedMsListenable ||
-        oldDelegate.passedNoteIndexes != passedNoteIndexes ||
-        oldDelegate.missedNoteIndexes != missedNoteIndexes ||
+        oldDelegate.passedNoteIndexesListenable != passedNoteIndexesListenable ||
+        oldDelegate.missedNoteIndexesListenable !=
+            missedNoteIndexesListenable ||
         oldDelegate.showKeyboard != showKeyboard ||
         oldDelegate.staffHeightScale != staffHeightScale ||
         oldDelegate.timelineMsPerDurationDivision !=
