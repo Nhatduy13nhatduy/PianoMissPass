@@ -1683,7 +1683,7 @@ class GameNotePainter {
     final ledgerPaint = Paint()
       ..color = color
       ..strokeWidth = math.max(spacing * 0.05, 1.6);
-    final halfLength = math.max(spacing * 1.12, 9.4);
+    final halfLength = math.max(spacing * 0.9, 9.4);
     final leftHalfLength = durationType == _DurationType.whole
         ? halfLength * 1.49
         : halfLength;
@@ -1936,7 +1936,7 @@ class GameNotePainter {
       ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
-    final stemDirectionNudge = spacing * 0.6;
+    final stemDirectionNudge = spacing * 0.72;
 
     for (var i = 0; i < flagCount; i++) {
       final yOffset = i * (spacing * 0.72);

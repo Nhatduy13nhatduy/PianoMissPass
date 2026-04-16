@@ -30,10 +30,14 @@ class NotationMetrics {
     final safeScale = staffHeightScale.clamp(0.5, 2.0).toDouble();
     var staffHeight = (resolvedStaffRegionHeight / 4.0) * safeScale;
     final maxStaffHeight = resolvedStaffRegionHeight / 2.0;
-    staffHeight = staffHeight.clamp(28.0, maxStaffHeight > 28 ? maxStaffHeight : 28.0)
+    staffHeight = staffHeight
+        .clamp(28.0, maxStaffHeight > 28 ? maxStaffHeight : 28.0)
         .toDouble();
     final remainingVerticalSpace =
-        (resolvedStaffRegionHeight - (staffHeight * 2.0)).clamp(0.0, double.infinity);
+        (resolvedStaffRegionHeight - (staffHeight * 2.0)).clamp(
+          0.0,
+          double.infinity,
+        );
     final topPadding = remainingVerticalSpace / 4.0;
     final staffGap = remainingVerticalSpace / 2.0;
 
@@ -92,13 +96,10 @@ class NotationMetrics {
       _scaledClamp(staffSpace * 0.32, 2.4, 6.4);
   double get slurChordVerticalInsetExtra =>
       _scaledClamp(staffSpace * 0.28, 2.0, 5.2);
-  double get slurNoteHeadClearance =>
-      _scaledClamp(staffSpace * 0.34, 2.8, 6.2);
+  double get slurNoteHeadClearance => _scaledClamp(staffSpace * 0.34, 2.8, 6.2);
   double get slurStemSideNudgeX => _scaledClamp(staffSpace * 0.12, 1.0, 2.4);
-  double get slurStemClearanceY =>
-      _scaledClamp(staffSpace * 0.34, 2.8, 6.0);
-  double get slurBeamClearanceY =>
-      _scaledClamp(staffSpace * 0.42, 3.4, 7.2);
+  double get slurStemClearanceY => _scaledClamp(staffSpace * 0.34, 2.8, 6.0);
+  double get slurBeamClearanceY => _scaledClamp(staffSpace * 0.42, 3.4, 7.2);
   double get slurFingeringClearanceY =>
       _scaledClamp(staffSpace * 0.52, 4.0, 8.8);
   double get slurAccidentalClearanceX =>
@@ -116,18 +117,15 @@ class NotationMetrics {
       _scaledClamp(staffSpace * 0.32, 2.4, 5.6);
   double get slurAnchorStaccatoClearanceY =>
       _scaledClamp(staffSpace * 0.38, 2.8, 6.4);
-  double get slurBodyNoteClearance =>
-      _scaledClamp(staffSpace * 0.5, 3.6, 8.0);
+  double get slurBodyNoteClearance => _scaledClamp(staffSpace * 0.5, 3.6, 8.0);
   double get slurBodyNoteArcLiftWeight => 1.0;
   double get slurBodyNoteArcLiftMax =>
       _scaledClamp(staffSpace * 0.75, 5.0, 10.0);
   double get slurNoteCollisionClearance =>
       _scaledClamp(staffSpace * 0.42, 3.0, 7.0);
   double get slurControlInsetRatio => 0.28;
-  double get slurControlInsetMin =>
-      _scaledClamp(staffSpace * 1.55, 10.0, 20.0);
-  double get slurControlInsetMax =>
-      _scaledClamp(staffSpace * 4.6, 22.0, 44.0);
+  double get slurControlInsetMin => _scaledClamp(staffSpace * 1.55, 10.0, 20.0);
+  double get slurControlInsetMax => _scaledClamp(staffSpace * 4.6, 22.0, 44.0);
   double get slurArcHeightRatio => 0.085;
   double get slurArcHeightMin => _scaledClamp(staffSpace * 1.18, 8.0, 16.0);
   double get slurArcHeightMax => _scaledClamp(staffSpace * 2.7, 16.0, 30.0);
@@ -149,17 +147,16 @@ class NotationMetrics {
   double get trebleMainClefX => staffLeftInset + staffSpace * 0.68;
   double get bassMainClefX => staffLeftInset + staffSpace * 0.82;
   double get clefBaselineOffsetY => staffSpace * 0.35;
-  double get clefFontSize => _scaledClamp(staffSpace * 4.8, 58.0, 84.0);
+  double get clefFontSize => math.max(staffSpace * 4.65, 62.0 * visualScale);
   double get movingClefOffsetX => staffSpace * 0.35;
 
   double get keySignatureStartX => staffLeftInset + staffSpace * 4.55;
-  double get keyToTimeSignatureGap =>
-      _scaledClamp(staffSpace * 0.2, 4.0, 10.0);
+  double get keyToTimeSignatureGap => _scaledClamp(staffSpace * 0.2, 4.0, 10.0);
   double get timeSignatureToPlayheadGap =>
       _scaledClamp(staffSpace * 1.15, 12.0, 22.0);
   double get measureLineOffsetX => -staffSpace * 1.33;
   double get keySignatureGlyphFontSize =>
-      _scaledClamp(staffSpace * 3.9, 28.0, 54.0);
+      math.max(staffSpace * 3.9, 28.0 * visualScale);
   double get keySignatureBaselineNudgeSharp => staffSpace * 0.05;
   double get keySignatureBaselineNudgeFlat => staffSpace * 0.18;
   double get keySignatureSpacingX =>
@@ -168,28 +165,26 @@ class NotationMetrics {
       _scaledClamp(staffSpace * 1.95, 12.0, 26.0);
 
   double get timeSignatureTargetDigitHeight =>
-      _scaledClamp(staffHeight * 0.55, 24.0, 48.0);
+      math.max(staffHeight * 0.55, 24.0 * visualScale);
   double get timeSignatureVisualScale => 1.85;
   double get timeSignatureMinFontSize => 44.0 * visualScale;
-  double get timeSignatureMaxFontSize => 110.0 * visualScale;
-  double get timeSignatureTopCenterOffset =>
-      _scaledClamp(staffSpace * 1.0, 5.0, 28.0);
-  double get timeSignatureBottomCenterOffset =>
-      _scaledClamp(staffSpace * 3.0, 14.0, 64.0);
+  double get timeSignatureMaxFontSize =>
+      math.max(110.0 * visualScale, timeSignatureMinFontSize);
+  double get timeSignatureTopCenterOffset => staffSpace * 1.0;
+  double get timeSignatureBottomCenterOffset => staffSpace * 4.35;
   double get timeSignatureMaxWidthPadding =>
       _scaledClamp(staffSpace * 0.42, 4.0, 10.0);
 
   double get playheadStrokeWidth => _scaledClamp(staffSpace * 0.15, 1.8, 2.6);
   double get measureLineStrokeWidth =>
       _scaledClamp(staffSpace * 0.09, 1.0, 1.6);
-  double get symbolLabelFontSize =>
-      _scaledClamp(staffSpace * 0.93, 12.0, 16.0);
+  double get symbolLabelFontSize => _scaledClamp(staffSpace * 0.93, 12.0, 16.0);
   double get symbolLabelTopOffset => staffSpace * 1.05;
   double get symbolLabelOffsetX => staffSpace * 0.27;
 
   double get noteInkColorFontScale => staffSpace;
-  double get restWholeHalfScaleFactor => 2.65;
-  double get restOtherScaleFactor => 1.72;
+  double get restWholeHalfScaleFactor => 4.2;
+  double get restOtherScaleFactor => 2.8;
   double get restWholeHalfMinFontSize => 50.0 * visualScale;
   double get restWholeHalfMaxFontSize => 124.0 * visualScale;
   double get restOtherMinFontSize => 32.0 * visualScale;

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -319,10 +321,7 @@ class _GameLayoutControls extends StatelessWidget {
                     onTap: onDecreaseTimeline,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '$timelineMsPerDurationDivision',
-                    style: labelStyle,
-                  ),
+                  Text('$timelineMsPerDurationDivision', style: labelStyle),
                   const SizedBox(width: 8),
                   _MiniIconButton(
                     icon: Icons.add_rounded,
@@ -1174,7 +1173,8 @@ class _StaffScrollerPainter extends CustomPainter {
       'quarter' => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
       '8th' => (lineSpacing * 2.55).clamp(20.0 * scale, 40.0 * scale),
       '16th' => (lineSpacing * 2.8).clamp(22.0 * scale, 43.0 * scale),
-      '32th' || '32nd' => (lineSpacing * 3.05).clamp(24.0 * scale, 46.0 * scale),
+      '32th' ||
+      '32nd' => (lineSpacing * 3.05).clamp(24.0 * scale, 46.0 * scale),
       _ => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
     };
   }
@@ -1417,15 +1417,22 @@ class _StaffScrollerPainter extends CustomPainter {
             .clamp(
               metrics.timeSignatureMinFontSize /
                   metrics.timeSignatureVisualScale,
-              metrics.timeSignatureMaxFontSize /
-                  metrics.timeSignatureVisualScale,
+              math.max(
+                metrics.timeSignatureMaxFontSize /
+                    metrics.timeSignatureVisualScale,
+                metrics.timeSignatureMinFontSize /
+                    metrics.timeSignatureVisualScale,
+              ),
             )
             .toDouble() *
         metrics.timeSignatureVisualScale;
     final effectiveFontSize = fontSize
         .clamp(
           metrics.timeSignatureMinFontSize,
-          metrics.timeSignatureMaxFontSize,
+          math.max(
+            metrics.timeSignatureMaxFontSize,
+            metrics.timeSignatureMinFontSize,
+          ),
         )
         .toDouble();
 
@@ -1443,10 +1450,20 @@ class _StaffScrollerPainter extends CustomPainter {
     final centerX = startX + blockWidth / 2;
     final topX = centerX - topWidth / 2;
     final bottomX = centerX - bottomWidth / 2;
-    final trebleTopY =
-        trebleTop + metrics.timeSignatureTopCenterOffset - topHeight / 2;
-    final trebleBottomY =
-        trebleTop + metrics.timeSignatureBottomCenterOffset - bottomHeight / 2;
+    final trebleTopCenterY = _yForStaffStep(
+      36,
+      isTreble: true,
+      staffTop: trebleTop,
+      spacing: metrics.staffSpace,
+    );
+    final trebleBottomCenterY = _yForStaffStep(
+      32,
+      isTreble: true,
+      staffTop: trebleTop,
+      spacing: metrics.staffSpace,
+    );
+    final trebleTopY = trebleTopCenterY - topHeight / 2;
+    final trebleBottomY = trebleBottomCenterY - bottomHeight / 2;
 
     _textPainter.paintText(
       canvas,
@@ -1477,10 +1494,20 @@ class _StaffScrollerPainter extends CustomPainter {
       return blockRightX;
     }
 
-    final bassTopY =
-        bassTop + metrics.timeSignatureTopCenterOffset - topHeight / 2;
-    final bassBottomY =
-        bassTop + metrics.timeSignatureBottomCenterOffset - bottomHeight / 2;
+    final bassTopCenterY = _yForStaffStep(
+      24,
+      isTreble: false,
+      staffTop: bassTop,
+      spacing: metrics.staffSpace,
+    );
+    final bassBottomCenterY = _yForStaffStep(
+      20,
+      isTreble: false,
+      staffTop: bassTop,
+      spacing: metrics.staffSpace,
+    );
+    final bassTopY = bassTopCenterY - topHeight / 2;
+    final bassBottomY = bassBottomCenterY - bottomHeight / 2;
     _textPainter.paintText(
       canvas,
       Offset(topX, bassTopY),
