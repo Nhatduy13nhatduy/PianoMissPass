@@ -81,6 +81,8 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               previous.errorMessage != current.errorMessage ||
               previous.score != current.score ||
               previous.isPlaying != current.isPlaying ||
+              previous.isSongAudioEnabled != current.isSongAudioEnabled ||
+              previous.isSoundfontReady != current.isSoundfontReady ||
               previous.playbackSpeed != current.playbackSpeed ||
               previous.timelineMsPerDurationDivision !=
                   current.timelineMsPerDurationDivision ||
@@ -152,6 +154,8 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   child: _GameLayoutControls(
                     showKeyboard: _showKeyboard,
                     staffHeightScale: _staffHeightScale,
+                    isSongAudioEnabled: state.isSongAudioEnabled,
+                    isSoundfontReady: state.isSoundfontReady,
                     playbackSpeed: state.playbackSpeed,
                     timelineMsPerDurationDivision:
                         state.timelineMsPerDurationDivision,
@@ -160,6 +164,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                         _showKeyboard = value;
                       });
                     },
+                    onToggleSongAudio: cubit.setSongAudioEnabled,
                     onDecreaseScale: () {
                       setState(() {
                         _staffHeightScale = (_staffHeightScale - 0.1).clamp(
@@ -209,9 +214,12 @@ class _GameLayoutControls extends StatelessWidget {
   const _GameLayoutControls({
     required this.showKeyboard,
     required this.staffHeightScale,
+    required this.isSongAudioEnabled,
+    required this.isSoundfontReady,
     required this.playbackSpeed,
     required this.timelineMsPerDurationDivision,
     required this.onToggleKeyboard,
+    required this.onToggleSongAudio,
     required this.onDecreaseScale,
     required this.onIncreaseScale,
     required this.onDecreaseSpeed,
@@ -222,9 +230,12 @@ class _GameLayoutControls extends StatelessWidget {
 
   final bool showKeyboard;
   final double staffHeightScale;
+  final bool isSongAudioEnabled;
+  final bool isSoundfontReady;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final ValueChanged<bool> onToggleKeyboard;
+  final ValueChanged<bool> onToggleSongAudio;
   final VoidCallback onDecreaseScale;
   final VoidCallback onIncreaseScale;
   final VoidCallback onDecreaseSpeed;
@@ -268,6 +279,22 @@ class _GameLayoutControls extends StatelessWidget {
                   Switch(
                     value: showKeyboard,
                     onChanged: onToggleKeyboard,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isSoundfontReady ? 'Song audio' : 'Song audio...',
+                    style: labelStyle,
+                  ),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: isSongAudioEnabled,
+                    onChanged: isSoundfontReady ? onToggleSongAudio : null,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ],

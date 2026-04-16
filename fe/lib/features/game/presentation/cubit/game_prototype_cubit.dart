@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
+import 'package:flutter_midi_engine/flutter_midi_engine.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
@@ -19,29 +21,53 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   static const String sampleMxlUrl =
       'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776261396/chopin-prelude-no-4-in-e-minor-op-28_yaxgbx.mxl';
+  static const String _soundfontAssetPath =
+      'assets/soundfonts/GeneralUser-GS.sf2';
 
-  static const bool _midiInputEnabled = false;
+  static const bool _midiInputEnabled = true;
   static const int initialLeadInMs = 4500;
   static const int hitWindowMs = 120;
   static const int missWindowMs = 160;
+  static const int _songAudioChannel = 0;
+  static const int _midiInputAudioChannel = 1;
+  static const int _songPlaybackVelocity = 92;
+  static const int _midiInputVelocityFallback = 96;
+  static const int _songPlaybackPollIntervalMs = 12;
+  static const int _songPlaybackMinimumHoldMs = 90;
+  static const int _songAudioLatencyCompensationMs = 260;
+  static const int _synthProgramPiano = 0;
+  static const int _synthVolume = 110;
+  static const int _synthPanCenter = 64;
 
   final MidiCommand _midiCommand = MidiCommand();
+  final FlutterMidiEngine _midiEngine = FlutterMidiEngine();
   final String? assetMxlPath;
   final String? songTitle;
   StreamSubscription<MidiPacket>? _midiSub;
   StreamSubscription<String>? _midiSetupSub;
-  MidiDevice? _connectedDevice;
+  MidiDevice? _connectedInputDevice;
+  Timer? _songPlaybackTimer;
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
   final ValueNotifier<int> _elapsedMsNotifier = ValueNotifier<int>(0);
+  final List<_ScheduledMidiEvent> _scheduledSongEvents =
+      <_ScheduledMidiEvent>[];
+  final Map<int, int> _activeSongPlaybackTokenByMidi = <int, int>{};
+  final Set<int> _activeInputNotes = <int>{};
   int _baseElapsedMs = 0;
   int _nextMissScanIndex = 0;
+  int _nextSongPlaybackEventIndex = 0;
   int _maxDurationMs = 10000;
+  bool _isSynthReady = false;
+  bool _isSynthLoading = false;
 
   Future<void> initialize() async {
     final playbackSpeed = state.playbackSpeed;
     final timelineMsPerDurationDivision = state.timelineMsPerDurationDivision;
+    final isSongAudioEnabled = state.isSongAudioEnabled;
     _ticker.stop();
+    _stopSongPlaybackScheduler();
+    await _silenceSongPlaybackNotes();
     _stopwatch
       ..stop()
       ..reset();
@@ -54,71 +80,131 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         isLoading: true,
         playbackSpeed: playbackSpeed,
         timelineMsPerDurationDivision: timelineMsPerDurationDivision,
+        isSongAudioEnabled: isSongAudioEnabled,
+        isSoundfontReady: _isSynthReady,
       ),
     );
 
-    await _setupMidi();
+    await _initializeSynth();
+    await _setupMidiInput();
     await _loadScore();
   }
 
   Future<void> retry() => initialize();
 
-  Future<void> _setupMidi() async {
+  Future<void> _initializeSynth() async {
+    if (_isSynthReady || _isSynthLoading) {
+      if (!isClosed) {
+        emit(state.copyWith(isSoundfontReady: _isSynthReady));
+      }
+      return;
+    }
+
+    _isSynthLoading = true;
+    try {
+      await _midiEngine.unmute();
+    } catch (_) {
+      // Unmute is platform-specific; continue even if unavailable.
+    }
+
+    try {
+      final loaded = await _midiEngine.loadSoundfontFromAsset(
+        _soundfontAssetPath,
+      );
+      if (!loaded) {
+        throw Exception('Khong load duoc soundfont tu asset.');
+      }
+
+      await _configureSynthChannel(_songAudioChannel);
+      await _configureSynthChannel(_midiInputAudioChannel);
+      _isSynthReady = true;
+    } catch (error) {
+      _isSynthReady = false;
+      debugPrint('Soundfont init failed: $error');
+    } finally {
+      _isSynthLoading = false;
+      if (!isClosed) {
+        emit(state.copyWith(isSoundfontReady: _isSynthReady));
+      }
+    }
+  }
+
+  Future<void> _configureSynthChannel(int channel) async {
+    await _midiEngine.changeProgram(
+      program: _synthProgramPiano,
+      channel: channel,
+    );
+    await _midiEngine.setVolume(volume: _synthVolume, channel: channel);
+    await _midiEngine.setPan(pan: _synthPanCenter, channel: channel);
+  }
+
+  Future<void> _setupMidiInput() async {
     if (!_midiInputEnabled) {
-      _connectedDevice = null;
       await _midiSub?.cancel();
       _midiSub = null;
       await _midiSetupSub?.cancel();
       _midiSetupSub = null;
+      _connectedInputDevice = null;
       return;
     }
 
     try {
-      await _connectFirstMidiDevice();
+      await _connectPreferredMidiInputDevice();
       _midiSetupSub ??= _midiCommand.onMidiSetupChanged?.listen((_) {
-        _connectFirstMidiDevice();
+        _connectPreferredMidiInputDevice();
       });
-
       _midiSub ??= _midiCommand.onMidiDataReceived?.listen((packet) {
         _handleMidiPacket(packet.data);
       });
     } catch (_) {
-      // Keep gameplay running even if MIDI is unavailable on the device.
+      // Keep gameplay running even if MIDI input is unavailable.
     }
   }
 
-  Future<void> _connectFirstMidiDevice() async {
-    if (!_midiInputEnabled) {
-      _connectedDevice = null;
-      return;
-    }
-
+  Future<void> _connectPreferredMidiInputDevice() async {
     try {
       final devices = await _midiCommand.devices ?? const <MidiDevice>[];
-      if (devices.isEmpty) {
-        _connectedDevice = null;
+      final target = _selectPreferredMidiInputDevice(devices);
+      if (target == null) {
+        if (_connectedInputDevice != null) {
+          _midiCommand.disconnectDevice(_connectedInputDevice!);
+        }
+        _connectedInputDevice = null;
         return;
       }
 
-      if (_connectedDevice != null &&
-          devices.any((device) => device.id == _connectedDevice!.id)) {
+      if (_connectedInputDevice?.id == target.id) {
         return;
       }
 
-      final target = devices.first;
+      if (_connectedInputDevice != null) {
+        _midiCommand.disconnectDevice(_connectedInputDevice!);
+      }
       await _midiCommand.connectToDevice(target);
-      _connectedDevice = target;
+      _connectedInputDevice = target;
     } catch (_) {
-      _connectedDevice = null;
+      _connectedInputDevice = null;
     }
+  }
+
+  MidiDevice? _selectPreferredMidiInputDevice(List<MidiDevice> devices) {
+    final preferred = devices
+        .where((device) => device.inputPorts.isNotEmpty)
+        .toList();
+    if (preferred.isEmpty) {
+      return null;
+    }
+
+    for (final device in preferred) {
+      if (device.connected) {
+        return device;
+      }
+    }
+    return preferred.first;
   }
 
   void _handleMidiPacket(List<int> data) {
-    if (!_midiInputEnabled) {
-      return;
-    }
-
-    if (data.length < 3 || state.score == null || !state.isPlaying) {
+    if (!_midiInputEnabled || data.length < 3) {
       return;
     }
 
@@ -126,11 +212,64 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final note = data[1];
     final velocity = data[2];
 
-    if (status != 0x90 || velocity == 0) {
+    if (status == 0x90 && velocity > 0) {
+      _playInputMidiNote(note, velocity);
+      if (state.score != null && state.isPlaying) {
+        _judgeNoteInput(note);
+      }
       return;
     }
 
-    _judgeNoteInput(note);
+    if (status == 0x80 || (status == 0x90 && velocity == 0)) {
+      _stopInputMidiNote(note);
+    }
+  }
+
+  void _playInputMidiNote(int midiNote, int velocity) {
+    _activeInputNotes.add(midiNote);
+    if (!_isSynthReady) {
+      return;
+    }
+
+    unawaited(
+      _midiEngine.playNote(
+        note: midiNote,
+        velocity: velocity > 0 ? velocity : _midiInputVelocityFallback,
+        channel: _midiInputAudioChannel,
+      ),
+    );
+  }
+
+  void _stopInputMidiNote(int midiNote) {
+    final removed = _activeInputNotes.remove(midiNote);
+    if (!removed || !_isSynthReady) {
+      return;
+    }
+
+    unawaited(
+      _midiEngine.stopNote(
+        note: midiNote,
+        velocity: 0,
+        channel: _midiInputAudioChannel,
+      ),
+    );
+  }
+
+  Future<void> _silenceInputNotes() async {
+    if (_activeInputNotes.isEmpty || !_isSynthReady) {
+      _activeInputNotes.clear();
+      return;
+    }
+
+    final notes = _activeInputNotes.toList();
+    _activeInputNotes.clear();
+    for (final note in notes) {
+      await _midiEngine.stopNote(
+        note: note,
+        velocity: 0,
+        channel: _midiInputAudioChannel,
+      );
+    }
   }
 
   void _judgeNoteInput(int midiNote) {
@@ -199,10 +338,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           score: score,
           passedNoteIndexes: const <int>{},
           missedNoteIndexes: const <int>{},
+          isSoundfontReady: _isSynthReady,
         ),
       );
 
       _maxDurationMs = _computeMaxDurationMs(score);
+      _rebuildSongPlaybackEvents(score);
       _play();
     } catch (error) {
       if (isClosed) {
@@ -214,6 +355,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           isLoading: false,
           errorMessage: 'Khong tai duoc bai hat tu asset: $assetPath\n$error',
           isPlaying: false,
+          isSoundfontReady: _isSynthReady,
         ),
       );
     }
@@ -245,10 +387,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           score: score,
           passedNoteIndexes: const <int>{},
           missedNoteIndexes: const <int>{},
+          isSoundfontReady: _isSynthReady,
         ),
       );
 
       _maxDurationMs = _computeMaxDurationMs(score);
+      _rebuildSongPlaybackEvents(score);
       _play();
     } catch (error) {
       if (isClosed) {
@@ -260,6 +404,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           isLoading: false,
           errorMessage: error.toString(),
           isPlaying: false,
+          isSoundfontReady: _isSynthReady,
         ),
       );
     }
@@ -275,6 +420,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..start();
     _ticker.start();
     emit(state.copyWith(isPlaying: true));
+    _restartSongPlaybackFromCurrentPosition();
   }
 
   void play() => _play();
@@ -290,6 +436,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..stop()
       ..reset();
     _ticker.stop();
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
     emit(state.copyWith(isPlaying: false));
   }
 
@@ -303,11 +451,27 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _play();
   }
 
+  void setSongAudioEnabled(bool value) {
+    if (value == state.isSongAudioEnabled) {
+      return;
+    }
+
+    emit(state.copyWith(isSongAudioEnabled: value));
+    if (!value) {
+      _stopSongPlaybackScheduler();
+      unawaited(_silenceSongPlaybackNotes());
+      return;
+    }
+
+    if (state.isPlaying) {
+      _restartSongPlaybackFromCurrentPosition();
+    }
+  }
+
   void setPlaybackSpeed(double value) {
-    final clamped = value.clamp(
-      NoteTiming.minPlaybackSpeed,
-      NoteTiming.maxPlaybackSpeed,
-    ).toDouble();
+    final clamped = value
+        .clamp(NoteTiming.minPlaybackSpeed, NoteTiming.maxPlaybackSpeed)
+        .toDouble();
     final anchoredCurrentMs = currentMs;
 
     _baseElapsedMs = anchoredCurrentMs;
@@ -319,16 +483,18 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     emit(state.copyWith(playbackSpeed: clamped));
+    if (state.isPlaying && state.isSongAudioEnabled) {
+      _restartSongPlaybackFromCurrentPosition();
+    }
   }
 
   void setTimelineMsPerDurationDivision(int value) {
     final minTimeline = NoteTiming.minTimelineMsPerDurationDivision;
     final maxTimeline = NoteTiming.maxTimelineMsPerDurationDivision;
     final step = NoteTiming.timelineMsPerDurationDivisionStep;
-    final normalized = ((value / step).round() * step).clamp(
-      minTimeline,
-      maxTimeline,
-    ).toInt();
+    final normalized = ((value / step).round() * step)
+        .clamp(minTimeline, maxTimeline)
+        .toInt();
     emit(state.copyWith(timelineMsPerDurationDivision: normalized));
   }
 
@@ -446,13 +612,228 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     return last + 2400;
   }
 
+  void _rebuildSongPlaybackEvents(ScoreData score) {
+    _scheduledSongEvents
+      ..clear()
+      ..addAll(_buildSongPlaybackEvents(score));
+    _nextSongPlaybackEventIndex = 0;
+  }
+
+  List<_ScheduledMidiEvent> _buildSongPlaybackEvents(ScoreData score) {
+    final events = <_ScheduledMidiEvent>[];
+    for (var i = 0; i < score.notes.length; i++) {
+      final note = score.notes[i];
+      final noteOnTimeMs = _songPlaybackStartMs(note);
+      final noteOffTimeMs = _songPlaybackEndMs(note);
+      events.add(
+        _ScheduledMidiEvent(
+          timeMs: noteOnTimeMs,
+          midi: note.midi,
+          token: i,
+          type: _ScheduledMidiEventType.noteOn,
+        ),
+      );
+      events.add(
+        _ScheduledMidiEvent(
+          timeMs: noteOffTimeMs,
+          midi: note.midi,
+          token: i,
+          type: _ScheduledMidiEventType.noteOff,
+        ),
+      );
+    }
+
+    events.sort((a, b) {
+      final timeComparison = a.timeMs.compareTo(b.timeMs);
+      if (timeComparison != 0) {
+        return timeComparison;
+      }
+      if (a.type != b.type) {
+        return a.type == _ScheduledMidiEventType.noteOff ? -1 : 1;
+      }
+      return a.token.compareTo(b.token);
+    });
+    return events;
+  }
+
+  int _songPlaybackStartMs(MusicNote note) {
+    final adjusted = note.hitTimeMs - _songAudioLatencyCompensationMs;
+    return adjusted < 0 ? 0 : adjusted;
+  }
+
+  int _songPlaybackEndMs(MusicNote note) {
+    final holdMs = note.holdMs < _songPlaybackMinimumHoldMs
+        ? _songPlaybackMinimumHoldMs
+        : note.holdMs;
+    return _songPlaybackStartMs(note) + holdMs;
+  }
+
+  void _restartSongPlaybackFromCurrentPosition() {
+    if (!state.isPlaying ||
+        !state.isSongAudioEnabled ||
+        state.score == null ||
+        !_isSynthReady) {
+      return;
+    }
+
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
+
+    final current = currentMs;
+    _restoreActiveSongPlaybackNotes(current);
+    _nextSongPlaybackEventIndex = _upperBoundSongPlaybackEventTime(current);
+    _songPlaybackTimer = Timer.periodic(
+      const Duration(milliseconds: _songPlaybackPollIntervalMs),
+      (_) => _pumpSongPlayback(),
+    );
+  }
+
+  void _restoreActiveSongPlaybackNotes(int currentMs) {
+    final score = state.score;
+    if (score == null || !_isSynthReady || currentMs < 0) {
+      return;
+    }
+
+    final latestTokenByMidi = <int, int>{};
+    for (var i = 0; i < score.notes.length; i++) {
+      final note = score.notes[i];
+      if (_songPlaybackStartMs(note) <= currentMs &&
+          currentMs < _songPlaybackEndMs(note)) {
+        latestTokenByMidi[note.midi] = i;
+      }
+    }
+
+    for (final entry in latestTokenByMidi.entries) {
+      _activeSongPlaybackTokenByMidi[entry.key] = entry.value;
+      unawaited(
+        _midiEngine.playNote(
+          note: entry.key,
+          velocity: _songPlaybackVelocity,
+          channel: _songAudioChannel,
+        ),
+      );
+    }
+  }
+
+  void _pumpSongPlayback() {
+    if (!state.isPlaying ||
+        !state.isSongAudioEnabled ||
+        state.score == null ||
+        !_isSynthReady) {
+      return;
+    }
+
+    final nowMs = currentMs;
+    while (_nextSongPlaybackEventIndex < _scheduledSongEvents.length) {
+      final event = _scheduledSongEvents[_nextSongPlaybackEventIndex];
+      if (event.timeMs > nowMs) {
+        break;
+      }
+      _dispatchSongPlaybackEvent(event);
+      _nextSongPlaybackEventIndex++;
+    }
+
+    if (_nextSongPlaybackEventIndex >= _scheduledSongEvents.length &&
+        _activeSongPlaybackTokenByMidi.isEmpty) {
+      _stopSongPlaybackScheduler();
+    }
+  }
+
+  void _dispatchSongPlaybackEvent(_ScheduledMidiEvent event) {
+    if (!_isSynthReady) {
+      return;
+    }
+
+    if (event.type == _ScheduledMidiEventType.noteOn) {
+      final activeToken = _activeSongPlaybackTokenByMidi[event.midi];
+      if (activeToken != null && activeToken != event.token) {
+        unawaited(
+          _midiEngine.stopNote(
+            note: event.midi,
+            velocity: 0,
+            channel: _songAudioChannel,
+          ),
+        );
+      }
+      _activeSongPlaybackTokenByMidi[event.midi] = event.token;
+      unawaited(
+        _midiEngine.playNote(
+          note: event.midi,
+          velocity: _songPlaybackVelocity,
+          channel: _songAudioChannel,
+        ),
+      );
+      return;
+    }
+
+    final activeToken = _activeSongPlaybackTokenByMidi[event.midi];
+    if (activeToken != event.token) {
+      return;
+    }
+    _activeSongPlaybackTokenByMidi.remove(event.midi);
+    unawaited(
+      _midiEngine.stopNote(
+        note: event.midi,
+        velocity: 0,
+        channel: _songAudioChannel,
+      ),
+    );
+  }
+
+  int _upperBoundSongPlaybackEventTime(int targetMs) {
+    var low = 0;
+    var high = _scheduledSongEvents.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (_scheduledSongEvents[mid].timeMs <= targetMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  void _stopSongPlaybackScheduler() {
+    _songPlaybackTimer?.cancel();
+    _songPlaybackTimer = null;
+  }
+
+  Future<void> _silenceSongPlaybackNotes() async {
+    if (_activeSongPlaybackTokenByMidi.isEmpty || !_isSynthReady) {
+      _activeSongPlaybackTokenByMidi.clear();
+      return;
+    }
+
+    final activeMidis = _activeSongPlaybackTokenByMidi.keys.toList();
+    _activeSongPlaybackTokenByMidi.clear();
+    for (final midi in activeMidis) {
+      await _midiEngine.stopNote(
+        note: midi,
+        velocity: 0,
+        channel: _songAudioChannel,
+      );
+    }
+  }
+
   @override
   Future<void> close() async {
+    _stopSongPlaybackScheduler();
+    await _silenceSongPlaybackNotes();
+    await _silenceInputNotes();
+    if (_isSynthReady) {
+      try {
+        await _midiEngine.stopAllNotes();
+        await _midiEngine.unloadSoundfont();
+      } catch (_) {
+        // Ignore teardown errors during disposal.
+      }
+    }
     _ticker.dispose();
     await _midiSub?.cancel();
     await _midiSetupSub?.cancel();
-    if (_midiInputEnabled && _connectedDevice != null) {
-      _midiCommand.disconnectDevice(_connectedDevice!);
+    if (_connectedInputDevice != null) {
+      _midiCommand.disconnectDevice(_connectedInputDevice!);
     }
     _stopwatch
       ..stop()
@@ -460,4 +841,20 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _elapsedMsNotifier.dispose();
     return super.close();
   }
+}
+
+enum _ScheduledMidiEventType { noteOn, noteOff }
+
+class _ScheduledMidiEvent {
+  const _ScheduledMidiEvent({
+    required this.timeMs,
+    required this.midi,
+    required this.token,
+    required this.type,
+  });
+
+  final int timeMs;
+  final int midi;
+  final int token;
+  final _ScheduledMidiEventType type;
 }

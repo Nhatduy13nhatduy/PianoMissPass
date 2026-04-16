@@ -9,6 +9,8 @@ class GamePrototypeState extends Equatable {
     this.errorMessage,
     this.score,
     this.isPlaying = false,
+    this.isSongAudioEnabled = true,
+    this.isSoundfontReady = false,
     this.playbackSpeed = NoteTiming.defaultPlaybackSpeed,
     this.timelineMsPerDurationDivision =
         NoteTiming.defaultTimelineMsPerDurationDivision,
@@ -20,6 +22,8 @@ class GamePrototypeState extends Equatable {
   final String? errorMessage;
   final ScoreData? score;
   final bool isPlaying;
+  final bool isSongAudioEnabled;
+  final bool isSoundfontReady;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final Set<int> passedNoteIndexes;
@@ -31,6 +35,8 @@ class GamePrototypeState extends Equatable {
     bool clearErrorMessage = false,
     ScoreData? score,
     bool? isPlaying,
+    bool? isSongAudioEnabled,
+    bool? isSoundfontReady,
     double? playbackSpeed,
     int? timelineMsPerDurationDivision,
     Set<int>? passedNoteIndexes,
@@ -43,6 +49,8 @@ class GamePrototypeState extends Equatable {
           : errorMessage ?? this.errorMessage,
       score: score ?? this.score,
       isPlaying: isPlaying ?? this.isPlaying,
+      isSongAudioEnabled: isSongAudioEnabled ?? this.isSongAudioEnabled,
+      isSoundfontReady: isSoundfontReady ?? this.isSoundfontReady,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       timelineMsPerDurationDivision:
           timelineMsPerDurationDivision ?? this.timelineMsPerDurationDivision,
@@ -57,6 +65,8 @@ class GamePrototypeState extends Equatable {
     errorMessage,
     score,
     isPlaying,
+    isSongAudioEnabled,
+    isSoundfontReady,
     playbackSpeed,
     timelineMsPerDurationDivision,
     passedNoteIndexes,

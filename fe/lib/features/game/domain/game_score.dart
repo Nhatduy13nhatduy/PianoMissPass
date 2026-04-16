@@ -51,7 +51,7 @@ class GameColorScheme {
       background: Color(0xE6F4F4F4),
       border: Color(0xFF111111),
       line: Color(0xFF111111),
-      measureLine: Color(0xFF506473),
+      measureLine: Color(0xFF111111),
       judgeLine: Color(0xFF0D3750),
     ),
     note: GameNoteColorScheme(
