@@ -368,7 +368,7 @@ void _notePainterDrawBeamGroup(
     final stemColor = stemColorByVisibleIndex[idx] ?? resolvedBeamColor;
     final stemPaint = Paint()
       ..color = stemColor
-      ..strokeWidth = math.max(lineSpacing * 0.22, 2.0)
+      ..strokeWidth = math.max(lineSpacing * 0.19, 1.7)
       ..strokeCap = StrokeCap.butt;
     _notePainterApplyTrailingFadeToPaint(
       stemPaint,

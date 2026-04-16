@@ -240,7 +240,7 @@ class GameKeyboardPainter {
         width: markerWidth,
         height: markerHeight,
       ),
-      _radiusFromRatio(markerWidth, radiusRatio * 2.4),
+      _radiusFromRatio(20, radiusRatio * 2.4),
     );
 
     canvas.drawRRect(markerRect, Paint()..color = markerColor);

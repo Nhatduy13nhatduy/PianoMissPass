@@ -69,131 +69,137 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<GamePrototypeCubit>();
-    return Scaffold(
-      body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
-        buildWhen: (previous, current) =>
-            previous.isLoading != current.isLoading ||
-            previous.errorMessage != current.errorMessage ||
-            previous.score != current.score ||
-            previous.isPlaying != current.isPlaying ||
-            previous.playbackSpeed != current.playbackSpeed ||
-            previous.timelineMsPerDurationDivision !=
-                current.timelineMsPerDurationDivision ||
-            previous.passedNoteIndexes != current.passedNoteIndexes ||
-            previous.missedNoteIndexes != current.missedNoteIndexes,
-        builder: (context, state) {
-          if (state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (_, __) {
+        cubit.pause();
+      },
+      child: Scaffold(
+        body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
+          buildWhen: (previous, current) =>
+              previous.isLoading != current.isLoading ||
+              previous.errorMessage != current.errorMessage ||
+              previous.score != current.score ||
+              previous.isPlaying != current.isPlaying ||
+              previous.playbackSpeed != current.playbackSpeed ||
+              previous.timelineMsPerDurationDivision !=
+                  current.timelineMsPerDurationDivision ||
+              previous.passedNoteIndexes != current.passedNoteIndexes ||
+              previous.missedNoteIndexes != current.missedNoteIndexes,
+          builder: (context, state) {
+            if (state.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (state.errorMessage != null) {
-            return _ErrorView(
-              error: state.errorMessage!,
-              onRetry: () => context.read<GamePrototypeCubit>().retry(),
+            if (state.errorMessage != null) {
+              return _ErrorView(
+                error: state.errorMessage!,
+                onRetry: () => context.read<GamePrototypeCubit>().retry(),
+              );
+            }
+
+            final score = state.score;
+            if (score == null) {
+              return const SizedBox.shrink();
+            }
+
+            return Stack(
+              children: [
+                CustomPaint(
+                  painter: _StaffScrollerPainter(
+                    score: score,
+                    elapsedMsListenable: cubit.elapsedMsListenable,
+                    passedNoteIndexes: state.passedNoteIndexes,
+                    missedNoteIndexes: state.missedNoteIndexes,
+                    showKeyboard: _showKeyboard,
+                    staffHeightScale: _staffHeightScale,
+                    timelineMsPerDurationDivision:
+                        state.timelineMsPerDurationDivision,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: _PlaybackButton(
+                    isPlaying: state.isPlaying,
+                    onPressed: cubit.togglePlayback,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: cubit.elapsedMsListenable,
+                    builder: (context, elapsedMs, _) {
+                      final safeMaxDuration = cubit.maxDurationMs <= 0
+                          ? 1
+                          : cubit.maxDurationMs;
+                      final progress = (elapsedMs / safeMaxDuration)
+                          .clamp(0.0, 1.0)
+                          .toDouble();
+                      return _TopProgressLine(
+                        progress: progress,
+                        color: score.colors.progress.line,
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: _GameLayoutControls(
+                    showKeyboard: _showKeyboard,
+                    staffHeightScale: _staffHeightScale,
+                    playbackSpeed: state.playbackSpeed,
+                    timelineMsPerDurationDivision:
+                        state.timelineMsPerDurationDivision,
+                    onToggleKeyboard: (value) {
+                      setState(() {
+                        _showKeyboard = value;
+                      });
+                    },
+                    onDecreaseScale: () {
+                      setState(() {
+                        _staffHeightScale = (_staffHeightScale - 0.1).clamp(
+                          0.5,
+                          2.0,
+                        );
+                      });
+                    },
+                    onIncreaseScale: () {
+                      setState(() {
+                        _staffHeightScale = (_staffHeightScale + 0.1).clamp(
+                          0.5,
+                          2.0,
+                        );
+                      });
+                    },
+                    onDecreaseSpeed: () {
+                      cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
+                    },
+                    onIncreaseSpeed: () {
+                      cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
+                    },
+                    onDecreaseTimeline: () {
+                      cubit.setTimelineMsPerDurationDivision(
+                        state.timelineMsPerDurationDivision -
+                            NoteTiming.timelineMsPerDurationDivisionStep,
+                      );
+                    },
+                    onIncreaseTimeline: () {
+                      cubit.setTimelineMsPerDurationDivision(
+                        state.timelineMsPerDurationDivision +
+                            NoteTiming.timelineMsPerDurationDivisionStep,
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
-          }
-
-          final score = state.score;
-          if (score == null) {
-            return const SizedBox.shrink();
-          }
-
-          return Stack(
-            children: [
-              CustomPaint(
-                painter: _StaffScrollerPainter(
-                  score: score,
-                  elapsedMsListenable: cubit.elapsedMsListenable,
-                  passedNoteIndexes: state.passedNoteIndexes,
-                  missedNoteIndexes: state.missedNoteIndexes,
-                  showKeyboard: _showKeyboard,
-                  staffHeightScale: _staffHeightScale,
-                  timelineMsPerDurationDivision:
-                      state.timelineMsPerDurationDivision,
-                ),
-                child: const SizedBox.expand(),
-              ),
-              Positioned(
-                top: 16,
-                left: 16,
-                child: _PlaybackButton(
-                  isPlaying: state.isPlaying,
-                  onPressed: cubit.togglePlayback,
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                child: ValueListenableBuilder<int>(
-                  valueListenable: cubit.elapsedMsListenable,
-                  builder: (context, elapsedMs, _) {
-                    final safeMaxDuration = cubit.maxDurationMs <= 0
-                        ? 1
-                        : cubit.maxDurationMs;
-                    final progress = (elapsedMs / safeMaxDuration)
-                        .clamp(0.0, 1.0)
-                        .toDouble();
-                    return _TopProgressLine(
-                      progress: progress,
-                      color: score.colors.progress.line,
-                    );
-                  },
-                ),
-              ),
-              Positioned(
-                top: 16,
-                right: 16,
-                child: _GameLayoutControls(
-                  showKeyboard: _showKeyboard,
-                  staffHeightScale: _staffHeightScale,
-                  playbackSpeed: state.playbackSpeed,
-                  timelineMsPerDurationDivision:
-                      state.timelineMsPerDurationDivision,
-                  onToggleKeyboard: (value) {
-                    setState(() {
-                      _showKeyboard = value;
-                    });
-                  },
-                  onDecreaseScale: () {
-                    setState(() {
-                      _staffHeightScale = (_staffHeightScale - 0.1).clamp(
-                        0.5,
-                        2.0,
-                      );
-                    });
-                  },
-                  onIncreaseScale: () {
-                    setState(() {
-                      _staffHeightScale = (_staffHeightScale + 0.1).clamp(
-                        0.5,
-                        2.0,
-                      );
-                    });
-                  },
-                  onDecreaseSpeed: () {
-                    cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
-                  },
-                  onIncreaseSpeed: () {
-                    cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
-                  },
-                  onDecreaseTimeline: () {
-                    cubit.setTimelineMsPerDurationDivision(
-                      state.timelineMsPerDurationDivision -
-                          NoteTiming.timelineMsPerDurationDivisionStep,
-                    );
-                  },
-                  onIncreaseTimeline: () {
-                    cubit.setTimelineMsPerDurationDivision(
-                      state.timelineMsPerDurationDivision +
-                          NoteTiming.timelineMsPerDurationDivisionStep,
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }

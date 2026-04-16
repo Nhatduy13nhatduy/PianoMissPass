@@ -1896,7 +1896,7 @@ class GameNotePainter {
 
     final p = Paint()
       ..color = color
-      ..strokeWidth = math.max(spacing * 0.22, 2.0)
+      ..strokeWidth = math.max(spacing * 0.19, 1.7)
       ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
     final stemStart = _stemStartForGeometry(
