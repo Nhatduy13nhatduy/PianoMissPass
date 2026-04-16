@@ -19,6 +19,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const String sampleMxlUrl =
       'https://res.cloudinary.com/dnx5e59hz/raw/upload/v1776261396/chopin-prelude-no-4-in-e-minor-op-28_yaxgbx.mxl';
 
+  static const bool _midiInputEnabled = false;
   static const int initialLeadInMs = 4500;
   static const int hitWindowMs = 120;
   static const int missWindowMs = 160;
@@ -54,6 +55,15 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   Future<void> retry() => initialize();
 
   Future<void> _setupMidi() async {
+    if (!_midiInputEnabled) {
+      _connectedDevice = null;
+      await _midiSub?.cancel();
+      _midiSub = null;
+      await _midiSetupSub?.cancel();
+      _midiSetupSub = null;
+      return;
+    }
+
     try {
       await _connectFirstMidiDevice();
       _midiSetupSub ??= _midiCommand.onMidiSetupChanged?.listen((_) {
@@ -69,6 +79,11 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   Future<void> _connectFirstMidiDevice() async {
+    if (!_midiInputEnabled) {
+      _connectedDevice = null;
+      return;
+    }
+
     try {
       final devices = await _midiCommand.devices ?? const <MidiDevice>[];
       if (devices.isEmpty) {
@@ -90,6 +105,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   void _handleMidiPacket(List<int> data) {
+    if (!_midiInputEnabled) {
+      return;
+    }
+
     if (data.length < 3 || state.score == null || !state.isPlaying) {
       return;
     }
@@ -393,7 +412,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _ticker.dispose();
     await _midiSub?.cancel();
     await _midiSetupSub?.cancel();
-    if (_connectedDevice != null) {
+    if (_midiInputEnabled && _connectedDevice != null) {
       _midiCommand.disconnectDevice(_connectedDevice!);
     }
     _stopwatch

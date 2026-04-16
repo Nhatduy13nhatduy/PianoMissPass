@@ -43,6 +43,7 @@ class GameColorScheme {
     required this.rest,
     required this.notation,
     required this.keyboard,
+    required this.progress,
   });
 
   static const GameColorScheme classic = GameColorScheme(
@@ -74,11 +75,11 @@ class GameColorScheme {
     ),
     keyboard: GameKeyboardColorScheme(
       white: Color(0xFFE7EBF0),
-      whiteActive: Color(0xFF8A6DB8),
+      active: Color(0xFF8A6DB8),
       whiteBorder: Color(0xFF0F1720),
       black: Color(0xFF1A1A1C),
-      blackActive: Color(0xFF4E5BFF),
     ),
+    progress: GameProgressColorScheme(line: Color(0xFF0D3750)),
   );
 
   final GameStaffColorScheme staff;
@@ -88,6 +89,7 @@ class GameColorScheme {
   final GameRestColorScheme rest;
   final GameNotationColorScheme notation;
   final GameKeyboardColorScheme keyboard;
+  final GameProgressColorScheme progress;
 }
 
 class GameStaffColorScheme {
@@ -161,17 +163,21 @@ class GameNotationColorScheme {
 class GameKeyboardColorScheme {
   const GameKeyboardColorScheme({
     required this.white,
-    required this.whiteActive,
+    required this.active,
     required this.whiteBorder,
     required this.black,
-    required this.blackActive,
   });
 
   final Color white;
-  final Color whiteActive;
+  final Color active;
   final Color whiteBorder;
   final Color black;
-  final Color blackActive;
+}
+
+class GameProgressColorScheme {
+  const GameProgressColorScheme({required this.line});
+
+  final Color line;
 }
 
 void logParsedMxlTrace(

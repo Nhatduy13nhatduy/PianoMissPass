@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 class NotationMetrics {
   const NotationMetrics({
+    required this.screenWidth,
+    required this.screenHeight,
+    required this.aspectRatio,
     required this.staffHeight,
     required this.topPadding,
     required this.staffGap,
@@ -42,6 +45,9 @@ class NotationMetrics {
 
     staffHeight = staffHeight.clamp(52.0, 96.0).toDouble();
     return NotationMetrics(
+      screenWidth: screenWidth,
+      screenHeight: screenHeight,
+      aspectRatio: aspectRatio,
       staffHeight: staffHeight,
       topPadding: (staffHeight * 0.78).clamp(30.0, 56.0).toDouble(),
       staffGap: (staffHeight * 1.45).clamp(74.0, 112.0).toDouble(),
@@ -50,6 +56,9 @@ class NotationMetrics {
     );
   }
 
+  final double screenWidth;
+  final double screenHeight;
+  final double aspectRatio;
   final double staffHeight;
   final double topPadding;
   final double staffGap;
@@ -160,13 +169,13 @@ class NotationMetrics {
 
   double get timeSignatureTargetDigitHeight =>
       (staffHeight * 0.55).clamp(24.0, 48.0).toDouble();
-  double get timeSignatureVisualScale => 1.95;
+  double get timeSignatureVisualScale => 1.85;
   double get timeSignatureMinFontSize => 44.0;
   double get timeSignatureMaxFontSize => 110.0;
   double get timeSignatureTopCenterOffset =>
-      (staffSpace * 1.08).clamp(5.0, 28.0).toDouble();
+      (staffSpace * 1.0).clamp(5.0, 28.0).toDouble();
   double get timeSignatureBottomCenterOffset =>
-      (staffSpace * 2.92).clamp(14.0, 64.0).toDouble();
+      (staffSpace * 3.0).clamp(14.0, 64.0).toDouble();
   double get timeSignatureMaxWidthPadding =>
       (staffSpace * 0.42).clamp(4.0, 10.0).toDouble();
 
@@ -185,4 +194,50 @@ class NotationMetrics {
   double get restOtherMaxFontSize => 84.0;
 
   double get keyboardTopInset => (staffHeight * 0.82).clamp(44.0, 62.0);
+  double get keyboardWhiteHeight {
+    var height = screenHeight * 0.135;
+    if (aspectRatio >= 2.1) {
+      height *= 0.94;
+    } else if (aspectRatio <= 1.45) {
+      height *= 1.08;
+    }
+    return height.clamp(54.0, 86.0).toDouble();
+  }
+
+  double get keyboardBlackHeightRatio {
+    final ratio = aspectRatio >= 2.1 ? 0.6 : 0.62;
+    return ratio.clamp(0.56, 0.66).toDouble();
+  }
+
+  double get keyboardBlackWidthRatio {
+    final ratio = screenWidth >= 1180 ? 0.54 : 0.58;
+    return ratio.clamp(0.52, 0.6).toDouble();
+  }
+
+  double get keyboardWhiteGap =>
+      (keyboardWhiteHeight * 0.012).clamp(0.45, 1.1).toDouble();
+  double get keyboardBedTopInset =>
+      (keyboardWhiteHeight * 0.075).clamp(3.0, 6.0).toDouble();
+  double get keyboardBedBottomInset =>
+      (keyboardWhiteHeight * 0.2).clamp(10.0, 16.0).toDouble();
+  double get keyboardWhiteCornerRadius =>
+      (keyboardWhiteHeight * 0.06).clamp(3.0, 6.0).toDouble();
+  double get keyboardBlackCornerRadius =>
+      (keyboardWhiteHeight * 0.05).clamp(3.0, 5.0).toDouble();
+  double get keyboardWhiteShadowBlur =>
+      (keyboardWhiteHeight * 0.07).clamp(2.0, 4.8).toDouble();
+  double get keyboardBlackShadowBlur =>
+      (keyboardWhiteHeight * 0.075).clamp(2.0, 4.8).toDouble();
+  double get keyboardWhiteShadowOffsetY =>
+      (keyboardWhiteHeight * 0.022).clamp(0.9, 1.8).toDouble();
+  double get keyboardBlackShadowOffsetY =>
+      (keyboardWhiteHeight * 0.026).clamp(1.0, 2.0).toDouble();
+  double get keyboardWhiteHighlightHeightRatio =>
+      aspectRatio >= 2.1 ? 0.18 : 0.2;
+  double get keyboardBlackHighlightHeightRatio =>
+      aspectRatio >= 2.1 ? 0.13 : 0.14;
+  double get keyboardWhitePressDepth =>
+      (keyboardWhiteHeight * 0.06).clamp(3.0, 5.0).toDouble();
+  double get keyboardBlackPressDepth =>
+      (keyboardWhiteHeight * 0.055).clamp(2.0, 4.0).toDouble();
 }

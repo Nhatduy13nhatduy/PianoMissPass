@@ -13,11 +13,7 @@ import '../painters/game_staff_painter.dart';
 import '../painters/game_text_painter.dart';
 
 class GamePrototypePage extends StatelessWidget {
-  const GamePrototypePage({
-    super.key,
-    this.assetMxlPath,
-    this.songTitle,
-  });
+  const GamePrototypePage({super.key, this.assetMxlPath, this.songTitle});
 
   final String? assetMxlPath;
   final String? songTitle;
@@ -25,10 +21,9 @@ class GamePrototypePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => GamePrototypeCubit(
-        assetMxlPath: assetMxlPath,
-        songTitle: songTitle,
-      )..initialize(),
+      create: (_) =>
+          GamePrototypeCubit(assetMxlPath: assetMxlPath, songTitle: songTitle)
+            ..initialize(),
       child: const _GamePrototypeChromeScope(),
     );
   }
@@ -112,6 +107,26 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   onPressed: cubit.togglePlayback,
                 ),
               ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: cubit.elapsedMsListenable,
+                  builder: (context, elapsedMs, _) {
+                    final safeMaxDuration = cubit.maxDurationMs <= 0
+                        ? 1
+                        : cubit.maxDurationMs;
+                    final progress = (elapsedMs / safeMaxDuration)
+                        .clamp(0.0, 1.0)
+                        .toDouble();
+                    return _TopProgressLine(
+                      progress: progress,
+                      color: score.colors.progress.line,
+                    );
+                  },
+                ),
+              ),
             ],
           );
         },
@@ -120,11 +135,55 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   }
 }
 
+class _TopProgressLine extends StatelessWidget {
+  const _TopProgressLine({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        height: 5,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withAlpha(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(28),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: progress,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: color,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withAlpha(120),
+                      blurRadius: 7,
+                      spreadRadius: 0.4,
+                    ),
+                  ],
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PlaybackButton extends StatelessWidget {
-  const _PlaybackButton({
-    required this.isPlaying,
-    required this.onPressed,
-  });
+  const _PlaybackButton({required this.isPlaying, required this.onPressed});
 
   final bool isPlaying;
   final VoidCallback onPressed;
@@ -509,7 +568,6 @@ class _StaffScrollerPainter extends CustomPainter {
         );
         continue;
       }
-
     }
 
     _notePainter.paintNotes(
@@ -537,6 +595,7 @@ class _StaffScrollerPainter extends CustomPainter {
       score: score,
       currentMs: currentMs,
       keyboardTop: size.height - metrics.keyboardTopInset,
+      metrics: metrics,
     );
   }
 
