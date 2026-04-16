@@ -22,6 +22,7 @@ extension on GameNotePainter {
     required double trebleTop,
     required double bassTop,
     required NotationMetrics metrics,
+    required double notePxPerMs,
   }) {
     if (score.slurs.isEmpty || visible.isEmpty) {
       return;
@@ -30,7 +31,7 @@ extension on GameNotePainter {
     final spacing = metrics.staffSpace;
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
-    final leftInvisibleMeasurePx = measureMs * GameNotePainter.notePxPerMs;
+    final leftInvisibleMeasurePx = measureMs * notePxPerMs;
     final slurLaneCache =
         GameNotePainter._slurLaneCacheByScore[score] ?? <String, int>{};
     GameNotePainter._slurLaneCacheByScore[score] = slurLaneCache;
@@ -76,6 +77,7 @@ extension on GameNotePainter {
           trebleTop: trebleTop,
           bassTop: bassTop,
           metrics: metrics,
+          notePxPerMs: notePxPerMs,
         );
         final projectedEnd = _projectSlurRenderNote(
           score: score,
@@ -86,6 +88,7 @@ extension on GameNotePainter {
           trebleTop: trebleTop,
           bassTop: bassTop,
           metrics: metrics,
+          notePxPerMs: notePxPerMs,
         );
         if (projectedEnd.x <
             -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0)) {
@@ -407,12 +410,11 @@ extension on GameNotePainter {
     required double trebleTop,
     required double bassTop,
     required NotationMetrics metrics,
+    required double notePxPerMs,
   }) {
     final note = score.notes[scoreIndex];
     final precomputed = precomputedScore.notes[scoreIndex];
-    final x =
-        playheadX +
-        (precomputed.adjustedHitMs - currentMs) * GameNotePainter.notePxPerMs;
+    final x = playheadX + (precomputed.adjustedHitMs - currentMs) * notePxPerMs;
     final staffTop = precomputed.isUpperStaff ? trebleTop : bassTop;
     final y = _yForStaffStep(
       note.staffStep,

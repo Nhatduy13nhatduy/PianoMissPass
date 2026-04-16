@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/game_score.dart';
+import '../../domain/note_timing.dart';
 import '../notation/notation_metrics.dart';
 import '../cubit/game_prototype_cubit.dart';
 import '../cubit/game_prototype_state.dart';
@@ -38,6 +39,9 @@ class _GamePrototypeChromeScope extends StatefulWidget {
 }
 
 class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
+  bool _showKeyboard = true;
+  double _staffHeightScale = 1.0;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +73,10 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
             previous.isLoading != current.isLoading ||
             previous.errorMessage != current.errorMessage ||
             previous.score != current.score ||
+            previous.isPlaying != current.isPlaying ||
+            previous.playbackSpeed != current.playbackSpeed ||
+            previous.timelineMsPerDurationDivision !=
+                current.timelineMsPerDurationDivision ||
             previous.passedNoteIndexes != current.passedNoteIndexes ||
             previous.missedNoteIndexes != current.missedNoteIndexes,
         builder: (context, state) {
@@ -96,6 +104,10 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   elapsedMsListenable: cubit.elapsedMsListenable,
                   passedNoteIndexes: state.passedNoteIndexes,
                   missedNoteIndexes: state.missedNoteIndexes,
+                  showKeyboard: _showKeyboard,
+                  staffHeightScale: _staffHeightScale,
+                  timelineMsPerDurationDivision:
+                      state.timelineMsPerDurationDivision,
                 ),
                 child: const SizedBox.expand(),
               ),
@@ -127,9 +139,224 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   },
                 ),
               ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: _GameLayoutControls(
+                  showKeyboard: _showKeyboard,
+                  staffHeightScale: _staffHeightScale,
+                  playbackSpeed: state.playbackSpeed,
+                  timelineMsPerDurationDivision:
+                      state.timelineMsPerDurationDivision,
+                  onToggleKeyboard: (value) {
+                    setState(() {
+                      _showKeyboard = value;
+                    });
+                  },
+                  onDecreaseScale: () {
+                    setState(() {
+                      _staffHeightScale = (_staffHeightScale - 0.1).clamp(
+                        0.5,
+                        2.0,
+                      );
+                    });
+                  },
+                  onIncreaseScale: () {
+                    setState(() {
+                      _staffHeightScale = (_staffHeightScale + 0.1).clamp(
+                        0.5,
+                        2.0,
+                      );
+                    });
+                  },
+                  onDecreaseSpeed: () {
+                    cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
+                  },
+                  onIncreaseSpeed: () {
+                    cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
+                  },
+                  onDecreaseTimeline: () {
+                    cubit.setTimelineMsPerDurationDivision(
+                      state.timelineMsPerDurationDivision -
+                          NoteTiming.timelineMsPerDurationDivisionStep,
+                    );
+                  },
+                  onIncreaseTimeline: () {
+                    cubit.setTimelineMsPerDurationDivision(
+                      state.timelineMsPerDurationDivision +
+                          NoteTiming.timelineMsPerDurationDivisionStep,
+                    );
+                  },
+                ),
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _GameLayoutControls extends StatelessWidget {
+  const _GameLayoutControls({
+    required this.showKeyboard,
+    required this.staffHeightScale,
+    required this.playbackSpeed,
+    required this.timelineMsPerDurationDivision,
+    required this.onToggleKeyboard,
+    required this.onDecreaseScale,
+    required this.onIncreaseScale,
+    required this.onDecreaseSpeed,
+    required this.onIncreaseSpeed,
+    required this.onDecreaseTimeline,
+    required this.onIncreaseTimeline,
+  });
+
+  final bool showKeyboard;
+  final double staffHeightScale;
+  final double playbackSpeed;
+  final int timelineMsPerDurationDivision;
+  final ValueChanged<bool> onToggleKeyboard;
+  final VoidCallback onDecreaseScale;
+  final VoidCallback onIncreaseScale;
+  final VoidCallback onDecreaseSpeed;
+  final VoidCallback onIncreaseSpeed;
+  final VoidCallback onDecreaseTimeline;
+  final VoidCallback onIncreaseTimeline;
+
+  @override
+  Widget build(BuildContext context) {
+    const labelStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xCC0E1620),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Keyboard', style: labelStyle),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: showKeyboard,
+                    onChanged: onToggleKeyboard,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Staff', style: labelStyle),
+                  const SizedBox(width: 10),
+                  _MiniIconButton(
+                    icon: Icons.remove_rounded,
+                    onTap: onDecreaseScale,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${staffHeightScale.toStringAsFixed(1)}x',
+                    style: labelStyle,
+                  ),
+                  const SizedBox(width: 8),
+                  _MiniIconButton(
+                    icon: Icons.add_rounded,
+                    onTap: onIncreaseScale,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Speed', style: labelStyle),
+                  const SizedBox(width: 10),
+                  _MiniIconButton(
+                    icon: Icons.remove_rounded,
+                    onTap: onDecreaseSpeed,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${playbackSpeed.toStringAsFixed(1)}x',
+                    style: labelStyle,
+                  ),
+                  const SizedBox(width: 8),
+                  _MiniIconButton(
+                    icon: Icons.add_rounded,
+                    onTap: onIncreaseSpeed,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Timeline', style: labelStyle),
+                  const SizedBox(width: 10),
+                  _MiniIconButton(
+                    icon: Icons.remove_rounded,
+                    onTap: onDecreaseTimeline,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$timelineMsPerDurationDivision',
+                    style: labelStyle,
+                  ),
+                  const SizedBox(width: 8),
+                  _MiniIconButton(
+                    icon: Icons.add_rounded,
+                    onTap: onIncreaseTimeline,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniIconButton extends StatelessWidget {
+  const _MiniIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Ink(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C2735),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 18, color: Colors.white),
       ),
     );
   }
@@ -276,12 +503,18 @@ class _StaffScrollerPainter extends CustomPainter {
     required this.elapsedMsListenable,
     required this.passedNoteIndexes,
     required this.missedNoteIndexes,
+    required this.showKeyboard,
+    required this.staffHeightScale,
+    required this.timelineMsPerDurationDivision,
   }) : super(repaint: elapsedMsListenable);
 
   final ScoreData score;
   final ValueListenable<int> elapsedMsListenable;
   final Set<int> passedNoteIndexes;
   final Set<int> missedNoteIndexes;
+  final bool showKeyboard;
+  final double staffHeightScale;
+  final int timelineMsPerDurationDivision;
 
   final GameStaffPainter _staffPainter = GameStaffPainter();
   final GameTextPainter _textPainter = GameTextPainter();
@@ -292,15 +525,28 @@ class _StaffScrollerPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final currentMs = elapsedMsListenable.value;
     final visuals = _getPrecomputedScoreVisuals(score);
-    final metrics = NotationMetrics.fromCanvasSize(size);
+    final baseMetrics = NotationMetrics.fromCanvasSize(size);
+    final notePxPerMs = NoteTiming.notePxPerMsForScore(
+      score,
+      timelineMsPerDurationDivision: timelineMsPerDurationDivision,
+    );
+    final keyboardHeight = showKeyboard ? baseMetrics.keyboardTotalHeight : 0.0;
+    final staffRegionHeight = (size.height - keyboardHeight).clamp(
+      0.0,
+      size.height,
+    );
+    final metrics = NotationMetrics.fromCanvasSize(
+      size,
+      staffRegionHeight: staffRegionHeight,
+      staffHeightScale: staffHeightScale,
+    );
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
-    final leftInvisibleMeasurePx = measureMs * GameNotePainter.notePxPerMs;
-    final topPadding = metrics.topPadding;
+    final leftInvisibleMeasurePx = measureMs * notePxPerMs;
     final staffHeight = metrics.staffHeight;
     final staffGap = metrics.staffGap;
-
-    final trebleTop = topPadding;
+    final keyboardTop = size.height - keyboardHeight;
+    final trebleTop = metrics.topPadding;
     final bassTop = trebleTop + staffHeight + staffGap;
     final effectiveBassTop = _debugHideLowerStaff
         ? size.height + 1000
@@ -370,6 +616,7 @@ class _StaffScrollerPainter extends CustomPainter {
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: trebleMainClefX,
+      notePxPerMs: notePxPerMs,
     );
     final trebleMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
       visuals.clefEventsByStaff[1] ?? const <_ClefSymbolEvent>[],
@@ -377,6 +624,7 @@ class _StaffScrollerPainter extends CustomPainter {
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: trebleMainClefX,
+      notePxPerMs: notePxPerMs,
     );
     final bassActiveClef = _mainClefSignForStaffAtAnchor(
       visuals.clefEventsByStaff[2] ?? const <_ClefSymbolEvent>[],
@@ -385,6 +633,7 @@ class _StaffScrollerPainter extends CustomPainter {
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: bassMainClefX,
+      notePxPerMs: notePxPerMs,
     );
     final bassMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
       visuals.clefEventsByStaff[2] ?? const <_ClefSymbolEvent>[],
@@ -392,6 +641,7 @@ class _StaffScrollerPainter extends CustomPainter {
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: bassMainClefX,
+      notePxPerMs: notePxPerMs,
     );
     _textPainter.paintClef(
       canvas,
@@ -428,8 +678,7 @@ class _StaffScrollerPainter extends CustomPainter {
       symbolIndex++
     ) {
       final symbol = visuals.timedSymbols[symbolIndex];
-      final x =
-          playheadX + (symbol.timeMs - currentMs) * GameNotePainter.notePxPerMs;
+      final x = playheadX + (symbol.timeMs - currentMs) * notePxPerMs;
 
       if (symbol.kind == _PreparedSymbolKind.barline) {
         if (symbol.timeMs <= 0) {
@@ -480,6 +729,7 @@ class _StaffScrollerPainter extends CustomPainter {
                 playheadX: playheadX,
                 currentMs: currentMs,
                 barlineOffsetX: measureLineOffsetX,
+                notePxPerMs: notePxPerMs,
               )
             : x;
         final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
@@ -581,6 +831,7 @@ class _StaffScrollerPainter extends CustomPainter {
       trebleTop: trebleTop,
       bassTop: effectiveBassTop,
       metrics: metrics,
+      notePxPerMs: notePxPerMs,
     );
 
     canvas.drawLine(
@@ -589,14 +840,16 @@ class _StaffScrollerPainter extends CustomPainter {
       symbolPaint,
     );
 
-    _keyboardPainter.paintKeyboard(
-      canvas,
-      size,
-      score: score,
-      currentMs: currentMs,
-      keyboardTop: size.height - metrics.keyboardTopInset,
-      metrics: metrics,
-    );
+    if (showKeyboard) {
+      _keyboardPainter.paintKeyboard(
+        canvas,
+        size,
+        score: score,
+        currentMs: currentMs,
+        keyboardTop: keyboardTop,
+        metrics: metrics,
+      );
+    }
   }
 
   @override
@@ -604,7 +857,11 @@ class _StaffScrollerPainter extends CustomPainter {
     return oldDelegate.score != score ||
         oldDelegate.elapsedMsListenable != elapsedMsListenable ||
         oldDelegate.passedNoteIndexes != passedNoteIndexes ||
-        oldDelegate.missedNoteIndexes != missedNoteIndexes;
+        oldDelegate.missedNoteIndexes != missedNoteIndexes ||
+        oldDelegate.showKeyboard != showKeyboard ||
+        oldDelegate.staffHeightScale != staffHeightScale ||
+        oldDelegate.timelineMsPerDurationDivision !=
+            timelineMsPerDurationDivision;
   }
 
   int _activeKeyFifths(ScoreData score, int timeMs) {
@@ -765,6 +1022,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required double playheadX,
     required NotationMetrics metrics,
     required double mainClefX,
+    required double notePxPerMs,
   }) {
     if (changes.isEmpty) {
       return fallback;
@@ -777,6 +1035,7 @@ class _StaffScrollerPainter extends CustomPainter {
         playheadX: playheadX,
         metrics: metrics,
         mainClefX: mainClefX,
+        notePxPerMs: notePxPerMs,
       );
       if (currentMs >= arrivalMs) {
         activeSign = change.sign;
@@ -793,6 +1052,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required double playheadX,
     required NotationMetrics metrics,
     required double mainClefX,
+    required double notePxPerMs,
   }) {
     if (changes.isEmpty) {
       return 1.0;
@@ -804,6 +1064,7 @@ class _StaffScrollerPainter extends CustomPainter {
         playheadX: playheadX,
         metrics: metrics,
         mainClefX: mainClefX,
+        notePxPerMs: notePxPerMs,
       );
       if (currentMs >= arrivalMs) {
         continue;
@@ -828,10 +1089,11 @@ class _StaffScrollerPainter extends CustomPainter {
     required double playheadX,
     required NotationMetrics metrics,
     required double mainClefX,
+    required double notePxPerMs,
   }) {
     final clefOffsetX = metrics.measureLineOffsetX + metrics.movingClefOffsetX;
     final distanceToMain = (playheadX + clefOffsetX) - mainClefX;
-    final travelMs = distanceToMain / GameNotePainter.notePxPerMs;
+    final travelMs = distanceToMain / notePxPerMs;
     return symbolTimeMs + travelMs.round();
   }
 
@@ -905,14 +1167,15 @@ class _StaffScrollerPainter extends CustomPainter {
     required NotationMetrics metrics,
   }) {
     final lineSpacing = metrics.staffSpace;
+    final scale = metrics.visualScale;
     return switch (restType) {
-      'whole' => (lineSpacing * 1.7).clamp(14.0, 26.0),
-      'half' => (lineSpacing * 1.7).clamp(14.0, 26.0),
-      'quarter' => (lineSpacing * 2.3).clamp(18.0, 36.0),
-      '8th' => (lineSpacing * 2.55).clamp(20.0, 40.0),
-      '16th' => (lineSpacing * 2.8).clamp(22.0, 43.0),
-      '32th' || '32nd' => (lineSpacing * 3.05).clamp(24.0, 46.0),
-      _ => (lineSpacing * 2.3).clamp(18.0, 36.0),
+      'whole' => (lineSpacing * 1.7).clamp(14.0 * scale, 26.0 * scale),
+      'half' => (lineSpacing * 1.7).clamp(14.0 * scale, 26.0 * scale),
+      'quarter' => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
+      '8th' => (lineSpacing * 2.55).clamp(20.0 * scale, 40.0 * scale),
+      '16th' => (lineSpacing * 2.8).clamp(22.0 * scale, 43.0 * scale),
+      '32th' || '32nd' => (lineSpacing * 3.05).clamp(24.0 * scale, 46.0 * scale),
+      _ => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
     };
   }
 
@@ -964,10 +1227,11 @@ class _StaffScrollerPainter extends CustomPainter {
     required double playheadX,
     required int currentMs,
     required double barlineOffsetX,
+    required double notePxPerMs,
   }) {
     final centerTimeMs = _measureCenterTimeMs(restTimeMs, measureStartTimes);
     return playheadX +
-        (centerTimeMs - currentMs) * GameNotePainter.notePxPerMs +
+        (centerTimeMs - currentMs) * notePxPerMs +
         barlineOffsetX;
   }
 

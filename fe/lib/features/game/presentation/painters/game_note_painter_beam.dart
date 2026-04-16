@@ -333,14 +333,14 @@ void _notePainterDrawBeamGroup(
     ..color = resolvedBeamColor
     ..style = PaintingStyle.fill
     ..isAntiAlias = true;
-  final beamThickness = (lineSpacing * 0.48).clamp(3.0, 6.0);
+  final beamThickness = math.max(lineSpacing * 0.48, 3.0);
   final primaryBeamThickness = beamThickness * 1.6;
   final hasThirtySecondInGroup = indexes.any(
     (idx) => visible[idx].durationType == _DurationType.thirtySecond,
   );
   final interBeamGap = hasThirtySecondInGroup
-      ? (lineSpacing * 0.18).clamp(1.6, 3.2)
-      : (lineSpacing * 0.24).clamp(2.0, 4.0);
+      ? math.max(lineSpacing * 0.18, 1.6)
+      : math.max(lineSpacing * 0.24, 2.0);
   final secondaryBeamThickness = hasThirtySecondInGroup
       ? beamThickness * 0.86
       : beamThickness;
@@ -368,7 +368,7 @@ void _notePainterDrawBeamGroup(
     final stemColor = stemColorByVisibleIndex[idx] ?? resolvedBeamColor;
     final stemPaint = Paint()
       ..color = stemColor
-      ..strokeWidth = (lineSpacing * 0.22).clamp(2.0, 3.6)
+      ..strokeWidth = math.max(lineSpacing * 0.22, 2.0)
       ..strokeCap = StrokeCap.butt;
     _notePainterApplyTrailingFadeToPaint(
       stemPaint,
@@ -705,7 +705,7 @@ void _notePainterDrawSecondaryBeamHook(
   required double playheadX,
   required NotationMetrics metrics,
 }) {
-  final hookLength = (lineSpacing * 1.35).clamp(8.0, 20.0);
+  final hookLength = math.max(lineSpacing * 1.35, 8.0);
   final startX = isForward ? stemX : stemX - hookLength;
   final endX = isForward ? stemX + hookLength : stemX;
 
@@ -827,5 +827,5 @@ double _notePainterMaxBeamSlope(List<_RenderNote> visible, List<int> indexes) {
 }
 
 double _notePainterBaseStemHeight(double spacing) {
-  return (spacing * 3.3).clamp(34.0, 76.0);
+  return math.max(spacing * 3.3, 34.0);
 }

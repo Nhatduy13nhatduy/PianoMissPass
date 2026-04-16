@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
 
 import '../../domain/game_score.dart';
+import '../../domain/note_timing.dart';
 import 'game_prototype_state.dart';
 
 class GamePrototypeCubit extends Cubit<GamePrototypeState> {
@@ -38,6 +39,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   int _maxDurationMs = 10000;
 
   Future<void> initialize() async {
+    final playbackSpeed = state.playbackSpeed;
+    final timelineMsPerDurationDivision = state.timelineMsPerDurationDivision;
     _ticker.stop();
     _stopwatch
       ..stop()
@@ -46,7 +49,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _elapsedMsNotifier.value = _baseElapsedMs;
     _nextMissScanIndex = 0;
 
-    emit(const GamePrototypeState(isLoading: true));
+    emit(
+      GamePrototypeState(
+        isLoading: true,
+        playbackSpeed: playbackSpeed,
+        timelineMsPerDurationDivision: timelineMsPerDurationDivision,
+      ),
+    );
 
     await _setupMidi();
     await _loadScore();
@@ -294,6 +303,35 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _play();
   }
 
+  void setPlaybackSpeed(double value) {
+    final clamped = value.clamp(
+      NoteTiming.minPlaybackSpeed,
+      NoteTiming.maxPlaybackSpeed,
+    ).toDouble();
+    final anchoredCurrentMs = currentMs;
+
+    _baseElapsedMs = anchoredCurrentMs;
+    _elapsedMsNotifier.value = anchoredCurrentMs;
+    if (state.isPlaying) {
+      _stopwatch
+        ..reset()
+        ..start();
+    }
+
+    emit(state.copyWith(playbackSpeed: clamped));
+  }
+
+  void setTimelineMsPerDurationDivision(int value) {
+    final minTimeline = NoteTiming.minTimelineMsPerDurationDivision;
+    final maxTimeline = NoteTiming.maxTimelineMsPerDurationDivision;
+    final step = NoteTiming.timelineMsPerDurationDivisionStep;
+    final normalized = ((value / step).round() * step).clamp(
+      minTimeline,
+      maxTimeline,
+    ).toInt();
+    emit(state.copyWith(timelineMsPerDurationDivision: normalized));
+  }
+
   void _onTick(Duration _) {
     if (!state.isPlaying || state.score == null) {
       return;
@@ -387,7 +425,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return _baseElapsedMs;
     }
 
-    return _baseElapsedMs + _stopwatch.elapsedMilliseconds;
+    return _baseElapsedMs +
+        (_stopwatch.elapsedMilliseconds * state.playbackSpeed).round();
   }
 
   ValueListenable<int> get elapsedMsListenable => _elapsedMsNotifier;

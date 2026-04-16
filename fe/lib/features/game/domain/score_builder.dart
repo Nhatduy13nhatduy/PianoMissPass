@@ -1,12 +1,5 @@
 part of 'game_score.dart';
 
-// Duration-based spacing in quarter units.
-// MusicXML durations are in divisions, where `measureDivisions` is divisions per
-// quarter note. We convert duration to quarter-count first, then multiply by the
-// fixed timeline factor below.
-const bool _useDurationBasedTimeline = true;
-const double _timelineMsPerDurationDivision = 800;
-
 ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   if (document.parts.isEmpty) {
     return const ScoreData(
@@ -367,19 +360,16 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   }
 
   final sortedNoteEntries = notes.indexed
-      .map(
-        (entry) => (
-          note: entry.$2,
-          sourceOrder: noteSourceOrders[entry.$1],
-        ),
-      )
+      .map((entry) => (note: entry.$2, sourceOrder: noteSourceOrders[entry.$1]))
       .toList();
   sortedNoteEntries.sort((a, b) {
     final timeComparison = a.note.hitTimeMs.compareTo(b.note.hitTimeMs);
     if (timeComparison != 0) {
       return timeComparison;
     }
-    final measureComparison = a.note.measureIndex.compareTo(b.note.measureIndex);
+    final measureComparison = a.note.measureIndex.compareTo(
+      b.note.measureIndex,
+    );
     if (measureComparison != 0) {
       return measureComparison;
     }
@@ -754,14 +744,6 @@ int _divisionsToTimelineMs(
   required int measureDivisions,
   required double measureBpm,
 }) {
-  if (_useDurationBasedTimeline) {
-    if (measureDivisions <= 0) {
-      return 0;
-    }
-    final quarterCount = divisions / measureDivisions;
-    return (quarterCount * _timelineMsPerDurationDivision).round();
-  }
-
   if (measureDivisions <= 0 || measureBpm <= 0) {
     return 0;
   }

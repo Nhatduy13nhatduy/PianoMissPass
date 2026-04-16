@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class NotationMetrics {
@@ -5,6 +7,7 @@ class NotationMetrics {
     required this.screenWidth,
     required this.screenHeight,
     required this.aspectRatio,
+    required this.staffRegionHeight,
     required this.staffHeight,
     required this.topPadding,
     required this.staffGap,
@@ -12,45 +15,36 @@ class NotationMetrics {
     required this.staffRightInset,
   });
 
-  factory NotationMetrics.fromCanvasSize(Size size) {
+  factory NotationMetrics.fromCanvasSize(
+    Size size, {
+    double? staffRegionHeight,
+    double staffHeightScale = 1.0,
+  }) {
     final screenHeight = size.height;
     final screenWidth = size.width;
     final aspectRatio = screenWidth <= 0 ? 1.0 : screenWidth / screenHeight;
+    final resolvedStaffRegionHeight = (staffRegionHeight ?? screenHeight)
+        .clamp(0.0, screenHeight)
+        .toDouble();
 
-    // Tune staff size primarily from available vertical room so the score
-    // feels consistent across short phones, taller phones, and tablets.
-    var staffHeight = (() {
-      if (screenHeight <= 360) {
-        return screenHeight * 0.16;
-      }
-      if (screenHeight <= 430) {
-        return screenHeight * 0.17;
-      }
-      if (screenHeight <= 520) {
-        return screenHeight * 0.182;
-      }
-      if (screenHeight <= 680) {
-        return screenHeight * 0.19;
-      }
-      return screenHeight * 0.2;
-    })();
+    final safeScale = staffHeightScale.clamp(0.5, 2.0).toDouble();
+    var staffHeight = (resolvedStaffRegionHeight / 4.0) * safeScale;
+    final maxStaffHeight = resolvedStaffRegionHeight / 2.0;
+    staffHeight = staffHeight.clamp(28.0, maxStaffHeight > 28 ? maxStaffHeight : 28.0)
+        .toDouble();
+    final remainingVerticalSpace =
+        (resolvedStaffRegionHeight - (staffHeight * 2.0)).clamp(0.0, double.infinity);
+    final topPadding = remainingVerticalSpace / 4.0;
+    final staffGap = remainingVerticalSpace / 2.0;
 
-    // Very wide layouts often have less perceived vertical density, so give
-    // the staff a small lift to avoid looking undersized on larger devices.
-    if (aspectRatio >= 2.1) {
-      staffHeight *= 1.04;
-    } else if (aspectRatio <= 1.45) {
-      staffHeight *= 0.97;
-    }
-
-    staffHeight = staffHeight.clamp(52.0, 96.0).toDouble();
     return NotationMetrics(
       screenWidth: screenWidth,
       screenHeight: screenHeight,
       aspectRatio: aspectRatio,
+      staffRegionHeight: resolvedStaffRegionHeight,
       staffHeight: staffHeight,
-      topPadding: (staffHeight * 0.78).clamp(30.0, 56.0).toDouble(),
-      staffGap: (staffHeight * 1.45).clamp(74.0, 112.0).toDouble(),
+      topPadding: topPadding,
+      staffGap: staffGap,
       staffLeftInset: (staffHeight * 0.3).clamp(16.0, 28.0).toDouble(),
       staffRightInset: 0.0,
     );
@@ -59,6 +53,7 @@ class NotationMetrics {
   final double screenWidth;
   final double screenHeight;
   final double aspectRatio;
+  final double staffRegionHeight;
   final double staffHeight;
   final double topPadding;
   final double staffGap;
@@ -66,82 +61,87 @@ class NotationMetrics {
   final double staffRightInset;
 
   double get staffSpace => staffHeight / 4;
+  double get visualScale {
+    final baseStaffHeight = staffRegionHeight / 4.0;
+    if (baseStaffHeight <= 0) {
+      return 1.0;
+    }
+    return staffHeight / baseStaffHeight;
+  }
 
-  double get noteHeadHeight => (staffSpace * 1.1).clamp(10.8, 25.5).toDouble();
+  double _scaledClamp(double value, double min, double max) {
+    return value.clamp(min * visualScale, max * visualScale).toDouble();
+  }
+
+  double get noteHeadHeight => math.max(staffSpace * 1.1, 10.8 * visualScale);
   double get wholeNoteHeadHeight =>
-      (staffSpace * 1.42).clamp(12.0, 29.5).toDouble();
+      math.max(staffSpace * 1.42, 12.0 * visualScale);
   double get noteHeadStrokeWidth =>
-      (staffSpace * 0.12).clamp(1.1, 2.4).toDouble();
+      math.max(staffSpace * 0.12, 1.1 * visualScale);
   double get slurAnchorHorizontalInset =>
-      (staffSpace * 0.82).clamp(7.0, 14.0).toDouble();
+      _scaledClamp(staffSpace * 0.82, 7.0, 14.0);
   double get slurAnchorVerticalInset =>
-      (staffSpace * 0.96).clamp(7.2, 14.2).toDouble();
+      _scaledClamp(staffSpace * 0.96, 7.2, 14.2);
   double get slurStartAnchorHorizontalInset =>
       (slurAnchorHorizontalInset * 1.0).toDouble();
   double get slurEndAnchorHorizontalInset =>
       (slurAnchorHorizontalInset * 0.86).toDouble();
   double get slurOutsideHeadHorizontalInset =>
-      (staffSpace * 0.24).clamp(2.0, 5.0).toDouble();
+      _scaledClamp(staffSpace * 0.24, 2.0, 5.0);
   double get slurChordHorizontalInsetExtra =>
-      (staffSpace * 0.32).clamp(2.4, 6.4).toDouble();
+      _scaledClamp(staffSpace * 0.32, 2.4, 6.4);
   double get slurChordVerticalInsetExtra =>
-      (staffSpace * 0.28).clamp(2.0, 5.2).toDouble();
+      _scaledClamp(staffSpace * 0.28, 2.0, 5.2);
   double get slurNoteHeadClearance =>
-      (staffSpace * 0.34).clamp(2.8, 6.2).toDouble();
-  double get slurStemSideNudgeX =>
-      (staffSpace * 0.12).clamp(1.0, 2.4).toDouble();
+      _scaledClamp(staffSpace * 0.34, 2.8, 6.2);
+  double get slurStemSideNudgeX => _scaledClamp(staffSpace * 0.12, 1.0, 2.4);
   double get slurStemClearanceY =>
-      (staffSpace * 0.34).clamp(2.8, 6.0).toDouble();
+      _scaledClamp(staffSpace * 0.34, 2.8, 6.0);
   double get slurBeamClearanceY =>
-      (staffSpace * 0.42).clamp(3.4, 7.2).toDouble();
+      _scaledClamp(staffSpace * 0.42, 3.4, 7.2);
   double get slurFingeringClearanceY =>
-      (staffSpace * 0.52).clamp(4.0, 8.8).toDouble();
+      _scaledClamp(staffSpace * 0.52, 4.0, 8.8);
   double get slurAccidentalClearanceX =>
-      (staffSpace * 0.92).clamp(7.4, 15.0).toDouble();
+      _scaledClamp(staffSpace * 0.92, 7.4, 15.0);
   double get slurAutoplaceMinDistance =>
-      (staffSpace * 0.46).clamp(3.2, 7.6).toDouble();
+      _scaledClamp(staffSpace * 0.46, 3.2, 7.6);
   double get slurAnchorLocalCollisionZoneX =>
-      (staffSpace * 2.1).clamp(14.0, 32.0).toDouble();
+      _scaledClamp(staffSpace * 2.1, 14.0, 32.0);
   double get slurAccidentalXWeight => 1.2;
   double get slurBeamAnchorYWeight => 1.08;
   double get slurFingeringAnchorYWeight => 1.12;
   double get slurDotAnchorYWeight => 0.96;
   double get slurStaccatoAnchorYWeight => 1.0;
   double get slurAnchorDotClearanceY =>
-      (staffSpace * 0.32).clamp(2.4, 5.6).toDouble();
+      _scaledClamp(staffSpace * 0.32, 2.4, 5.6);
   double get slurAnchorStaccatoClearanceY =>
-      (staffSpace * 0.38).clamp(2.8, 6.4).toDouble();
+      _scaledClamp(staffSpace * 0.38, 2.8, 6.4);
   double get slurBodyNoteClearance =>
-      (staffSpace * 0.5).clamp(3.6, 8.0).toDouble();
+      _scaledClamp(staffSpace * 0.5, 3.6, 8.0);
   double get slurBodyNoteArcLiftWeight => 1.0;
   double get slurBodyNoteArcLiftMax =>
-      (staffSpace * 0.75).clamp(5.0, 10.0).toDouble();
+      _scaledClamp(staffSpace * 0.75, 5.0, 10.0);
   double get slurNoteCollisionClearance =>
-      (staffSpace * 0.42).clamp(3.0, 7.0).toDouble();
+      _scaledClamp(staffSpace * 0.42, 3.0, 7.0);
   double get slurControlInsetRatio => 0.28;
   double get slurControlInsetMin =>
-      (staffSpace * 1.55).clamp(10.0, 20.0).toDouble();
+      _scaledClamp(staffSpace * 1.55, 10.0, 20.0);
   double get slurControlInsetMax =>
-      (staffSpace * 4.6).clamp(22.0, 44.0).toDouble();
+      _scaledClamp(staffSpace * 4.6, 22.0, 44.0);
   double get slurArcHeightRatio => 0.085;
-  double get slurArcHeightMin =>
-      (staffSpace * 1.18).clamp(8.0, 16.0).toDouble();
-  double get slurArcHeightMax =>
-      (staffSpace * 2.7).clamp(16.0, 30.0).toDouble();
+  double get slurArcHeightMin => _scaledClamp(staffSpace * 1.18, 8.0, 16.0);
+  double get slurArcHeightMax => _scaledClamp(staffSpace * 2.7, 16.0, 30.0);
   double get slurArcHeightSpanRatioCap => 0.26;
   double get slurShortSpanBoostThreshold =>
-      (staffSpace * 6.4).clamp(42.0, 88.0).toDouble();
-  double get slurShortSpanBoostMax =>
-      (staffSpace * 0.7).clamp(5.0, 10.0).toDouble();
-  double get slurSlopeBoostMax =>
-      (staffSpace * 0.45).clamp(3.0, 6.0).toDouble();
-  double get slurStackGap => (staffSpace * 0.82).clamp(6.0, 14.0).toDouble();
+      _scaledClamp(staffSpace * 6.4, 42.0, 88.0);
+  double get slurShortSpanBoostMax => _scaledClamp(staffSpace * 0.7, 5.0, 10.0);
+  double get slurSlopeBoostMax => _scaledClamp(staffSpace * 0.45, 3.0, 6.0);
+  double get slurStackGap => _scaledClamp(staffSpace * 0.82, 6.0, 14.0);
   double get slurStackOverlapPadding =>
-      (staffSpace * 0.55).clamp(4.0, 10.0).toDouble();
+      _scaledClamp(staffSpace * 0.55, 4.0, 10.0);
   double get slurShoulderDropRatio => 0.1;
-  double get slurEndThickness => (staffSpace * 0.12).clamp(0.9, 1.7).toDouble();
-  double get slurMiddleThickness =>
-      (staffSpace * 0.24).clamp(1.8, 3.2).toDouble();
+  double get slurEndThickness => _scaledClamp(staffSpace * 0.12, 0.9, 1.7);
+  double get slurMiddleThickness => _scaledClamp(staffSpace * 0.24, 1.8, 3.2);
   double get slurOuterThicknessRatio => 0.66;
   double get slurInnerThicknessRatio => 0.34;
   double get slurPartialHangRatio => 0.42;
@@ -149,49 +149,54 @@ class NotationMetrics {
   double get trebleMainClefX => staffLeftInset + staffSpace * 0.68;
   double get bassMainClefX => staffLeftInset + staffSpace * 0.82;
   double get clefBaselineOffsetY => staffSpace * 0.35;
-  double get clefFontSize => (staffSpace * 4.8).clamp(58.0, 84.0).toDouble();
+  double get clefFontSize => _scaledClamp(staffSpace * 4.8, 58.0, 84.0);
   double get movingClefOffsetX => staffSpace * 0.35;
 
   double get keySignatureStartX => staffLeftInset + staffSpace * 4.55;
   double get keyToTimeSignatureGap =>
-      (staffSpace * 0.2).clamp(4.0, 10.0).toDouble();
+      _scaledClamp(staffSpace * 0.2, 4.0, 10.0);
   double get timeSignatureToPlayheadGap =>
-      (staffSpace * 1.15).clamp(12.0, 22.0).toDouble();
+      _scaledClamp(staffSpace * 1.15, 12.0, 22.0);
   double get measureLineOffsetX => -staffSpace * 1.33;
   double get keySignatureGlyphFontSize =>
-      (staffSpace * 3.9).clamp(28.0, 54.0).toDouble();
+      _scaledClamp(staffSpace * 3.9, 28.0, 54.0);
   double get keySignatureBaselineNudgeSharp => staffSpace * 0.05;
   double get keySignatureBaselineNudgeFlat => staffSpace * 0.18;
   double get keySignatureSpacingX =>
-      (staffSpace * 1.28).clamp(10.0, 18.0).toDouble();
+      _scaledClamp(staffSpace * 1.28, 10.0, 18.0);
   double get keySignatureTrailingGap =>
-      (staffSpace * 1.95).clamp(12.0, 26.0).toDouble();
+      _scaledClamp(staffSpace * 1.95, 12.0, 26.0);
 
   double get timeSignatureTargetDigitHeight =>
-      (staffHeight * 0.55).clamp(24.0, 48.0).toDouble();
+      _scaledClamp(staffHeight * 0.55, 24.0, 48.0);
   double get timeSignatureVisualScale => 1.85;
-  double get timeSignatureMinFontSize => 44.0;
-  double get timeSignatureMaxFontSize => 110.0;
+  double get timeSignatureMinFontSize => 44.0 * visualScale;
+  double get timeSignatureMaxFontSize => 110.0 * visualScale;
   double get timeSignatureTopCenterOffset =>
-      (staffSpace * 1.0).clamp(5.0, 28.0).toDouble();
+      _scaledClamp(staffSpace * 1.0, 5.0, 28.0);
   double get timeSignatureBottomCenterOffset =>
-      (staffSpace * 3.0).clamp(14.0, 64.0).toDouble();
+      _scaledClamp(staffSpace * 3.0, 14.0, 64.0);
   double get timeSignatureMaxWidthPadding =>
-      (staffSpace * 0.42).clamp(4.0, 10.0).toDouble();
+      _scaledClamp(staffSpace * 0.42, 4.0, 10.0);
 
-  double get playheadStrokeWidth => (staffSpace * 0.15).clamp(1.8, 2.6);
-  double get measureLineStrokeWidth => (staffSpace * 0.09).clamp(1.0, 1.6);
-  double get symbolLabelFontSize => (staffSpace * 0.93).clamp(12.0, 16.0);
+  double get playheadStrokeWidth => _scaledClamp(staffSpace * 0.15, 1.8, 2.6);
+  double get measureLineStrokeWidth =>
+      _scaledClamp(staffSpace * 0.09, 1.0, 1.6);
+  double get symbolLabelFontSize =>
+      _scaledClamp(staffSpace * 0.93, 12.0, 16.0);
   double get symbolLabelTopOffset => staffSpace * 1.05;
   double get symbolLabelOffsetX => staffSpace * 0.27;
 
   double get noteInkColorFontScale => staffSpace;
   double get restWholeHalfScaleFactor => 2.65;
   double get restOtherScaleFactor => 1.72;
-  double get restWholeHalfMinFontSize => 50.0;
-  double get restWholeHalfMaxFontSize => 124.0;
-  double get restOtherMinFontSize => 32.0;
-  double get restOtherMaxFontSize => 84.0;
+  double get restWholeHalfMinFontSize => 50.0 * visualScale;
+  double get restWholeHalfMaxFontSize => 124.0 * visualScale;
+  double get restOtherMinFontSize => 32.0 * visualScale;
+  double get restOtherMaxFontSize => 84.0 * visualScale;
+
+  double get keyboardTotalHeight =>
+      keyboardWhiteHeight + keyboardBedBottomInset;
 
   double get keyboardTopInset => (staffHeight * 0.82).clamp(44.0, 62.0);
   double get keyboardWhiteHeight {

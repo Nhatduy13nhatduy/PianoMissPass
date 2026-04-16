@@ -22,7 +22,6 @@ class GameNotePainter {
   static const double _renderWindowPaddingMs = 1400;
   static const double _accidentalCollisionPaddingTuning = 1.0;
   static const double _accidentalCollisionPaddingScale = 0.04;
-  static const double notePxPerMs = NoteTiming.notePxPerMs;
   static const int _trebleBottomLineStep = 30; // E4
   static const int _bassBottomLineStep = 18; // G2
   static const int _upperStableTrebleStep = 30; // E4+
@@ -75,6 +74,7 @@ class GameNotePainter {
     required double trebleTop,
     required double bassTop,
     required NotationMetrics metrics,
+    required double notePxPerMs,
   }) {
     final lineSpacing = metrics.staffSpace;
     final precomputedScore = _getPrecomputedScoreRenderData(score);
@@ -727,7 +727,7 @@ class GameNotePainter {
       );
     }
 
-    this._drawSlurs(
+    _drawSlurs(
       canvas,
       score: score,
       precomputedScore: precomputedScore,
@@ -748,6 +748,7 @@ class GameNotePainter {
       trebleTop: trebleTop,
       bassTop: bassTop,
       metrics: metrics,
+      notePxPerMs: notePxPerMs,
     );
   }
 
@@ -1681,8 +1682,8 @@ class GameNotePainter {
     final topLine = bottomLine + 8;
     final ledgerPaint = Paint()
       ..color = color
-      ..strokeWidth = 1.6;
-    final halfLength = (spacing * 1.12).clamp(9.4, 16.4);
+      ..strokeWidth = math.max(spacing * 0.05, 1.6);
+    final halfLength = math.max(spacing * 1.12, 9.4);
     final leftHalfLength = durationType == _DurationType.whole
         ? halfLength * 1.49
         : halfLength;
@@ -1895,7 +1896,7 @@ class GameNotePainter {
 
     final p = Paint()
       ..color = color
-      ..strokeWidth = (spacing * 0.22).clamp(2.0, 3.6)
+      ..strokeWidth = math.max(spacing * 0.22, 2.0)
       ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
     final stemStart = _stemStartForGeometry(
@@ -1949,7 +1950,7 @@ class GameNotePainter {
         continue;
       }
 
-      final flagTargetHeight = (spacing * 2.2).clamp(14.0, 30.0);
+      final flagTargetHeight = math.max(spacing * 2.2, 14.0);
       final scale = flagTargetHeight / bounds.height;
       final matrix = Matrix4.identity()
         ..translate(anchor.dx, anchor.dy)
@@ -1981,8 +1982,8 @@ class GameNotePainter {
       return;
     }
 
-    final scale = (_accidentalScale(spacing) * scaleMultiplier).clamp(0.2, 2.0);
-    final fontSize = (68.0 * scale).clamp(10.0, 56.0);
+    final scale = math.max(_accidentalScale(spacing) * scaleMultiplier, 0.2);
+    final fontSize = math.max(68.0 * scale, 10.0);
     final baselineNudge = accidental == '♭' ? fontSize * 0.025 : 0.0;
 
     final glyphSize = _sharedTextPainter.measureText(
@@ -2042,7 +2043,7 @@ class GameNotePainter {
       return;
     }
 
-    final dotRadius = (spacing * 0.2).clamp(1.5, 3.5);
+    final dotRadius = math.max(spacing * 0.2, 1.5);
     final dotPaint = Paint()
       ..color = color
       ..style = PaintingStyle.fill
@@ -2074,7 +2075,7 @@ class GameNotePainter {
     required double spacing,
     required Color color,
   }) {
-    final fontSize = (spacing * 0.95).clamp(9.0, 16.0);
+    final fontSize = math.max(spacing * 0.95, 9.0);
     final textSize = _sharedTextPainter.measureText(
       text,
       fontSize: fontSize,
@@ -2103,7 +2104,7 @@ class GameNotePainter {
     required int referenceNoteStep,
     required bool isTreble,
   }) {
-    final radius = (spacing * 0.16).clamp(1.2, 2.8).toDouble();
+    final radius = math.max(spacing * 0.16, 1.2).toDouble();
 
     var yOffset = direction == _StemDirection.up ? spacing : -spacing;
 

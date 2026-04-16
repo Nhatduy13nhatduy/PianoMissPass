@@ -127,8 +127,8 @@ Rect _notePainterAccidentalBounds(
 }
 
 double _notePainterAccidentalScale(double spacing) {
-  const accidentalScaleFactor = 1.02;
-  return ((spacing / 7.0) * accidentalScaleFactor).clamp(0.4, 0.74);
+  const accidentalScaleFactor = 0.3;
+  return math.max((spacing / 7.0) * accidentalScaleFactor, 0.4);
 }
 
 double _notePainterAccidentalCollisionPadding(double spacing) {

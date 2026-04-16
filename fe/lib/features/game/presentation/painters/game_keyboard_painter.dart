@@ -27,13 +27,16 @@ class GameKeyboardPainter {
 
     final whiteWidth = size.width / math.max(whiteMidis.length, 1);
     final whiteHeight = metrics.keyboardWhiteHeight;
+    final whiteVisualHeight = whiteHeight + metrics.keyboardBedBottomInset;
     final blackHeight = whiteHeight * metrics.keyboardBlackHeightRatio;
     final blackWidth = whiteWidth * metrics.keyboardBlackWidthRatio;
     final whiteGap = metrics.keyboardWhiteGap;
-    final whiteCornerRatio =
-        whiteWidth <= 0 ? 0.0 : metrics.keyboardWhiteCornerRadius / whiteWidth;
-    final blackCornerRatio =
-        blackWidth <= 0 ? 0.0 : metrics.keyboardBlackCornerRadius / blackWidth;
+    final whiteCornerRatio = whiteWidth <= 0
+        ? 0.0
+        : metrics.keyboardWhiteCornerRadius / whiteWidth;
+    final blackCornerRatio = blackWidth <= 0
+        ? 0.0
+        : metrics.keyboardBlackCornerRadius / blackWidth;
 
     final active = <int>{};
     final startTime = currentMs - _activeWindowMs;
@@ -53,7 +56,7 @@ class GameKeyboardPainter {
         0,
         keyboardTop - metrics.keyboardBedTopInset,
         size.width,
-        whiteHeight + metrics.keyboardBedBottomInset,
+        whiteHeight * 1.5 + metrics.keyboardBedBottomInset,
       ),
       const Radius.circular(0),
     );
@@ -72,12 +75,9 @@ class GameKeyboardPainter {
         x + whiteGap,
         keyboardTop + pressDepth,
         whiteWidth - (whiteGap * 2),
-        whiteHeight - pressDepth,
+        whiteVisualHeight - pressDepth,
       );
-      final whiteRadius = _radiusFromRatio(
-        keyRect.width,
-        whiteCornerRatio,
-      );
+      final whiteRadius = _radiusFromRatio(keyRect.width, whiteCornerRatio);
       final keyRRect = RRect.fromRectAndCorners(
         keyRect,
         bottomLeft: whiteRadius,
@@ -155,10 +155,7 @@ class GameKeyboardPainter {
           blackWidth,
           blackHeight - pressDepth,
         );
-        final blackRadius = _radiusFromRatio(
-          keyRect.width,
-          blackCornerRatio,
-        );
+        final blackRadius = _radiusFromRatio(keyRect.width, blackCornerRatio);
         final keyRRect = RRect.fromRectAndCorners(
           keyRect,
           bottomLeft: blackRadius,
@@ -243,10 +240,7 @@ class GameKeyboardPainter {
         width: markerWidth,
         height: markerHeight,
       ),
-      _radiusFromRatio(
-        markerWidth,
-        radiusRatio * 2.4,
-      ),
+      _radiusFromRatio(markerWidth, radiusRatio * 2.4),
     );
 
     canvas.drawRRect(markerRect, Paint()..color = markerColor);
