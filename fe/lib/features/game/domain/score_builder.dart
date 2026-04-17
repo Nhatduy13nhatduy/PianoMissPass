@@ -409,13 +409,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       }
     }
 
-    final expectedMeasureDiv = divisions * beats * (4.0 / beatType);
-    final shouldPadToExpectedMeasureLength =
-        measureIndex > 0 || measureMaxDiv >= expectedMeasureDiv;
-    if (shouldPadToExpectedMeasureLength &&
-        measureMaxDiv < expectedMeasureDiv) {
-      measureMaxDiv = expectedMeasureDiv;
-    }
     elapsedMs =
         measureStartMs +
         _divisionsToTimelineMs(
