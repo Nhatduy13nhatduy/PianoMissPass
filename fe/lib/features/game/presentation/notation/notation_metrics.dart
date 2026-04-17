@@ -154,13 +154,14 @@ class NotationMetrics {
   double get keyToTimeSignatureGap => _scaledClamp(staffSpace * 0.2, 4.0, 10.0);
   double get timeSignatureToPlayheadGap =>
       _scaledClamp(staffSpace * 1.15, 12.0, 22.0);
+  double get fixedPlayheadX => staffLeftInset + staffSpace * 12;
   double get measureLineOffsetX => -staffSpace * 1.33;
   double get keySignatureGlyphFontSize =>
-      math.max(staffSpace * 3.9, 28.0 * visualScale);
-  double get keySignatureBaselineNudgeSharp => staffSpace * 0.05;
-  double get keySignatureBaselineNudgeFlat => staffSpace * 0.18;
+      math.max(staffSpace * 3.45, 25.0 * visualScale);
+  double get keySignatureBaselineNudgeSharp => staffSpace * 0.14;
+  double get keySignatureBaselineNudgeFlat => staffSpace * 0.28;
   double get keySignatureSpacingX =>
-      _scaledClamp(staffSpace * 1.28, 10.0, 18.0);
+      _scaledClamp(staffSpace * 1.38, 11.0, 19.0);
   double get keySignatureTrailingGap =>
       _scaledClamp(staffSpace * 1.95, 12.0, 26.0);
 

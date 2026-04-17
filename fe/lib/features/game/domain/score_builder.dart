@@ -7,6 +7,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       beatsPerMeasure: 4,
       beatUnit: 4,
       notes: <MusicNote>[],
+      playbackNotes: <MusicNote>[],
       slurs: <SlurSpan>[],
       symbols: <MusicSymbol>[],
       keySignatures: <KeySignatureChange>[],
@@ -25,14 +26,18 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
   final staffClefIsTreble = <int, bool>{1: true, 2: false};
 
   final notes = <MusicNote>[];
+  final playbackNotes = <MusicNote>[];
   final noteSourceOrders = <int>[];
   final rawSlurEvents = <_PendingSlurEvent>[];
   final symbols = <MusicSymbol>[];
   final keySignatures = <KeySignatureChange>[];
+  final measureSpans = <_RepeatMeasureSpan>[];
   final globalStaffByVoice = <int, int>{};
   int? globalLastExplicitStaff;
   var elapsedMs = 0;
   var sourceNoteOrder = 0;
+  int? previousRawMeasureNumber;
+  var previousLogicalMeasureIndex = -1;
 
   for (
     var measureIndex = 0;
@@ -40,6 +45,14 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     measureIndex++
   ) {
     final measure = part.measures[measureIndex];
+    final logicalMeasureIndex = _resolveLogicalMeasureIndex(
+      measure,
+      fallbackSequentialIndex: measureIndex,
+      previousRawMeasureNumber: previousRawMeasureNumber,
+      previousLogicalMeasureIndex: previousLogicalMeasureIndex,
+    );
+    previousRawMeasureNumber = measure.number;
+    previousLogicalMeasureIndex = logicalMeasureIndex;
 
     // Update divisions from attributes first, so measure has correct divisions
     final attrs = _firstChildByName(measure.elements, 'attributes');
@@ -56,7 +69,13 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     final measureDivisions = divisions;
     final measureBpm = bpm;
     final measureStartMs = elapsedMs;
-    symbols.add(MusicSymbol(label: '|', timeMs: measureStartMs));
+    symbols.add(
+      MusicSymbol(
+        label: '|',
+        timeMs: measureStartMs,
+        measureIndex: logicalMeasureIndex,
+      ),
+    );
 
     if (attrs != null) {
       final keyFifths = _firstChildByName(
@@ -71,7 +90,11 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           );
         }
         symbols.add(
-          MusicSymbol(label: 'Key $keyFifths', timeMs: measureStartMs),
+          MusicSymbol(
+            label: 'Key $keyFifths',
+            timeMs: measureStartMs,
+            measureIndex: logicalMeasureIndex,
+          ),
         );
       }
 
@@ -85,7 +108,11 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         beats = int.tryParse(beatsText.trim()) ?? beats;
         beatType = int.tryParse(beatTypeText.trim()) ?? beatType;
         symbols.add(
-          MusicSymbol(label: '$beats/$beatType', timeMs: measureStartMs),
+          MusicSymbol(
+            label: '$beats/$beatType',
+            timeMs: measureStartMs,
+            measureIndex: logicalMeasureIndex,
+          ),
         );
       }
     }
@@ -101,6 +128,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           MusicSymbol(
             label: 'Tempo ${bpm.toStringAsFixed(0)}',
             timeMs: measureStartMs,
+            measureIndex: logicalMeasureIndex,
           ),
         );
       }
@@ -112,6 +140,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           MusicSymbol(
             label: _localName(firstDynamic.name).toUpperCase(),
             timeMs: measureStartMs,
+            measureIndex: logicalMeasureIndex,
           ),
         );
       }
@@ -123,6 +152,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     final expectedMeasureDivCurrent = divisions * beats * (4.0 / beatType);
     final staffByVoice = <int, int>{...globalStaffByVoice};
     int? lastExplicitStaff = globalLastExplicitStaff;
+    final pendingGraceNotes = <_PendingGracePlaybackNote>[];
 
     var noteCursor = 0;
     final isMeasureAllRest =
@@ -188,9 +218,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       final isGrace = note.raw.children.any(
         (child) => _localName(child.name).toLowerCase() == 'grace',
       );
-      if (isGrace) {
-        continue;
-      }
       final isChord = note.isChord;
       final isRest = note.isRest;
       final duration = note.durationDivisions ?? 0;
@@ -230,19 +257,54 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         globalLastExplicitStaff = explicitStaff;
       }
 
+      final midi = isRest
+          ? null
+          : pitchToMidiFromPitch(
+              step: note.step,
+              octave: note.octave,
+              alter: note.alter ?? 0,
+            );
+      final step = note.step;
+      final octave = note.octave;
+      final isTrebleFromMxl = staffNumber == null
+          ? null
+          : (staffClefIsTreble[staffNumber] ?? (staffNumber == 1));
+      final staffStep = isRest ? null : staffStepFromPitch(step, octave);
+
+      if (isGrace) {
+        if (!isRest && midi != null && staffStep != null) {
+          pendingGraceNotes.add(
+            _PendingGracePlaybackNote(
+              midi: midi,
+              staffStep: staffStep,
+              voice: voice,
+              staffNumber: staffNumber,
+              measureIndex: logicalMeasureIndex,
+              isTrebleFromMxl: isTrebleFromMxl,
+              durationDivisions: duration,
+              isChord: isChord,
+            ),
+          );
+        }
+        continue;
+      }
+
       if (!isRest) {
-        final midi = pitchToMidiFromPitch(
-          step: note.step,
-          octave: note.octave,
-          alter: note.alter ?? 0,
-        );
-        final step = note.step;
-        final octave = note.octave;
-        final isTrebleFromMxl = staffNumber == null
-            ? null
-            : (staffClefIsTreble[staffNumber] ?? (staffNumber == 1));
-        final staffStep = staffStepFromPitch(step, octave);
         if (midi != null && staffStep != null) {
+          if (pendingGraceNotes.isNotEmpty) {
+            playbackNotes.addAll(
+              _buildGracePlaybackNotes(
+                pendingGraceNotes,
+                principalOnsetMs: onsetMs,
+                principalHoldMs: holdMs,
+                measureStartMs: measureStartMs,
+                measureBpm: measureBpm,
+                measureDivisions: measureDivisions,
+              ),
+            );
+            pendingGraceNotes.clear();
+          }
+
           final accidental = accidentalGlyph(
             note.alter?.toString(),
             note.accidental,
@@ -259,27 +321,27 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           final normalizedFingering = (fingering == null || fingering.isEmpty)
               ? null
               : fingering;
-          notes.add(
-            MusicNote(
-              midi: midi,
-              staffStep: staffStep,
-              hitTimeMs: onsetMs,
-              holdMs: holdMs,
-              voice: voice,
-              accidental: accidental,
-              isTrebleFromMxl: isTrebleFromMxl,
-              staffNumber: staffNumber,
-              measureIndex: measureIndex,
-              notatedBeats: notatedBeats,
-              primaryBeam: primaryBeam,
-              secondaryBeam: secondaryBeam,
-              tertiaryBeam: tertiaryBeam,
-              stemFromMxl: stemFromMxl,
-              dotCount: dotCount,
-              isStaccato: isStaccato,
-              fingering: normalizedFingering,
-            ),
+          final builtNote = MusicNote(
+            midi: midi,
+            staffStep: staffStep,
+            hitTimeMs: onsetMs,
+            holdMs: holdMs,
+            voice: voice,
+            accidental: accidental,
+            isTrebleFromMxl: isTrebleFromMxl,
+            staffNumber: staffNumber,
+            measureIndex: logicalMeasureIndex,
+            notatedBeats: notatedBeats,
+            primaryBeam: primaryBeam,
+            secondaryBeam: secondaryBeam,
+            tertiaryBeam: tertiaryBeam,
+            stemFromMxl: stemFromMxl,
+            dotCount: dotCount,
+            isStaccato: isStaccato,
+            fingering: normalizedFingering,
           );
+          notes.add(builtNote);
+          playbackNotes.add(builtNote);
           final noteSourceOrder = sourceNoteOrder++;
           noteSourceOrders.add(noteSourceOrder);
           for (final slur in note.slurs) {
@@ -294,7 +356,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
                 number: slur.number,
                 eventType: slurEventType,
                 timeMs: onsetMs,
-                measureIndex: measureIndex,
+                measureIndex: logicalMeasureIndex,
                 voice: voice,
                 staffNumber: staffNumber,
                 staffStep: staffStep,
@@ -330,7 +392,11 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
               );
         final restTimeMs = isMeasureAllRest ? measureStartMs : onsetMs;
         symbols.add(
-          MusicSymbol(label: 'Rest:$restStaff:$restType', timeMs: restTimeMs),
+          MusicSymbol(
+            label: 'Rest:$restStaff:$restType',
+            timeMs: restTimeMs,
+            measureIndex: logicalMeasureIndex,
+          ),
         );
       }
 
@@ -357,6 +423,32 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
           measureDivisions: measureDivisions,
           measureBpm: measureBpm,
         );
+    final measureEndMs = elapsedMs;
+
+    if (pendingGraceNotes.isNotEmpty) {
+      final fallbackPrincipalOnsetMs = elapsedMs;
+      playbackNotes.addAll(
+        _buildGracePlaybackNotes(
+          pendingGraceNotes,
+          principalOnsetMs: fallbackPrincipalOnsetMs,
+          principalHoldMs: 0,
+          measureStartMs: measureStartMs,
+          measureBpm: measureBpm,
+          measureDivisions: measureDivisions,
+        ),
+      );
+      pendingGraceNotes.clear();
+    }
+
+    measureSpans.add(
+      _RepeatMeasureSpan(
+        measureIndex: logicalMeasureIndex,
+        startTimeMs: measureStartMs,
+        endTimeMs: measureEndMs,
+        hasForwardRepeat: _hasForwardRepeatBarline(measure),
+        hasBackwardRepeat: _hasBackwardRepeatBarline(measure),
+      ),
+    );
   }
 
   final sortedNoteEntries = notes.indexed
@@ -394,8 +486,16 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     rawEvents: rawSlurEvents,
     sortedNoteEntries: sortedNoteEntries,
   );
+  final unfolded = _expandScoreForRepeats(
+    notes: notes,
+    playbackNotes: _sortPlaybackNotes(playbackNotes),
+    slurs: slurs,
+    symbols: symbols,
+    keySignatures: keySignatures,
+    measureSpans: measureSpans,
+  );
 
-  final midiValues = notes.map((note) => note.midi).toList();
+  final midiValues = unfolded.notes.map((note) => note.midi).toList();
   final minMidi = midiValues.isEmpty ? 48 : midiValues.reduce(math.min);
   final maxMidi = midiValues.isEmpty ? 72 : midiValues.reduce(math.max);
 
@@ -403,14 +503,632 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     bpm: bpm,
     beatsPerMeasure: beats,
     beatUnit: beatType,
-    notes: notes,
-    slurs: slurs,
-    symbols: symbols,
-    keySignatures: keySignatures,
+    notes: unfolded.notes,
+    playbackNotes: unfolded.playbackNotes,
+    slurs: unfolded.slurs,
+    symbols: unfolded.symbols,
+    keySignatures: unfolded.keySignatures,
     colors: GameColorScheme.classic,
     minMidi: minMidi,
     maxMidi: maxMidi,
   );
+}
+
+List<MusicNote> _sortPlaybackNotes(List<MusicNote> notes) {
+  final sorted = List<MusicNote>.from(notes);
+  sorted.sort(_compareMusicNotes);
+  return List<MusicNote>.unmodifiable(sorted);
+}
+
+int _resolveLogicalMeasureIndex(
+  MxlMeasureNode measure, {
+  required int fallbackSequentialIndex,
+  required int? previousRawMeasureNumber,
+  required int previousLogicalMeasureIndex,
+}) {
+  final rawNumber = measure.number;
+  if (rawNumber == null) {
+    return fallbackSequentialIndex;
+  }
+
+  if (previousRawMeasureNumber != null &&
+      rawNumber == previousRawMeasureNumber) {
+    return previousLogicalMeasureIndex;
+  }
+
+  if (rawNumber <= 0) {
+    return -1;
+  }
+
+  return rawNumber - 1;
+}
+
+bool _hasBackwardRepeatBarline(MxlMeasureNode measure) {
+  for (final element in measure.elements) {
+    if (!_nameEquals(element.name, 'barline')) {
+      continue;
+    }
+    final repeat = _firstChildByName(element.children, 'repeat');
+    if (repeat?.attributes['direction']?.trim().toLowerCase() == 'backward') {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _hasForwardRepeatBarline(MxlMeasureNode measure) {
+  for (final element in measure.elements) {
+    if (!_nameEquals(element.name, 'barline')) {
+      continue;
+    }
+    final repeat = _firstChildByName(element.children, 'repeat');
+    if (repeat?.attributes['direction']?.trim().toLowerCase() == 'forward') {
+      return true;
+    }
+  }
+  return false;
+}
+
+_ExpandedScoreData _expandScoreForRepeats({
+  required List<MusicNote> notes,
+  required List<MusicNote> playbackNotes,
+  required List<SlurSpan> slurs,
+  required List<MusicSymbol> symbols,
+  required List<KeySignatureChange> keySignatures,
+  required List<_RepeatMeasureSpan> measureSpans,
+}) {
+  if (measureSpans.isEmpty) {
+    return _ExpandedScoreData(
+      notes: List<MusicNote>.unmodifiable(notes),
+      playbackNotes: List<MusicNote>.unmodifiable(playbackNotes),
+      slurs: List<SlurSpan>.unmodifiable(slurs),
+      symbols: List<MusicSymbol>.unmodifiable(symbols),
+      keySignatures: List<KeySignatureChange>.unmodifiable(keySignatures),
+    );
+  }
+
+  final expandedNotes = List<MusicNote>.from(notes);
+  final expandedPlaybackNotes = List<MusicNote>.from(playbackNotes);
+  final expandedSymbols = List<MusicSymbol>.from(symbols);
+  final expandedKeySignatures = List<KeySignatureChange>.from(keySignatures);
+  final expandedSlurs = List<SlurSpan>.from(slurs);
+  final expandedMeasureSpans = List<_RepeatMeasureSpan>.from(measureSpans);
+
+  var repeatStartMeasureIndex = expandedMeasureSpans.first.measureIndex;
+
+  for (var i = 0; i < expandedMeasureSpans.length; i++) {
+    final span = expandedMeasureSpans[i];
+    if (span.hasForwardRepeat) {
+      repeatStartMeasureIndex = span.measureIndex;
+    }
+    if (!span.hasBackwardRepeat) {
+      continue;
+    }
+
+    final repeatedMeasureSpans = expandedMeasureSpans
+        .where(
+          (candidate) =>
+              candidate.measureIndex >= repeatStartMeasureIndex &&
+              candidate.measureIndex <= span.measureIndex,
+        )
+        .toList();
+    if (repeatedMeasureSpans.isEmpty) {
+      continue;
+    }
+
+    final segmentStartMs = repeatedMeasureSpans.first.startTimeMs;
+    final segmentEndMs = repeatedMeasureSpans.last.endTimeMs;
+    final timeShiftMs = segmentEndMs - segmentStartMs;
+    if (timeShiftMs <= 0) {
+      continue;
+    }
+
+    final insertionTimeMs = segmentEndMs;
+    final originalNoteCount = expandedNotes.length;
+    final noteIndexMap = <int, int>{};
+    for (var noteIndex = 0; noteIndex < originalNoteCount; noteIndex++) {
+      final note = expandedNotes[noteIndex];
+      if (note.hitTimeMs < segmentStartMs || note.hitTimeMs >= segmentEndMs) {
+        continue;
+      }
+      final duplicated = _shiftMusicNote(note, timeShiftMs);
+      noteIndexMap[noteIndex] = expandedNotes.length;
+      expandedNotes.add(duplicated);
+    }
+
+    for (var noteIndex = 0; noteIndex < originalNoteCount; noteIndex++) {
+      final note = expandedNotes[noteIndex];
+      if (note.hitTimeMs >= insertionTimeMs) {
+        expandedNotes[noteIndex] = _shiftMusicNote(note, timeShiftMs);
+      }
+    }
+
+    final originalPlaybackCount = expandedPlaybackNotes.length;
+    for (var iPlayback = 0; iPlayback < originalPlaybackCount; iPlayback++) {
+      final note = expandedPlaybackNotes[iPlayback];
+      if (note.hitTimeMs < segmentStartMs || note.hitTimeMs >= segmentEndMs) {
+        if (note.hitTimeMs >= insertionTimeMs) {
+          expandedPlaybackNotes[iPlayback] = _shiftMusicNote(note, timeShiftMs);
+        }
+        continue;
+      }
+      expandedPlaybackNotes.add(_shiftMusicNote(note, timeShiftMs));
+    }
+
+    final originalSymbolCount = expandedSymbols.length;
+    final segmentSymbols = expandedSymbols
+        .where(
+          (symbol) =>
+              symbol.timeMs >= segmentStartMs && symbol.timeMs < segmentEndMs,
+        )
+        .toList();
+    for (var symbolIndex = 0; symbolIndex < originalSymbolCount; symbolIndex++) {
+      final symbol = expandedSymbols[symbolIndex];
+      if (symbol.timeMs >= insertionTimeMs) {
+        expandedSymbols[symbolIndex] = MusicSymbol(
+          label: symbol.label,
+          timeMs: symbol.timeMs + timeShiftMs,
+          measureIndex: symbol.measureIndex,
+        );
+      }
+    }
+    for (final symbol in segmentSymbols) {
+      expandedSymbols.add(
+        MusicSymbol(
+          label: symbol.label,
+          timeMs: symbol.timeMs + timeShiftMs,
+          measureIndex: symbol.measureIndex,
+        ),
+      );
+    }
+
+    final originalKeyCount = expandedKeySignatures.length;
+    for (var keyIndex = 0; keyIndex < originalKeyCount; keyIndex++) {
+      final key = expandedKeySignatures[keyIndex];
+      if (key.timeMs >= insertionTimeMs) {
+        expandedKeySignatures[keyIndex] = KeySignatureChange(
+          timeMs: key.timeMs + timeShiftMs,
+          fifths: key.fifths,
+        );
+      }
+    }
+
+    final repeatedStartMs = insertionTimeMs;
+    final keyAtSegmentStart = _activeKeySignatureAtTime(
+      expandedKeySignatures,
+      segmentStartMs,
+    );
+    if (keyAtSegmentStart != null) {
+      expandedKeySignatures.add(
+        KeySignatureChange(
+          timeMs: repeatedStartMs,
+          fifths: keyAtSegmentStart.fifths,
+        ),
+      );
+    }
+    final duplicatedKeys = expandedKeySignatures
+        .where((key) => key.timeMs >= segmentStartMs && key.timeMs < segmentEndMs)
+        .toList();
+    for (final key in duplicatedKeys) {
+      if (key.timeMs == repeatedStartMs && key.fifths == keyAtSegmentStart?.fifths) {
+        continue;
+      }
+      if (key.timeMs >= insertionTimeMs) {
+        continue;
+      }
+      expandedKeySignatures.add(
+        KeySignatureChange(timeMs: key.timeMs + timeShiftMs, fifths: key.fifths),
+      );
+    }
+
+    final originalSlurCount = expandedSlurs.length;
+    for (var slurIndex = 0; slurIndex < originalSlurCount; slurIndex++) {
+      expandedSlurs[slurIndex] = _shiftSlurSpanTimesAfter(
+        expandedSlurs[slurIndex],
+        insertionTimeMs: insertionTimeMs,
+        timeShiftMs: timeShiftMs,
+      );
+    }
+
+    for (var slurIndex = 0; slurIndex < originalSlurCount; slurIndex++) {
+      final slur = expandedSlurs[slurIndex];
+      if (!_slurInsideRepeatedSegment(
+        slur,
+        segmentStartMs,
+        segmentEndMs,
+        expandedNotes,
+      )) {
+        continue;
+      }
+      final duplicated = _duplicateSlurSpan(
+        slur,
+        noteIndexMap: noteIndexMap,
+        timeShiftMs: timeShiftMs,
+      );
+      if (duplicated != null) {
+        expandedSlurs.add(duplicated);
+      }
+    }
+
+    for (var spanIndex = i + 1; spanIndex < expandedMeasureSpans.length; spanIndex++) {
+      final futureSpan = expandedMeasureSpans[spanIndex];
+      expandedMeasureSpans[spanIndex] = _RepeatMeasureSpan(
+        measureIndex: futureSpan.measureIndex,
+        startTimeMs: futureSpan.startTimeMs + timeShiftMs,
+        endTimeMs: futureSpan.endTimeMs + timeShiftMs,
+        hasForwardRepeat: futureSpan.hasForwardRepeat,
+        hasBackwardRepeat: futureSpan.hasBackwardRepeat,
+      );
+    }
+  }
+
+  final indexedExpandedNotes = expandedNotes.indexed
+      .map((entry) => (originalIndex: entry.$1, note: entry.$2))
+      .toList();
+  indexedExpandedNotes.sort((a, b) => _compareMusicNotes(a.note, b.note));
+  final noteIndexRemap = <int, int>{};
+  for (var i = 0; i < indexedExpandedNotes.length; i++) {
+    noteIndexRemap[indexedExpandedNotes[i].originalIndex] = i;
+  }
+  final remappedSlurs = expandedSlurs
+      .map((slur) => _remapSlurSpanNoteIndexes(slur, noteIndexRemap))
+      .nonNulls
+      .toList();
+
+  expandedNotes
+    ..clear()
+    ..addAll(indexedExpandedNotes.map((entry) => entry.note));
+  expandedPlaybackNotes.sort(_compareMusicNotes);
+  expandedSymbols.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+  expandedKeySignatures.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+  remappedSlurs.sort((a, b) {
+    final aTime = a.events.isEmpty ? 0 : a.events.first.timeMs;
+    final bTime = b.events.isEmpty ? 0 : b.events.first.timeMs;
+    return aTime.compareTo(bTime);
+  });
+
+  return _ExpandedScoreData(
+    notes: List<MusicNote>.unmodifiable(expandedNotes),
+    playbackNotes: List<MusicNote>.unmodifiable(expandedPlaybackNotes),
+    slurs: List<SlurSpan>.unmodifiable(remappedSlurs),
+    symbols: List<MusicSymbol>.unmodifiable(expandedSymbols),
+    keySignatures: List<KeySignatureChange>.unmodifiable(expandedKeySignatures),
+  );
+}
+
+int _compareMusicNotes(MusicNote a, MusicNote b) {
+  final timeComparison = a.hitTimeMs.compareTo(b.hitTimeMs);
+  if (timeComparison != 0) {
+    return timeComparison;
+  }
+  final graceComparison = (a.isGrace ? 0 : 1).compareTo(b.isGrace ? 0 : 1);
+  if (graceComparison != 0) {
+    return graceComparison;
+  }
+  final measureComparison = a.measureIndex.compareTo(b.measureIndex);
+  if (measureComparison != 0) {
+    return measureComparison;
+  }
+  final voiceComparison = a.voice.compareTo(b.voice);
+  if (voiceComparison != 0) {
+    return voiceComparison;
+  }
+  final staffComparison = (a.staffNumber ?? 0).compareTo(b.staffNumber ?? 0);
+  if (staffComparison != 0) {
+    return staffComparison;
+  }
+  return a.staffStep.compareTo(b.staffStep);
+}
+
+MusicNote _shiftMusicNote(MusicNote note, int timeShiftMs) {
+  return MusicNote(
+    midi: note.midi,
+    staffStep: note.staffStep,
+    hitTimeMs: note.hitTimeMs + timeShiftMs,
+    holdMs: note.holdMs,
+    voice: note.voice,
+    accidental: note.accidental,
+    isTrebleFromMxl: note.isTrebleFromMxl,
+    staffNumber: note.staffNumber,
+    measureIndex: note.measureIndex,
+    notatedBeats: note.notatedBeats,
+    primaryBeam: note.primaryBeam,
+    secondaryBeam: note.secondaryBeam,
+    tertiaryBeam: note.tertiaryBeam,
+    stemFromMxl: note.stemFromMxl,
+    dotCount: note.dotCount,
+    isStaccato: note.isStaccato,
+    fingering: note.fingering,
+    isGrace: note.isGrace,
+  );
+}
+
+KeySignatureChange? _activeKeySignatureAtTime(
+  List<KeySignatureChange> keySignatures,
+  int timeMs,
+) {
+  KeySignatureChange? active;
+  for (final key in keySignatures) {
+    if (key.timeMs > timeMs) {
+      break;
+    }
+    active = key;
+  }
+  return active;
+}
+
+bool _slurInsideRepeatedSegment(
+  SlurSpan slur,
+  int segmentStartMs,
+  int segmentEndMs,
+  List<MusicNote> sourceNotes,
+) {
+  if (slur.events.isEmpty) {
+    return false;
+  }
+  for (final event in slur.events) {
+    final noteIndex = event.noteIndex;
+    if (noteIndex < 0 || noteIndex >= sourceNotes.length) {
+      return false;
+    }
+    final noteTimeMs = sourceNotes[noteIndex].hitTimeMs;
+    if (noteTimeMs < segmentStartMs || noteTimeMs >= segmentEndMs) {
+      return false;
+    }
+  }
+  return true;
+}
+
+SlurSpan? _duplicateSlurSpan(
+  SlurSpan slur, {
+  required Map<int, int> noteIndexMap,
+  required int timeShiftMs,
+}) {
+  final duplicatedEvents = <SlurEvent>[];
+  for (final event in slur.events) {
+    final remappedNoteIndex = noteIndexMap[event.noteIndex];
+    if (remappedNoteIndex == null) {
+      return null;
+    }
+    duplicatedEvents.add(
+      SlurEvent(
+        partId: event.partId,
+        number: event.number,
+        eventType: event.eventType,
+        noteIndex: remappedNoteIndex,
+        timeMs: event.timeMs + timeShiftMs,
+        measureIndex: event.measureIndex,
+        voice: event.voice,
+        staffNumber: event.staffNumber,
+        staffStep: event.staffStep,
+        isChord: event.isChord,
+        placement: event.placement,
+        orientation: event.orientation,
+        defaultX: event.defaultX,
+        defaultY: event.defaultY,
+        relativeX: event.relativeX,
+        relativeY: event.relativeY,
+        bezierX: event.bezierX,
+        bezierY: event.bezierY,
+        bezierX2: event.bezierX2,
+        bezierY2: event.bezierY2,
+        lineType: event.lineType,
+        dashLength: event.dashLength,
+        spaceLength: event.spaceLength,
+      ),
+    );
+  }
+
+  final duplicatedSegments = slur.segments
+      .map((segment) {
+        final remappedStart = noteIndexMap[segment.startNoteIndex];
+        final remappedEnd = noteIndexMap[segment.endNoteIndex];
+        if (remappedStart == null || remappedEnd == null) {
+          return null;
+        }
+        return SlurSegment(
+          startEventIndex: segment.startEventIndex,
+          endEventIndex: segment.endEventIndex,
+          startNoteIndex: remappedStart,
+          endNoteIndex: remappedEnd,
+          isCrossSystemContinuation: segment.isCrossSystemContinuation,
+        );
+      })
+      .nonNulls
+      .toList();
+  if (duplicatedSegments.length != slur.segments.length) {
+    return null;
+  }
+
+  return SlurSpan(
+    partId: slur.partId,
+    number: slur.number,
+    voice: slur.voice,
+    staffNumber: slur.staffNumber,
+    events: List<SlurEvent>.unmodifiable(duplicatedEvents),
+    segments: List<SlurSegment>.unmodifiable(duplicatedSegments),
+  );
+}
+
+SlurSpan _shiftSlurSpanTimesAfter(
+  SlurSpan slur, {
+  required int insertionTimeMs,
+  required int timeShiftMs,
+}) {
+  final shiftedEvents = slur.events
+      .map(
+        (event) => SlurEvent(
+          partId: event.partId,
+          number: event.number,
+          eventType: event.eventType,
+          noteIndex: event.noteIndex,
+          timeMs: event.timeMs >= insertionTimeMs
+              ? event.timeMs + timeShiftMs
+              : event.timeMs,
+          measureIndex: event.measureIndex,
+          voice: event.voice,
+          staffNumber: event.staffNumber,
+          staffStep: event.staffStep,
+          isChord: event.isChord,
+          placement: event.placement,
+          orientation: event.orientation,
+          defaultX: event.defaultX,
+          defaultY: event.defaultY,
+          relativeX: event.relativeX,
+          relativeY: event.relativeY,
+          bezierX: event.bezierX,
+          bezierY: event.bezierY,
+          bezierX2: event.bezierX2,
+          bezierY2: event.bezierY2,
+          lineType: event.lineType,
+          dashLength: event.dashLength,
+          spaceLength: event.spaceLength,
+        ),
+      )
+      .toList();
+  return SlurSpan(
+    partId: slur.partId,
+    number: slur.number,
+    voice: slur.voice,
+    staffNumber: slur.staffNumber,
+    events: List<SlurEvent>.unmodifiable(shiftedEvents),
+    segments: slur.segments,
+  );
+}
+
+SlurSpan? _remapSlurSpanNoteIndexes(
+  SlurSpan slur,
+  Map<int, int> noteIndexRemap,
+) {
+  final remappedEvents = <SlurEvent>[];
+  for (final event in slur.events) {
+    final remappedNoteIndex = noteIndexRemap[event.noteIndex];
+    if (remappedNoteIndex == null) {
+      return null;
+    }
+    remappedEvents.add(
+      SlurEvent(
+        partId: event.partId,
+        number: event.number,
+        eventType: event.eventType,
+        noteIndex: remappedNoteIndex,
+        timeMs: event.timeMs,
+        measureIndex: event.measureIndex,
+        voice: event.voice,
+        staffNumber: event.staffNumber,
+        staffStep: event.staffStep,
+        isChord: event.isChord,
+        placement: event.placement,
+        orientation: event.orientation,
+        defaultX: event.defaultX,
+        defaultY: event.defaultY,
+        relativeX: event.relativeX,
+        relativeY: event.relativeY,
+        bezierX: event.bezierX,
+        bezierY: event.bezierY,
+        bezierX2: event.bezierX2,
+        bezierY2: event.bezierY2,
+        lineType: event.lineType,
+        dashLength: event.dashLength,
+        spaceLength: event.spaceLength,
+      ),
+    );
+  }
+
+  final remappedSegments = slur.segments
+      .map((segment) {
+        final remappedStart = noteIndexRemap[segment.startNoteIndex];
+        final remappedEnd = noteIndexRemap[segment.endNoteIndex];
+        if (remappedStart == null || remappedEnd == null) {
+          return null;
+        }
+        return SlurSegment(
+          startEventIndex: segment.startEventIndex,
+          endEventIndex: segment.endEventIndex,
+          startNoteIndex: remappedStart,
+          endNoteIndex: remappedEnd,
+          isCrossSystemContinuation: segment.isCrossSystemContinuation,
+        );
+      })
+      .nonNulls
+      .toList();
+  if (remappedSegments.length != slur.segments.length) {
+    return null;
+  }
+
+  return SlurSpan(
+    partId: slur.partId,
+    number: slur.number,
+    voice: slur.voice,
+    staffNumber: slur.staffNumber,
+    events: List<SlurEvent>.unmodifiable(remappedEvents),
+    segments: List<SlurSegment>.unmodifiable(remappedSegments),
+  );
+}
+
+List<MusicNote> _buildGracePlaybackNotes(
+  List<_PendingGracePlaybackNote> pendingGraceNotes, {
+  required int principalOnsetMs,
+  required int principalHoldMs,
+  required int measureStartMs,
+  required double measureBpm,
+  required int measureDivisions,
+}) {
+  if (pendingGraceNotes.isEmpty) {
+    return const <MusicNote>[];
+  }
+
+  final beatMs = measureBpm <= 0 ? 600 : (60000 / measureBpm).round();
+  final defaultUnitMs = (beatMs * 0.18).round().clamp(45, 120).toInt();
+  final availableWindowMs = math.max(0, principalOnsetMs - measureStartMs - 8);
+  final preferredWindowMs = math
+      .max(
+        pendingGraceNotes.length * defaultUnitMs,
+        math.min(
+          principalHoldMs > 0 ? (principalHoldMs * 0.3).round() : defaultUnitMs,
+          beatMs ~/ 2,
+        ),
+      )
+      .toInt();
+  final totalWindowMs = math
+      .max(
+        pendingGraceNotes.length * 28,
+        math.min(
+          availableWindowMs > 0 ? availableWindowMs : preferredWindowMs,
+          preferredWindowMs,
+        ),
+      )
+      .toInt();
+  final graceUnitMs = math.max(
+    28,
+    (totalWindowMs / pendingGraceNotes.length).floor(),
+  );
+  final startMs = principalOnsetMs - graceUnitMs * pendingGraceNotes.length;
+
+  return List<MusicNote>.generate(pendingGraceNotes.length, (index) {
+    final grace = pendingGraceNotes[index];
+    final explicitHoldMs = grace.durationDivisions > 0
+        ? _divisionsToTimelineMs(
+            grace.durationDivisions.toDouble(),
+            measureDivisions: measureDivisions,
+            measureBpm: measureBpm,
+          )
+        : 0;
+    final holdMs = explicitHoldMs > 0
+        ? explicitHoldMs.clamp(28, graceUnitMs).toInt()
+        : math.max(28, math.min(graceUnitMs, 90));
+    return MusicNote(
+      midi: grace.midi,
+      staffStep: grace.staffStep,
+      hitTimeMs: startMs + index * graceUnitMs,
+      holdMs: holdMs,
+      voice: grace.voice,
+      isTrebleFromMxl: grace.isTrebleFromMxl,
+      staffNumber: grace.staffNumber,
+      measureIndex: grace.measureIndex,
+      isGrace: true,
+    );
+  });
 }
 
 List<SlurSpan> _buildSlurSpans({
@@ -621,6 +1339,60 @@ class _PendingSlurEvent {
   final String? lineType;
   final double? dashLength;
   final double? spaceLength;
+}
+
+class _PendingGracePlaybackNote {
+  const _PendingGracePlaybackNote({
+    required this.midi,
+    required this.staffStep,
+    required this.voice,
+    required this.staffNumber,
+    required this.measureIndex,
+    required this.isTrebleFromMxl,
+    required this.durationDivisions,
+    required this.isChord,
+  });
+
+  final int midi;
+  final int staffStep;
+  final int voice;
+  final int? staffNumber;
+  final int measureIndex;
+  final bool? isTrebleFromMxl;
+  final int durationDivisions;
+  final bool isChord;
+}
+
+class _RepeatMeasureSpan {
+  const _RepeatMeasureSpan({
+    required this.measureIndex,
+    required this.startTimeMs,
+    required this.endTimeMs,
+    required this.hasForwardRepeat,
+    required this.hasBackwardRepeat,
+  });
+
+  final int measureIndex;
+  final int startTimeMs;
+  final int endTimeMs;
+  final bool hasForwardRepeat;
+  final bool hasBackwardRepeat;
+}
+
+class _ExpandedScoreData {
+  const _ExpandedScoreData({
+    required this.notes,
+    required this.playbackNotes,
+    required this.slurs,
+    required this.symbols,
+    required this.keySignatures,
+  });
+
+  final List<MusicNote> notes;
+  final List<MusicNote> playbackNotes;
+  final List<SlurSpan> slurs;
+  final List<MusicSymbol> symbols;
+  final List<KeySignatureChange> keySignatures;
 }
 
 class _SlurSpanBuilder {

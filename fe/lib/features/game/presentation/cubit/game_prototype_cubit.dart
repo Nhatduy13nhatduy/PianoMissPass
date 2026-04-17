@@ -626,11 +626,14 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   int _computeMaxDurationMs(ScoreData score) {
-    if (score.notes.isEmpty) {
+    final timedNotes = score.playbackNotes.isEmpty
+        ? score.notes
+        : score.playbackNotes;
+    if (timedNotes.isEmpty) {
       return 10000;
     }
 
-    final last = score.notes
+    final last = timedNotes
         .map((note) => note.hitTimeMs + (note.holdMs < 180 ? 180 : note.holdMs))
         .reduce((a, b) => a > b ? a : b);
     return last + 2400;
@@ -645,8 +648,11 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   List<_ScheduledMidiEvent> _buildSongPlaybackEvents(ScoreData score) {
     final events = <_ScheduledMidiEvent>[];
-    for (var i = 0; i < score.notes.length; i++) {
-      final note = score.notes[i];
+    final playbackNotes = score.playbackNotes.isEmpty
+        ? score.notes
+        : score.playbackNotes;
+    for (var i = 0; i < playbackNotes.length; i++) {
+      final note = playbackNotes[i];
       final noteOnTimeMs = _songPlaybackStartMs(note);
       final noteOffTimeMs = _songPlaybackEndMs(note);
       events.add(
@@ -714,9 +720,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
+    final playbackNotes = score.playbackNotes.isEmpty
+        ? score.notes
+        : score.playbackNotes;
     final latestTokenByMidi = <int, int>{};
-    for (var i = 0; i < score.notes.length; i++) {
-      final note = score.notes[i];
+    for (var i = 0; i < playbackNotes.length; i++) {
+      final note = playbackNotes[i];
       if (_songPlaybackStartMs(note) <= currentMs &&
           currentMs < _songPlaybackEndMs(note)) {
         latestTokenByMidi[note.midi] = i;

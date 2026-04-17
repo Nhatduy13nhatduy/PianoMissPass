@@ -14,6 +14,7 @@ class ScoreData {
     required this.beatsPerMeasure,
     required this.beatUnit,
     required this.notes,
+    required this.playbackNotes,
     required this.slurs,
     required this.symbols,
     required this.keySignatures,
@@ -26,6 +27,7 @@ class ScoreData {
   final int beatsPerMeasure;
   final int beatUnit;
   final List<MusicNote> notes;
+  final List<MusicNote> playbackNotes;
   final List<SlurSpan> slurs;
   final List<MusicSymbol> symbols;
   final List<KeySignatureChange> keySignatures;
@@ -248,6 +250,7 @@ class MusicNote {
     this.dotCount = 0,
     this.isStaccato = false,
     this.fingering,
+    this.isGrace = false,
   });
 
   final int midi;
@@ -267,13 +270,19 @@ class MusicNote {
   final int dotCount;
   final bool isStaccato;
   final String? fingering;
+  final bool isGrace;
 }
 
 class MusicSymbol {
-  const MusicSymbol({required this.label, required this.timeMs});
+  const MusicSymbol({
+    required this.label,
+    required this.timeMs,
+    this.measureIndex,
+  });
 
   final String label;
   final int timeMs;
+  final int? measureIndex;
 }
 
 enum SlurEventType { start, stop, continuation }

@@ -618,8 +618,9 @@ class _StaffScrollerPainter extends CustomPainter {
     final trebleClefY = trebleTop + metrics.clefBaselineOffsetY;
     final bassClefY = bassTop + metrics.clefBaselineOffsetY;
 
+    final playheadX = metrics.fixedPlayheadX;
     final activeKeyFifths = _activeKeyFifths(score, currentMs);
-    final keySignatureEndX = _paintKeySignature(
+    _paintKeySignature(
       canvas,
       fifths: activeKeyFifths,
       colors: score.colors,
@@ -628,18 +629,19 @@ class _StaffScrollerPainter extends CustomPainter {
       bassTop: bassTop,
       drawBass: !_debugHideLowerStaff,
     );
-    final timeSignatureEndX = _paintTimeSignature(
-      canvas,
-      top: score.beatsPerMeasure,
-      bottom: score.beatUnit,
-      startX: keySignatureEndX + metrics.keyToTimeSignatureGap,
-      colors: score.colors,
-      metrics: metrics,
-      trebleTop: trebleTop,
-      bassTop: bassTop,
-      drawBass: !_debugHideLowerStaff,
-    );
-    final playheadX = timeSignatureEndX + metrics.timeSignatureToPlayheadGap;
+    if (!_shouldHideTimeSignatureForKeyFifths(activeKeyFifths)) {
+      _paintTimeSignature(
+        canvas,
+        top: score.beatsPerMeasure,
+        bottom: score.beatUnit,
+        rightX: playheadX - metrics.timeSignatureToPlayheadGap,
+        colors: score.colors,
+        metrics: metrics,
+        trebleTop: trebleTop,
+        bassTop: bassTop,
+        drawBass: !_debugHideLowerStaff,
+      );
+    }
 
     final symbolPaint = Paint()
       ..color = score.colors.staff.judgeLine
@@ -929,6 +931,10 @@ class _StaffScrollerPainter extends CustomPainter {
     return fifths.abs() >= 2;
   }
 
+  bool _shouldHideTimeSignatureForKeyFifths(int fifths) {
+    return fifths.abs() >= 5;
+  }
+
   _PrecomputedScoreVisuals _getPrecomputedScoreVisuals(ScoreData score) {
     final cached = _scoreVisualsCache[score];
     if (cached != null) {
@@ -938,10 +944,16 @@ class _StaffScrollerPainter extends CustomPainter {
     final measureStartTimes = <int>[];
     final timedSymbols = <_PreparedTimedSymbol>[];
     final clefEventsByStaff = <int, List<_ClefSymbolEvent>>{};
+    int? lastBarlineMeasureIndex;
 
     for (final symbol in score.symbols) {
       final label = symbol.label;
       if (label == '|') {
+        if (symbol.measureIndex != null &&
+            symbol.measureIndex == lastBarlineMeasureIndex) {
+          continue;
+        }
+        lastBarlineMeasureIndex = symbol.measureIndex;
         measureStartTimes.add(symbol.timeMs);
         timedSymbols.add(
           _PreparedTimedSymbol(
@@ -1436,7 +1448,7 @@ class _StaffScrollerPainter extends CustomPainter {
     Canvas canvas, {
     required int top,
     required int bottom,
-    required double startX,
+    required double rightX,
     required GameColorScheme colors,
     required NotationMetrics metrics,
     required double trebleTop,
@@ -1489,7 +1501,8 @@ class _StaffScrollerPainter extends CustomPainter {
     final bottomHeight = bottomSize.height;
     final blockWidth = topWidth > bottomWidth ? topWidth : bottomWidth;
 
-    final centerX = startX + blockWidth / 2;
+    final blockRightX = rightX;
+    final centerX = blockRightX - blockWidth / 2;
     final topX = centerX - topWidth / 2;
     final bottomX = centerX - bottomWidth / 2;
     final trebleTopCenterY = _yForStaffStep(
@@ -1529,8 +1542,6 @@ class _StaffScrollerPainter extends CustomPainter {
       fontFamily: _bravuraFontFamily,
       height: 1.0,
     );
-
-    final blockRightX = centerX + blockWidth / 2;
 
     if (!drawBass) {
       return blockRightX;
