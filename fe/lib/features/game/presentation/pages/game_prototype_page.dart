@@ -81,7 +81,6 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               previous.errorMessage != current.errorMessage ||
               previous.score != current.score ||
               previous.isPlaying != current.isPlaying ||
-              previous.isSongAudioEnabled != current.isSongAudioEnabled ||
               previous.audioStaffMode != current.audioStaffMode ||
               previous.visibleStaffMode != current.visibleStaffMode ||
               previous.isSoundfontReady != current.isSoundfontReady ||
@@ -123,14 +122,15 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   ),
                   child: const SizedBox.expand(),
                 ),
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  child: _PlaybackButton(
-                    isPlaying: state.isPlaying,
-                    onPressed: cubit.togglePlayback,
+                if (state.isPlaying)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: _PlaybackButton(
+                      isPlaying: true,
+                      onPressed: cubit.pause,
+                    ),
                   ),
-                ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -151,63 +151,65 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                     },
                   ),
                 ),
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: _GameLayoutControls(
-                    showKeyboard: _showKeyboard,
-                    staffHeightScale: _staffHeightScale,
-                    isSongAudioEnabled: state.isSongAudioEnabled,
-                    audioStaffMode: state.audioStaffMode,
-                    visibleStaffMode: state.visibleStaffMode,
-                    isSoundfontReady: state.isSoundfontReady,
-                    playbackSpeed: state.playbackSpeed,
-                    timelineMsPerDurationDivision:
-                        state.timelineMsPerDurationDivision,
-                    onToggleKeyboard: (value) {
-                      setState(() {
-                        _showKeyboard = value;
-                      });
-                    },
-                    onToggleSongAudio: cubit.setSongAudioEnabled,
-                    onSelectAudioStaffMode: cubit.setAudioStaffMode,
-                    onSelectVisibleStaffMode: cubit.setVisibleStaffMode,
-                    onDecreaseScale: () {
-                      setState(() {
-                        _staffHeightScale = (_staffHeightScale - 0.1).clamp(
-                          0.5,
-                          2.0,
-                        );
-                      });
-                    },
-                    onIncreaseScale: () {
-                      setState(() {
-                        _staffHeightScale = (_staffHeightScale + 0.1).clamp(
-                          0.5,
-                          2.0,
-                        );
-                      });
-                    },
-                    onDecreaseSpeed: () {
-                      cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
-                    },
-                    onIncreaseSpeed: () {
-                      cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
-                    },
-                    onDecreaseTimeline: () {
-                      cubit.setTimelineMsPerDurationDivision(
-                        state.timelineMsPerDurationDivision -
-                            NoteTiming.timelineMsPerDurationDivisionStep,
-                      );
-                    },
-                    onIncreaseTimeline: () {
-                      cubit.setTimelineMsPerDurationDivision(
-                        state.timelineMsPerDurationDivision +
-                            NoteTiming.timelineMsPerDurationDivisionStep,
-                      );
-                    },
+                if (!state.isPlaying)
+                  Positioned.fill(
+                    child: _GameSettingsOverlay(
+                      songTitle: cubit.songTitle,
+                      controls: _GameLayoutControls(
+                        useCard: false,
+                        showKeyboard: _showKeyboard,
+                        staffHeightScale: _staffHeightScale,
+                        audioStaffMode: state.audioStaffMode,
+                        visibleStaffMode: state.visibleStaffMode,
+                        isSoundfontReady: state.isSoundfontReady,
+                        playbackSpeed: state.playbackSpeed,
+                        timelineMsPerDurationDivision:
+                            state.timelineMsPerDurationDivision,
+                        onToggleKeyboard: (value) {
+                          setState(() {
+                            _showKeyboard = value;
+                          });
+                        },
+                        onSelectAudioStaffMode: cubit.setAudioStaffMode,
+                        onSelectVisibleStaffMode: cubit.setVisibleStaffMode,
+                        onDecreaseScale: () {
+                          setState(() {
+                            _staffHeightScale = (_staffHeightScale - 0.1).clamp(
+                              0.5,
+                              2.0,
+                            );
+                          });
+                        },
+                        onIncreaseScale: () {
+                          setState(() {
+                            _staffHeightScale = (_staffHeightScale + 0.1).clamp(
+                              0.5,
+                              2.0,
+                            );
+                          });
+                        },
+                        onDecreaseSpeed: () {
+                          cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
+                        },
+                        onIncreaseSpeed: () {
+                          cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
+                        },
+                        onDecreaseTimeline: () {
+                          cubit.setTimelineMsPerDurationDivision(
+                            state.timelineMsPerDurationDivision -
+                                NoteTiming.timelineMsPerDurationDivisionStep,
+                          );
+                        },
+                        onIncreaseTimeline: () {
+                          cubit.setTimelineMsPerDurationDivision(
+                            state.timelineMsPerDurationDivision +
+                                NoteTiming.timelineMsPerDurationDivisionStep,
+                          );
+                        },
+                      ),
+                      onPlay: cubit.play,
+                    ),
                   ),
-                ),
               ],
             );
           },
@@ -219,16 +221,15 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
 
 class _GameLayoutControls extends StatelessWidget {
   const _GameLayoutControls({
+    this.useCard = true,
     required this.showKeyboard,
     required this.staffHeightScale,
-    required this.isSongAudioEnabled,
     required this.audioStaffMode,
     required this.visibleStaffMode,
     required this.isSoundfontReady,
     required this.playbackSpeed,
     required this.timelineMsPerDurationDivision,
     required this.onToggleKeyboard,
-    required this.onToggleSongAudio,
     required this.onSelectAudioStaffMode,
     required this.onSelectVisibleStaffMode,
     required this.onDecreaseScale,
@@ -239,16 +240,15 @@ class _GameLayoutControls extends StatelessWidget {
     required this.onIncreaseTimeline,
   });
 
+  final bool useCard;
   final bool showKeyboard;
   final double staffHeightScale;
-  final bool isSongAudioEnabled;
   final GameAudioStaffMode audioStaffMode;
   final GameVisibleStaffMode visibleStaffMode;
   final bool isSoundfontReady;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final ValueChanged<bool> onToggleKeyboard;
-  final ValueChanged<bool> onToggleSongAudio;
   final ValueChanged<GameAudioStaffMode> onSelectAudioStaffMode;
   final ValueChanged<GameVisibleStaffMode> onSelectVisibleStaffMode;
   final VoidCallback onDecreaseScale;
@@ -266,6 +266,109 @@ class _GameLayoutControls extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
 
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Keyboard', style: labelStyle),
+              const SizedBox(width: 8),
+              Switch(
+                value: showKeyboard,
+                onChanged: onToggleKeyboard,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _ModeRow<GameAudioStaffMode>(
+            label: 'Audio staff',
+            selected: audioStaffMode,
+            onSelected: onSelectAudioStaffMode,
+            options: const [
+              (GameAudioStaffMode.off, 'Off'),
+              (GameAudioStaffMode.upperOnly, 'Staff 1'),
+              (GameAudioStaffMode.lowerOnly, 'Staff 2'),
+              (GameAudioStaffMode.both, 'Both'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _ModeRow<GameVisibleStaffMode>(
+            label: 'Show staff',
+            selected: visibleStaffMode,
+            onSelected: onSelectVisibleStaffMode,
+            options: const [
+              (GameVisibleStaffMode.upperOnly, 'Staff 1'),
+              (GameVisibleStaffMode.lowerOnly, 'Staff 2'),
+              (GameVisibleStaffMode.both, 'Both'),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Staff', style: labelStyle),
+              const SizedBox(width: 10),
+              _MiniIconButton(
+                icon: Icons.remove_rounded,
+                onTap: onDecreaseScale,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${staffHeightScale.toStringAsFixed(1)}x',
+                style: labelStyle,
+              ),
+              const SizedBox(width: 8),
+              _MiniIconButton(icon: Icons.add_rounded, onTap: onIncreaseScale),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Speed', style: labelStyle),
+              const SizedBox(width: 10),
+              _MiniIconButton(
+                icon: Icons.remove_rounded,
+                onTap: onDecreaseSpeed,
+              ),
+              const SizedBox(width: 8),
+              Text('${playbackSpeed.toStringAsFixed(1)}x', style: labelStyle),
+              const SizedBox(width: 8),
+              _MiniIconButton(icon: Icons.add_rounded, onTap: onIncreaseSpeed),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Timeline', style: labelStyle),
+              const SizedBox(width: 10),
+              _MiniIconButton(
+                icon: Icons.remove_rounded,
+                onTap: onDecreaseTimeline,
+              ),
+              const SizedBox(width: 8),
+              Text('$timelineMsPerDurationDivision', style: labelStyle),
+              const SizedBox(width: 8),
+              _MiniIconButton(
+                icon: Icons.add_rounded,
+                onTap: onIncreaseTimeline,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (!useCard) {
+      return content;
+    }
+
     return Material(
       color: Colors.transparent,
       child: DecoratedBox(
@@ -280,127 +383,86 @@ class _GameLayoutControls extends StatelessWidget {
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Keyboard', style: labelStyle),
-                  const SizedBox(width: 8),
-                  Switch(
-                    value: showKeyboard,
-                    onChanged: onToggleKeyboard,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+        child: content,
+      ),
+    );
+  }
+}
+
+class _GameSettingsOverlay extends StatelessWidget {
+  const _GameSettingsOverlay({
+    required this.controls,
+    required this.onPlay,
+    this.songTitle,
+  });
+
+  final Widget controls;
+  final VoidCallback onPlay;
+  final String? songTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: const Color(0xFF0B1118),
+      child: SafeArea(
+        child: SizedBox.expand(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    isSoundfontReady ? 'Song audio' : 'Song audio...',
-                    style: labelStyle,
+                    songTitle?.trim().isNotEmpty == true
+                        ? songTitle!.trim()
+                        : 'Game Settings',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Switch(
-                    value: isSongAudioEnabled,
-                    onChanged: isSoundfontReady ? onToggleSongAudio : null,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              _ModeRow<GameAudioStaffMode>(
-                label: 'Audio staff',
-                selected: audioStaffMode,
-                onSelected: onSelectAudioStaffMode,
-                enabled: isSoundfontReady && isSongAudioEnabled,
-                options: const [
-                  (GameAudioStaffMode.upperOnly, 'Staff 1'),
-                  (GameAudioStaffMode.lowerOnly, 'Staff 2'),
-                  (GameAudioStaffMode.both, 'Both'),
-                ],
-              ),
-              const SizedBox(height: 6),
-              _ModeRow<GameVisibleStaffMode>(
-                label: 'Show staff',
-                selected: visibleStaffMode,
-                onSelected: onSelectVisibleStaffMode,
-                options: const [
-                  (GameVisibleStaffMode.upperOnly, 'Staff 1'),
-                  (GameVisibleStaffMode.lowerOnly, 'Staff 2'),
-                  (GameVisibleStaffMode.both, 'Both'),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Staff', style: labelStyle),
-                  const SizedBox(width: 10),
-                  _MiniIconButton(
-                    icon: Icons.remove_rounded,
-                    onTap: onDecreaseScale,
-                  ),
-                  const SizedBox(width: 8),
+                  const SizedBox(height: 10),
                   Text(
-                    '${staffHeightScale.toStringAsFixed(1)}x',
-                    style: labelStyle,
+                    'Chinh cau hinh truoc khi choi, hoac tiep tuc tu vi tri da pause.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: const Color(0xD9FFFFFF),
+                      height: 1.35,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  _MiniIconButton(
-                    icon: Icons.add_rounded,
-                    onTap: onIncreaseScale,
+                  const SizedBox(height: 24),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101923),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0x1FFFFFFF)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                      child: controls,
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Speed', style: labelStyle),
-                  const SizedBox(width: 10),
-                  _MiniIconButton(
-                    icon: Icons.remove_rounded,
-                    onTap: onDecreaseSpeed,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${playbackSpeed.toStringAsFixed(1)}x',
-                    style: labelStyle,
-                  ),
-                  const SizedBox(width: 8),
-                  _MiniIconButton(
-                    icon: Icons.add_rounded,
-                    onTap: onIncreaseSpeed,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Timeline', style: labelStyle),
-                  const SizedBox(width: 10),
-                  _MiniIconButton(
-                    icon: Icons.remove_rounded,
-                    onTap: onDecreaseTimeline,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('$timelineMsPerDurationDivision', style: labelStyle),
-                  const SizedBox(width: 8),
-                  _MiniIconButton(
-                    icon: Icons.add_rounded,
-                    onTap: onIncreaseTimeline,
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: onPlay,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Play'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(56),
+                      backgroundColor: const Color(0xFF2B7FFF),
+                      foregroundColor: Colors.white,
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -691,10 +753,13 @@ class _StaffScrollerPainter extends CustomPainter {
     final bassTop = visibleStaffMode == GameVisibleStaffMode.both
         ? trebleTop + staffHeight + staffGap
         : singleStaffTop;
-    final effectiveBassTop =
-        showLowerStaff && !_debugHideLowerStaff ? bassTop : size.height + 1000;
+    final effectiveBassTop = showLowerStaff && !_debugHideLowerStaff
+        ? bassTop
+        : size.height + 1000;
     final playheadTopY = showUpperStaff ? trebleTop : bassTop;
-    final stavesBottomY = showLowerStaff ? bassTop + staffHeight : trebleTop + staffHeight;
+    final stavesBottomY = showLowerStaff
+        ? bassTop + staffHeight
+        : trebleTop + staffHeight;
     final lineSpacing = metrics.staffSpace;
     final staffLeftInset = metrics.staffLeftInset;
     final staffWidth = size.width - staffLeftInset;
@@ -1008,7 +1073,8 @@ class _StaffScrollerPainter extends CustomPainter {
   bool shouldRepaint(covariant _StaffScrollerPainter oldDelegate) {
     return oldDelegate.score != score ||
         oldDelegate.elapsedMsListenable != elapsedMsListenable ||
-        oldDelegate.passedNoteIndexesListenable != passedNoteIndexesListenable ||
+        oldDelegate.passedNoteIndexesListenable !=
+            passedNoteIndexesListenable ||
         oldDelegate.missedNoteIndexesListenable !=
             missedNoteIndexesListenable ||
         oldDelegate.showKeyboard != showKeyboard ||

@@ -67,7 +67,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   Future<void> initialize() async {
     final playbackSpeed = state.playbackSpeed;
     final timelineMsPerDurationDivision = state.timelineMsPerDurationDivision;
-    final isSongAudioEnabled = state.isSongAudioEnabled;
+    final audioStaffMode = state.audioStaffMode;
     _ticker.stop();
     _stopSongPlaybackScheduler();
     await _silenceSongPlaybackNotes();
@@ -85,7 +85,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         isLoading: true,
         playbackSpeed: playbackSpeed,
         timelineMsPerDurationDivision: timelineMsPerDurationDivision,
-        isSongAudioEnabled: isSongAudioEnabled,
+        audioStaffMode: audioStaffMode,
         isSoundfontReady: _isSynthReady,
       ),
     );
@@ -363,7 +363,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
       _maxDurationMs = _computeMaxDurationMs(score);
       _rebuildSongPlaybackEvents(score);
-      _play();
     } catch (error) {
       if (isClosed) {
         return;
@@ -412,7 +411,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
       _maxDurationMs = _computeMaxDurationMs(score);
       _rebuildSongPlaybackEvents(score);
-      _play();
     } catch (error) {
       if (isClosed) {
         return;
@@ -449,8 +447,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    _baseElapsedMs += _stopwatch.elapsedMilliseconds;
-    _elapsedMsNotifier.value = _baseElapsedMs;
+    final anchoredCurrentMs = currentMs;
+    _baseElapsedMs = anchoredCurrentMs;
+    _elapsedMsNotifier.value = anchoredCurrentMs;
     _stopwatch
       ..stop()
       ..reset();
@@ -470,30 +469,19 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _play();
   }
 
-  void setSongAudioEnabled(bool value) {
-    if (value == state.isSongAudioEnabled) {
-      return;
-    }
-
-    _emitState(state.copyWith(isSongAudioEnabled: value));
-    if (!value) {
-      _stopSongPlaybackScheduler();
-      unawaited(_silenceSongPlaybackNotes());
-      return;
-    }
-
-    if (state.isPlaying) {
-      _restartSongPlaybackFromCurrentPosition();
-    }
-  }
-
   void setAudioStaffMode(GameAudioStaffMode mode) {
     if (mode == state.audioStaffMode) {
       return;
     }
 
     _emitState(state.copyWith(audioStaffMode: mode));
-    if (state.isPlaying && state.isSongAudioEnabled) {
+    if (mode == GameAudioStaffMode.off) {
+      _stopSongPlaybackScheduler();
+      unawaited(_silenceSongPlaybackNotes());
+      return;
+    }
+
+    if (state.isPlaying) {
       _restartSongPlaybackFromCurrentPosition();
     }
   }
@@ -521,7 +509,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     _emitState(state.copyWith(playbackSpeed: clamped));
-    if (state.isPlaying && state.isSongAudioEnabled) {
+    if (state.isPlaying && _isSongAudioEnabled) {
       _restartSongPlaybackFromCurrentPosition();
     }
   }
@@ -542,7 +530,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     final current = currentMs;
-    if (state.isSongAudioEnabled) {
+    if (_isSongAudioEnabled) {
       _pumpSongPlayback(current);
     }
     final updatedMisses = _updateMissesIncremental(current);
@@ -725,7 +713,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void _restartSongPlaybackFromCurrentPosition() {
     if (!state.isPlaying ||
-        !state.isSongAudioEnabled ||
+        !_isSongAudioEnabled ||
         state.score == null ||
         !_isSynthReady) {
       return;
@@ -775,7 +763,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void _pumpSongPlayback([int? currentOverrideMs]) {
     if (!state.isPlaying ||
-        !state.isSongAudioEnabled ||
+        !_isSongAudioEnabled ||
         state.score == null ||
         !_isSynthReady) {
       return;
@@ -862,9 +850,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     // separate timer to tear down here.
   }
 
+  bool get _isSongAudioEnabled => state.audioStaffMode != GameAudioStaffMode.off;
+
   bool _shouldPlayAudioStaff(int? staffNumber) {
     final resolvedStaff = staffNumber ?? 1;
     return switch (state.audioStaffMode) {
+      GameAudioStaffMode.off => false,
       GameAudioStaffMode.upperOnly => resolvedStaff == 1,
       GameAudioStaffMode.lowerOnly => resolvedStaff == 2,
       GameAudioStaffMode.both => true,

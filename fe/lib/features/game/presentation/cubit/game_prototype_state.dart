@@ -3,7 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
 
-enum GameAudioStaffMode { upperOnly, lowerOnly, both }
+enum GameAudioStaffMode { off, upperOnly, lowerOnly, both }
 
 enum GameVisibleStaffMode { upperOnly, lowerOnly, both }
 
@@ -13,7 +13,6 @@ class GamePrototypeState extends Equatable {
     this.errorMessage,
     this.score,
     this.isPlaying = false,
-    this.isSongAudioEnabled = true,
     this.audioStaffMode = GameAudioStaffMode.both,
     this.visibleStaffMode = GameVisibleStaffMode.both,
     this.isSoundfontReady = false,
@@ -28,7 +27,6 @@ class GamePrototypeState extends Equatable {
   final String? errorMessage;
   final ScoreData? score;
   final bool isPlaying;
-  final bool isSongAudioEnabled;
   final GameAudioStaffMode audioStaffMode;
   final GameVisibleStaffMode visibleStaffMode;
   final bool isSoundfontReady;
@@ -43,7 +41,6 @@ class GamePrototypeState extends Equatable {
     bool clearErrorMessage = false,
     ScoreData? score,
     bool? isPlaying,
-    bool? isSongAudioEnabled,
     GameAudioStaffMode? audioStaffMode,
     GameVisibleStaffMode? visibleStaffMode,
     bool? isSoundfontReady,
@@ -59,7 +56,6 @@ class GamePrototypeState extends Equatable {
           : errorMessage ?? this.errorMessage,
       score: score ?? this.score,
       isPlaying: isPlaying ?? this.isPlaying,
-      isSongAudioEnabled: isSongAudioEnabled ?? this.isSongAudioEnabled,
       audioStaffMode: audioStaffMode ?? this.audioStaffMode,
       visibleStaffMode: visibleStaffMode ?? this.visibleStaffMode,
       isSoundfontReady: isSoundfontReady ?? this.isSoundfontReady,
@@ -77,7 +73,6 @@ class GamePrototypeState extends Equatable {
     errorMessage,
     score,
     isPlaying,
-    isSongAudioEnabled,
     audioStaffMode,
     visibleStaffMode,
     isSoundfontReady,
