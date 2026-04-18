@@ -37,10 +37,12 @@ dependencies:
   equatable: ^2.0.7
   flutter_dotenv: ^5.2.1
   shared_preferences: ^2.5.3
+  path_provider: ^2.1.5
   archive: ^3.6.1
   xml: ^6.5.0
   flutter_midi_command: ^0.5.3
-  flutter_midi_engine: ^0.1.3
+  flutter_midi_16kb:
+    path: third_party/flutter_midi_16kb
 
 dev_dependencies:
   flutter_test:

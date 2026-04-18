@@ -1,0 +1,6 @@
+.gradle-local/
+
+fe/third_party/flutter_midi_16kb/.dart_tool/
+fe/third_party/flutter_midi_16kb/android/.cxx/
+fe/third_party/flutter_midi_16kb/example/
+fe/third_party/flutter_midi_16kb/pubspec.lock

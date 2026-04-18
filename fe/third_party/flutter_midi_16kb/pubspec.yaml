@@ -1,0 +1,31 @@
+name: flutter_midi_16kb
+description: >
+  A Flutter plugin providing low-latency MIDI soundfont (SF2) playback 
+  using TinySoundFont and Oboe with 16KB page-size alignment for Android.
+version: 0.0.3
+homepage: https://empyrealworks.com
+repository: https://github.com/adelaykay/flutter_midi_16kb
+issue_tracker: https://github.com/adelaykay/flutter_midi_16kb/issues
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.flutter_midi_16kb
+        pluginClass: FlutterMidi16kbPlugin
+      ios:
+        pluginClass: FlutterMidi16kbPlugin

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -7,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart';
-import 'package:flutter_midi_engine/flutter_midi_engine.dart';
+
+import '../../../../core/audio/app_midi_engine.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
@@ -39,7 +39,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const int _synthPanCenter = 64;
 
   final MidiCommand _midiCommand = MidiCommand();
-  final FlutterMidiEngine _midiEngine = FlutterMidiEngine();
+  final AppMidiEngine _midiEngine = AppMidiEngine();
   final String? assetMxlPath;
   final String? songTitle;
   StreamSubscription<MidiPacket>? _midiSub;
