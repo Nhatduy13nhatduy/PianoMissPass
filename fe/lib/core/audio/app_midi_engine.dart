@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 class AppMidiEngine {
   AppMidiEngine();
 
+  static const int _warmupNote = 60;
   final Set<int> _activeNotes = <int>{};
   bool _isSoundfontLoaded = false;
 
@@ -140,6 +141,21 @@ class AppMidiEngine {
 
     await FlutterMidi16kb.stopAllNotes();
     _activeNotes.clear();
+  }
+
+  Future<void> warmUp() async {
+    if (!_supportsNativeMidi || !_isSoundfontLoaded) {
+      return;
+    }
+
+    try {
+      await FlutterMidi16kb.playNote(key: _warmupNote, velocity: 1);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await FlutterMidi16kb.stopNote(key: _warmupNote);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    } catch (error) {
+      debugPrint('Failed to warm up MIDI synth: $error');
+    }
   }
 
   Future<File?> _writeAssetToTempFile(ByteData data, String fileName) async {

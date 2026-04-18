@@ -25,15 +25,16 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       'assets/soundfonts/GeneralUser-GS.sf2';
 
   static const bool _midiInputEnabled = true;
-  static const int initialLeadInMs = 4500;
-  static const int hitWindowMs = 120;
-  static const int missWindowMs = 160;
+  static const int initialLeadInMs = 5200;
+  static const int hitWindowMs = 140;
+  static const int missWindowMs = 180;
   static const int _songAudioChannel = 0;
   static const int _midiInputAudioChannel = 1;
   static const int _songPlaybackVelocity = 92;
   static const int _midiInputVelocityFallback = 96;
   static const int _songPlaybackMinimumHoldMs = 90;
   static const int _songAudioLatencyCompensationMs = 160;
+  static const int _songPlaybackDispatchLookaheadMs = 12;
   static const int _synthProgramPiano = 0;
   static const int _synthVolume = 110;
   static const int _synthPanCenter = 64;
@@ -134,6 +135,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
       await _configureSynthChannel(_songAudioChannel);
       await _configureSynthChannel(_midiInputAudioChannel);
+      await _midiEngine.warmUp();
       _isSynthReady = true;
     } catch (error) {
       _isSynthReady = false;
@@ -753,9 +755,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     final nowMs = currentOverrideMs ?? currentMs;
+    final dispatchThresholdMs = nowMs + _songPlaybackDispatchLookaheadMs;
     while (_nextSongPlaybackEventIndex < _scheduledSongEvents.length) {
       final event = _scheduledSongEvents[_nextSongPlaybackEventIndex];
-      if (event.timeMs > nowMs) {
+      if (event.timeMs > dispatchThresholdMs) {
         break;
       }
       _dispatchSongPlaybackEvent(event);
