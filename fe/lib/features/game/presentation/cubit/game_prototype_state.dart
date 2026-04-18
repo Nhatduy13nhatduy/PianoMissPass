@@ -3,6 +3,10 @@ import 'package:equatable/equatable.dart';
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
 
+enum GameAudioStaffMode { upperOnly, lowerOnly, both }
+
+enum GameVisibleStaffMode { upperOnly, lowerOnly, both }
+
 class GamePrototypeState extends Equatable {
   const GamePrototypeState({
     this.isLoading = true,
@@ -10,6 +14,8 @@ class GamePrototypeState extends Equatable {
     this.score,
     this.isPlaying = false,
     this.isSongAudioEnabled = true,
+    this.audioStaffMode = GameAudioStaffMode.both,
+    this.visibleStaffMode = GameVisibleStaffMode.both,
     this.isSoundfontReady = false,
     this.playbackSpeed = NoteTiming.defaultPlaybackSpeed,
     this.timelineMsPerDurationDivision =
@@ -23,6 +29,8 @@ class GamePrototypeState extends Equatable {
   final ScoreData? score;
   final bool isPlaying;
   final bool isSongAudioEnabled;
+  final GameAudioStaffMode audioStaffMode;
+  final GameVisibleStaffMode visibleStaffMode;
   final bool isSoundfontReady;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
@@ -36,6 +44,8 @@ class GamePrototypeState extends Equatable {
     ScoreData? score,
     bool? isPlaying,
     bool? isSongAudioEnabled,
+    GameAudioStaffMode? audioStaffMode,
+    GameVisibleStaffMode? visibleStaffMode,
     bool? isSoundfontReady,
     double? playbackSpeed,
     int? timelineMsPerDurationDivision,
@@ -50,6 +60,8 @@ class GamePrototypeState extends Equatable {
       score: score ?? this.score,
       isPlaying: isPlaying ?? this.isPlaying,
       isSongAudioEnabled: isSongAudioEnabled ?? this.isSongAudioEnabled,
+      audioStaffMode: audioStaffMode ?? this.audioStaffMode,
+      visibleStaffMode: visibleStaffMode ?? this.visibleStaffMode,
       isSoundfontReady: isSoundfontReady ?? this.isSoundfontReady,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       timelineMsPerDurationDivision:
@@ -66,6 +78,8 @@ class GamePrototypeState extends Equatable {
     score,
     isPlaying,
     isSongAudioEnabled,
+    audioStaffMode,
+    visibleStaffMode,
     isSoundfontReady,
     playbackSpeed,
     timelineMsPerDurationDivision,

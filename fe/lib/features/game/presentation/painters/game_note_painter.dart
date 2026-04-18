@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
+import '../cubit/game_prototype_state.dart';
 import '../notation/notation_metrics.dart';
 import 'game_text_painter.dart';
 
@@ -73,6 +74,7 @@ class GameNotePainter {
     required double playheadX,
     required double trebleTop,
     required double bassTop,
+    required GameVisibleStaffMode visibleStaffMode,
     required NotationMetrics metrics,
     required double notePxPerMs,
   }) {
@@ -159,6 +161,9 @@ class GameNotePainter {
       }
 
       final isUpperStaff = precomputed.isUpperStaff;
+      if (!_isStaffVisible(isUpperStaff, visibleStaffMode)) {
+        continue;
+      }
       final isTreble = precomputed.isTreble;
       final staffTop = isUpperStaff ? trebleTop : bassTop;
       final y = _yForStaffStep(note.staffStep, isTreble, staffTop, lineSpacing);
@@ -1953,8 +1958,8 @@ class GameNotePainter {
       final flagTargetHeight = math.max(spacing * 2.2, 14.0);
       final scale = flagTargetHeight / bounds.height;
       final matrix = Matrix4.identity()
-        ..translate(anchor.dx, anchor.dy)
-        ..scale(scale, scale);
+        ..translateByDouble(anchor.dx, anchor.dy, 0.0, 1.0)
+        ..scaleByDouble(scale, scale, 1.0, 1.0);
       final path = template.transform(matrix.storage);
       canvas.drawPath(path, paint);
     }
@@ -2221,6 +2226,17 @@ class GameNotePainter {
       _NoteJudge.pending => isActive ? colors.note.active : colors.note.idle,
     };
   }
+
+  bool _isStaffVisible(
+    bool isUpperStaff,
+    GameVisibleStaffMode visibleStaffMode,
+  ) {
+    return switch (visibleStaffMode) {
+      GameVisibleStaffMode.upperOnly => isUpperStaff,
+      GameVisibleStaffMode.lowerOnly => !isUpperStaff,
+      GameVisibleStaffMode.both => true,
+    };
+  }
 }
 
 double _notePainterLeftFadeDistance(
@@ -2262,7 +2278,9 @@ double _notePainterLeftFadeOpacityAtX(
 }
 
 Color _notePainterApplyOpacity(Color base, double opacity) {
-  final alpha = (base.alpha * opacity.clamp(0.0, 1.0)).round();
+  final alpha = ((base.a * 255.0) * opacity.clamp(0.0, 1.0))
+      .round()
+      .clamp(0, 255);
   return base.withAlpha(alpha);
 }
 

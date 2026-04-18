@@ -71,7 +71,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
     final cubit = context.read<GamePrototypeCubit>();
     return PopScope(
       canPop: true,
-      onPopInvokedWithResult: (_, __) {
+      onPopInvokedWithResult: (_, _) {
         cubit.pause();
       },
       child: Scaffold(
@@ -82,6 +82,8 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               previous.score != current.score ||
               previous.isPlaying != current.isPlaying ||
               previous.isSongAudioEnabled != current.isSongAudioEnabled ||
+              previous.audioStaffMode != current.audioStaffMode ||
+              previous.visibleStaffMode != current.visibleStaffMode ||
               previous.isSoundfontReady != current.isSoundfontReady ||
               previous.playbackSpeed != current.playbackSpeed ||
               previous.timelineMsPerDurationDivision !=
@@ -115,6 +117,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                         cubit.missedNoteIndexesListenable,
                     showKeyboard: _showKeyboard,
                     staffHeightScale: _staffHeightScale,
+                    visibleStaffMode: state.visibleStaffMode,
                     timelineMsPerDurationDivision:
                         state.timelineMsPerDurationDivision,
                   ),
@@ -155,6 +158,8 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                     showKeyboard: _showKeyboard,
                     staffHeightScale: _staffHeightScale,
                     isSongAudioEnabled: state.isSongAudioEnabled,
+                    audioStaffMode: state.audioStaffMode,
+                    visibleStaffMode: state.visibleStaffMode,
                     isSoundfontReady: state.isSoundfontReady,
                     playbackSpeed: state.playbackSpeed,
                     timelineMsPerDurationDivision:
@@ -165,6 +170,8 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                       });
                     },
                     onToggleSongAudio: cubit.setSongAudioEnabled,
+                    onSelectAudioStaffMode: cubit.setAudioStaffMode,
+                    onSelectVisibleStaffMode: cubit.setVisibleStaffMode,
                     onDecreaseScale: () {
                       setState(() {
                         _staffHeightScale = (_staffHeightScale - 0.1).clamp(
@@ -215,11 +222,15 @@ class _GameLayoutControls extends StatelessWidget {
     required this.showKeyboard,
     required this.staffHeightScale,
     required this.isSongAudioEnabled,
+    required this.audioStaffMode,
+    required this.visibleStaffMode,
     required this.isSoundfontReady,
     required this.playbackSpeed,
     required this.timelineMsPerDurationDivision,
     required this.onToggleKeyboard,
     required this.onToggleSongAudio,
+    required this.onSelectAudioStaffMode,
+    required this.onSelectVisibleStaffMode,
     required this.onDecreaseScale,
     required this.onIncreaseScale,
     required this.onDecreaseSpeed,
@@ -231,11 +242,15 @@ class _GameLayoutControls extends StatelessWidget {
   final bool showKeyboard;
   final double staffHeightScale;
   final bool isSongAudioEnabled;
+  final GameAudioStaffMode audioStaffMode;
+  final GameVisibleStaffMode visibleStaffMode;
   final bool isSoundfontReady;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final ValueChanged<bool> onToggleKeyboard;
   final ValueChanged<bool> onToggleSongAudio;
+  final ValueChanged<GameAudioStaffMode> onSelectAudioStaffMode;
+  final ValueChanged<GameVisibleStaffMode> onSelectVisibleStaffMode;
   final VoidCallback onDecreaseScale;
   final VoidCallback onIncreaseScale;
   final VoidCallback onDecreaseSpeed;
@@ -297,6 +312,29 @@ class _GameLayoutControls extends StatelessWidget {
                     onChanged: isSoundfontReady ? onToggleSongAudio : null,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              _ModeRow<GameAudioStaffMode>(
+                label: 'Audio staff',
+                selected: audioStaffMode,
+                onSelected: onSelectAudioStaffMode,
+                enabled: isSoundfontReady && isSongAudioEnabled,
+                options: const [
+                  (GameAudioStaffMode.upperOnly, 'Staff 1'),
+                  (GameAudioStaffMode.lowerOnly, 'Staff 2'),
+                  (GameAudioStaffMode.both, 'Both'),
+                ],
+              ),
+              const SizedBox(height: 6),
+              _ModeRow<GameVisibleStaffMode>(
+                label: 'Show staff',
+                selected: visibleStaffMode,
+                onSelected: onSelectVisibleStaffMode,
+                options: const [
+                  (GameVisibleStaffMode.upperOnly, 'Staff 1'),
+                  (GameVisibleStaffMode.lowerOnly, 'Staff 2'),
+                  (GameVisibleStaffMode.both, 'Both'),
                 ],
               ),
               const SizedBox(height: 6),
@@ -390,6 +428,62 @@ class _MiniIconButton extends StatelessWidget {
         ),
         child: Icon(icon, size: 18, color: Colors.white),
       ),
+    );
+  }
+}
+
+class _ModeRow<T> extends StatelessWidget {
+  const _ModeRow({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+    required this.options,
+    this.enabled = true,
+  });
+
+  final String label;
+  final T selected;
+  final ValueChanged<T> onSelected;
+  final List<(T value, String label)> options;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    const labelStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: labelStyle),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          alignment: WrapAlignment.end,
+          children: [
+            for (final option in options)
+              ChoiceChip(
+                label: Text(option.$2),
+                selected: selected == option.$1,
+                onSelected: enabled ? (_) => onSelected(option.$1) : null,
+                selectedColor: const Color(0xFF284B63),
+                backgroundColor: const Color(0xFF1C2735),
+                disabledColor: const Color(0xFF1C2735),
+                labelStyle: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                side: BorderSide.none,
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -537,6 +631,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required this.missedNoteIndexesListenable,
     required this.showKeyboard,
     required this.staffHeightScale,
+    required this.visibleStaffMode,
     required this.timelineMsPerDurationDivision,
   }) : super(
          repaint: Listenable.merge([
@@ -552,6 +647,7 @@ class _StaffScrollerPainter extends CustomPainter {
   final ValueListenable<Set<int>> missedNoteIndexesListenable;
   final bool showKeyboard;
   final double staffHeightScale;
+  final GameVisibleStaffMode visibleStaffMode;
   final int timelineMsPerDurationDivision;
 
   final GameStaffPainter _staffPainter = GameStaffPainter();
@@ -586,25 +682,32 @@ class _StaffScrollerPainter extends CustomPainter {
     final staffHeight = metrics.staffHeight;
     final staffGap = metrics.staffGap;
     final keyboardTop = size.height - keyboardHeight;
-    final trebleTop = metrics.topPadding;
-    final bassTop = trebleTop + staffHeight + staffGap;
-    final effectiveBassTop = _debugHideLowerStaff
-        ? size.height + 1000
-        : bassTop;
-    final stavesBottomY = _debugHideLowerStaff
-        ? trebleTop + staffHeight
-        : bassTop + staffHeight;
+    final singleStaffTop = (staffRegionHeight - staffHeight) / 2.0;
+    final showUpperStaff = visibleStaffMode != GameVisibleStaffMode.lowerOnly;
+    final showLowerStaff = visibleStaffMode != GameVisibleStaffMode.upperOnly;
+    final trebleTop = visibleStaffMode == GameVisibleStaffMode.both
+        ? metrics.topPadding
+        : singleStaffTop;
+    final bassTop = visibleStaffMode == GameVisibleStaffMode.both
+        ? trebleTop + staffHeight + staffGap
+        : singleStaffTop;
+    final effectiveBassTop =
+        showLowerStaff && !_debugHideLowerStaff ? bassTop : size.height + 1000;
+    final playheadTopY = showUpperStaff ? trebleTop : bassTop;
+    final stavesBottomY = showLowerStaff ? bassTop + staffHeight : trebleTop + staffHeight;
     final lineSpacing = metrics.staffSpace;
     final staffLeftInset = metrics.staffLeftInset;
     final staffWidth = size.width - staffLeftInset;
 
-    _staffPainter.paint(
-      canvas,
-      Rect.fromLTWH(staffLeftInset, trebleTop, staffWidth, staffHeight),
-      lineSpacing,
-      colors: score.colors,
-    );
-    if (!_debugHideLowerStaff) {
+    if (showUpperStaff) {
+      _staffPainter.paint(
+        canvas,
+        Rect.fromLTWH(staffLeftInset, trebleTop, staffWidth, staffHeight),
+        lineSpacing,
+        colors: score.colors,
+      );
+    }
+    if (showLowerStaff && !_debugHideLowerStaff) {
       _staffPainter.paint(
         canvas,
         Rect.fromLTWH(staffLeftInset, bassTop, staffWidth, staffHeight),
@@ -627,7 +730,8 @@ class _StaffScrollerPainter extends CustomPainter {
       metrics: metrics,
       trebleTop: trebleTop,
       bassTop: bassTop,
-      drawBass: !_debugHideLowerStaff,
+      drawTreble: showUpperStaff,
+      drawBass: showLowerStaff && !_debugHideLowerStaff,
     );
     if (!_shouldHideTimeSignatureForKeyFifths(activeKeyFifths)) {
       _paintTimeSignature(
@@ -639,7 +743,8 @@ class _StaffScrollerPainter extends CustomPainter {
         metrics: metrics,
         trebleTop: trebleTop,
         bassTop: bassTop,
-        drawBass: !_debugHideLowerStaff,
+        drawTreble: showUpperStaff,
+        drawBass: showLowerStaff && !_debugHideLowerStaff,
       );
     }
 
@@ -685,14 +790,16 @@ class _StaffScrollerPainter extends CustomPainter {
       mainClefX: bassMainClefX,
       notePxPerMs: notePxPerMs,
     );
-    _textPainter.paintClef(
-      canvas,
-      Offset(trebleMainClefX, trebleClefY),
-      _glyphForClefSign(trebleActiveClef),
-      metrics.clefFontSize,
-      color: _withOpacity(score.colors.notation.clef, trebleMainClefOpacity),
-    );
-    if (!_debugHideLowerStaff) {
+    if (showUpperStaff) {
+      _textPainter.paintClef(
+        canvas,
+        Offset(trebleMainClefX, trebleClefY),
+        _glyphForClefSign(trebleActiveClef),
+        metrics.clefFontSize,
+        color: _withOpacity(score.colors.notation.clef, trebleMainClefOpacity),
+      );
+    }
+    if (showLowerStaff && !_debugHideLowerStaff) {
       _textPainter.paintClef(
         canvas,
         Offset(bassMainClefX, bassClefY),
@@ -748,7 +855,8 @@ class _StaffScrollerPainter extends CustomPainter {
           continue;
         }
         final isTrebleStaff = rest.staffNumber == 1;
-        if (!isTrebleStaff && _debugHideLowerStaff) {
+        if ((isTrebleStaff && !showUpperStaff) ||
+            (!isTrebleStaff && (!showLowerStaff || _debugHideLowerStaff))) {
           continue;
         }
 
@@ -836,7 +944,8 @@ class _StaffScrollerPainter extends CustomPainter {
           continue;
         }
         final isTrebleStaff = clef.staffNumber == 1;
-        if (!isTrebleStaff && _debugHideLowerStaff) {
+        if ((isTrebleStaff && !showUpperStaff) ||
+            (!isTrebleStaff && (!showLowerStaff || _debugHideLowerStaff))) {
           continue;
         }
         final glyph = _glyphForClefSign(clef.sign);
@@ -872,12 +981,13 @@ class _StaffScrollerPainter extends CustomPainter {
       playheadX: playheadX,
       trebleTop: trebleTop,
       bassTop: effectiveBassTop,
+      visibleStaffMode: visibleStaffMode,
       metrics: metrics,
       notePxPerMs: notePxPerMs,
     );
 
     canvas.drawLine(
-      Offset(playheadX, trebleTop),
+      Offset(playheadX, playheadTopY),
       Offset(playheadX, stavesBottomY),
       symbolPaint,
     );
@@ -903,6 +1013,7 @@ class _StaffScrollerPainter extends CustomPainter {
             missedNoteIndexesListenable ||
         oldDelegate.showKeyboard != showKeyboard ||
         oldDelegate.staffHeightScale != staffHeightScale ||
+        oldDelegate.visibleStaffMode != visibleStaffMode ||
         oldDelegate.timelineMsPerDurationDivision !=
             timelineMsPerDurationDivision;
   }
@@ -1376,6 +1487,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
+    bool drawTreble = true,
     bool drawBass = true,
   }) {
     final lineSpacing = metrics.staffSpace;
@@ -1415,17 +1527,19 @@ class _StaffScrollerPainter extends CustomPainter {
         spacing: lineSpacing,
       );
 
-      _textPainter.paintText(
-        canvas,
-        Offset(x, trebleY - glyphFontSize * 0.55 + glyphBaselineNudge),
-        glyph,
-        color: colors.notation.keySignature,
-        fontSize: glyphFontSize,
-        fontWeight: FontWeight.w400,
-        maxWidth: glyphFontSize * 1.4,
-        fontFamily: _bravuraFontFamily,
-        height: 1.0,
-      );
+      if (drawTreble) {
+        _textPainter.paintText(
+          canvas,
+          Offset(x, trebleY - glyphFontSize * 0.55 + glyphBaselineNudge),
+          glyph,
+          color: colors.notation.keySignature,
+          fontSize: glyphFontSize,
+          fontWeight: FontWeight.w400,
+          maxWidth: glyphFontSize * 1.4,
+          fontFamily: _bravuraFontFamily,
+          height: 1.0,
+        );
+      }
       if (drawBass) {
         _textPainter.paintText(
           canvas,
@@ -1453,6 +1567,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
+    bool drawTreble = true,
     bool drawBass = true,
   }) {
     final topText = _smuflTimeSigDigits(top);
@@ -1520,28 +1635,30 @@ class _StaffScrollerPainter extends CustomPainter {
     final trebleTopY = trebleTopCenterY - topHeight / 2;
     final trebleBottomY = trebleBottomCenterY - bottomHeight / 2;
 
-    _textPainter.paintText(
-      canvas,
-      Offset(topX, trebleTopY),
-      topText,
-      color: colors.notation.timeSignature,
-      fontSize: effectiveFontSize,
-      fontWeight: FontWeight.w400,
-      maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
-      fontFamily: _bravuraFontFamily,
-      height: 1.0,
-    );
-    _textPainter.paintText(
-      canvas,
-      Offset(bottomX, trebleBottomY),
-      bottomText,
-      color: colors.notation.timeSignature,
-      fontSize: effectiveFontSize,
-      fontWeight: FontWeight.w400,
-      maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
-      fontFamily: _bravuraFontFamily,
-      height: 1.0,
-    );
+    if (drawTreble) {
+      _textPainter.paintText(
+        canvas,
+        Offset(topX, trebleTopY),
+        topText,
+        color: colors.notation.timeSignature,
+        fontSize: effectiveFontSize,
+        fontWeight: FontWeight.w400,
+        maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
+        fontFamily: _bravuraFontFamily,
+        height: 1.0,
+      );
+      _textPainter.paintText(
+        canvas,
+        Offset(bottomX, trebleBottomY),
+        bottomText,
+        color: colors.notation.timeSignature,
+        fontSize: effectiveFontSize,
+        fontWeight: FontWeight.w400,
+        maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
+        fontFamily: _bravuraFontFamily,
+        height: 1.0,
+      );
+    }
 
     if (!drawBass) {
       return blockRightX;

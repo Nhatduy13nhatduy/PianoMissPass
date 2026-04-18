@@ -487,6 +487,25 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
   }
 
+  void setAudioStaffMode(GameAudioStaffMode mode) {
+    if (mode == state.audioStaffMode) {
+      return;
+    }
+
+    _emitState(state.copyWith(audioStaffMode: mode));
+    if (state.isPlaying && state.isSongAudioEnabled) {
+      _restartSongPlaybackFromCurrentPosition();
+    }
+  }
+
+  void setVisibleStaffMode(GameVisibleStaffMode mode) {
+    if (mode == state.visibleStaffMode) {
+      return;
+    }
+
+    _emitState(state.copyWith(visibleStaffMode: mode));
+  }
+
   void setPlaybackSpeed(double value) {
     final clamped = value
         .clamp(NoteTiming.minPlaybackSpeed, NoteTiming.maxPlaybackSpeed)
@@ -655,12 +674,16 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         : score.playbackNotes;
     for (var i = 0; i < playbackNotes.length; i++) {
       final note = playbackNotes[i];
+      if (!_shouldPlayAudioStaff(note.staffNumber)) {
+        continue;
+      }
       final noteOnTimeMs = _songPlaybackStartMs(note);
       final noteOffTimeMs = _songPlaybackEndMs(note);
       events.add(
         _ScheduledMidiEvent(
           timeMs: noteOnTimeMs,
           midi: note.midi,
+          staffNumber: note.staffNumber,
           token: i,
           type: _ScheduledMidiEventType.noteOn,
         ),
@@ -669,6 +692,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         _ScheduledMidiEvent(
           timeMs: noteOffTimeMs,
           midi: note.midi,
+          staffNumber: note.staffNumber,
           token: i,
           type: _ScheduledMidiEventType.noteOff,
         ),
@@ -728,6 +752,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final latestTokenByMidi = <int, int>{};
     for (var i = 0; i < playbackNotes.length; i++) {
       final note = playbackNotes[i];
+      if (!_shouldPlayAudioStaff(note.staffNumber)) {
+        continue;
+      }
       if (_songPlaybackStartMs(note) <= currentMs &&
           currentMs < _songPlaybackEndMs(note)) {
         latestTokenByMidi[note.midi] = i;
@@ -773,6 +800,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void _dispatchSongPlaybackEvent(_ScheduledMidiEvent event) {
     if (!_isSynthReady) {
+      return;
+    }
+
+    if (!_shouldPlayAudioStaff(event.staffNumber)) {
       return;
     }
 
@@ -831,6 +862,15 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     // separate timer to tear down here.
   }
 
+  bool _shouldPlayAudioStaff(int? staffNumber) {
+    final resolvedStaff = staffNumber ?? 1;
+    return switch (state.audioStaffMode) {
+      GameAudioStaffMode.upperOnly => resolvedStaff == 1,
+      GameAudioStaffMode.lowerOnly => resolvedStaff == 2,
+      GameAudioStaffMode.both => true,
+    };
+  }
+
   Future<void> _silenceSongPlaybackNotes() async {
     if (_activeSongPlaybackTokenByMidi.isEmpty || !_isSynthReady) {
       _activeSongPlaybackTokenByMidi.clear();
@@ -883,12 +923,14 @@ class _ScheduledMidiEvent {
   const _ScheduledMidiEvent({
     required this.timeMs,
     required this.midi,
+    required this.staffNumber,
     required this.token,
     required this.type,
   });
 
   final int timeMs;
   final int midi;
+  final int? staffNumber;
   final int token;
   final _ScheduledMidiEventType type;
 }
