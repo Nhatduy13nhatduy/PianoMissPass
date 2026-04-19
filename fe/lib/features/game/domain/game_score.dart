@@ -6,6 +6,8 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:xml/xml.dart';
 
+import 'staff_background.dart';
+
 part 'score_builder.dart';
 
 class ScoreData {
@@ -34,6 +36,22 @@ class ScoreData {
   final GameColorScheme colors;
   final int minMidi;
   final int maxMidi;
+
+  ScoreData copyWith({GameColorScheme? colors}) {
+    return ScoreData(
+      bpm: bpm,
+      beatsPerMeasure: beatsPerMeasure,
+      beatUnit: beatUnit,
+      notes: notes,
+      playbackNotes: playbackNotes,
+      slurs: slurs,
+      symbols: symbols,
+      keySignatures: keySignatures,
+      colors: colors ?? this.colors,
+      minMidi: minMidi,
+      maxMidi: maxMidi,
+    );
+  }
 }
 
 class GameColorScheme {
@@ -48,40 +66,52 @@ class GameColorScheme {
     required this.progress,
   });
 
+  static const Color _note = Color(0xFF111111);
+  static const Color _staffStroke = Color(0xFF111111);
+  static const Color _notationGlyph = Color(0xFF111111);
+  static const Color _keyboardBlack = Color(0xFF1A1A1C);
+  static const Color _keyboardWhite = Color(0xFFE7EBF0);
+  static const Color _keyBoardActive = Color(0xFF8A6DB8);
+
+  static const Color _neutralGlyph = Color(0xFF222222);
+  static const Color _passAccent = Color(0xFF1E5D31);
+  static const Color _missAccent = Color(0xFF98273B);
+  static const Color _judgeLine = Color(0xFF0D3750);
+
   static const GameColorScheme classic = GameColorScheme(
     staff: GameStaffColorScheme(
-      background: Color(0xE6F4F4F4),
-      border: Color(0xFF111111),
-      line: Color(0xFF111111),
-      measureLine: Color(0xFF111111),
-      judgeLine: Color(0xFF0D3750),
+      background: GameStaffBackground.color(Color(0xE6F4F4F4)),
+      border: _staffStroke,
+      line: _staffStroke,
+      measureLine: _staffStroke,
+      judgeLine: _judgeLine,
     ),
     note: GameNoteColorScheme(
-      idle: Color(0xFF111111),
-      active: Color(0xFF111111),
-      pass: Color(0xFF1E5D31),
-      miss: Color(0xFF98273B),
+      idle: _note,
+      active: _note,
+      pass: _passAccent,
+      miss: _missAccent,
     ),
     accidentalAndSlur: GameAccidentalSlurColorScheme(
-      accidental: Color(0xFF222222),
-      slurIdle: Color(0xFF222222),
-      slurPass: Color(0xFF1E5D31),
-      slurMiss: Color(0xFF98273B),
+      accidental: _neutralGlyph,
+      slurIdle: _neutralGlyph,
+      slurPass: _passAccent,
+      slurMiss: _missAccent,
     ),
-    fingering: GameFingeringColorScheme(text: Color(0xFF111111)),
-    rest: GameRestColorScheme(glyph: Color(0xFF111111)),
+    fingering: GameFingeringColorScheme(text: _neutralGlyph),
+    rest: GameRestColorScheme(glyph: _neutralGlyph),
     notation: GameNotationColorScheme(
-      keySignature: Color(0xFF111111),
-      clef: Color(0xFF111111),
-      timeSignature: Color(0xFF111111),
+      keySignature: _notationGlyph,
+      clef: _notationGlyph,
+      timeSignature: _notationGlyph,
     ),
     keyboard: GameKeyboardColorScheme(
-      white: Color(0xFFE7EBF0),
-      active: Color(0xFF8A6DB8),
-      whiteBorder: Color(0xFF0F1720),
-      black: Color(0xFF1A1A1C),
+      white: _keyboardWhite,
+      active: _keyBoardActive,
+      whiteBorder: _keyboardBlack,
+      black: _keyboardBlack,
     ),
-    progress: GameProgressColorScheme(line: Color(0xFF0D3750)),
+    progress: GameProgressColorScheme(line: _judgeLine),
   );
 
   final GameStaffColorScheme staff;
@@ -103,7 +133,7 @@ class GameStaffColorScheme {
     required this.judgeLine,
   });
 
-  final Color background;
+  final GameStaffBackground background;
   final Color border;
   final Color line;
   final Color measureLine;

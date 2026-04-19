@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
+import '../../domain/staff_background.dart';
 import '../notation/notation_metrics.dart';
 import '../cubit/game_prototype_cubit.dart';
 import '../cubit/game_prototype_state.dart';
@@ -43,6 +44,174 @@ class _GamePrototypeChromeScope extends StatefulWidget {
 class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   bool _showKeyboard = true;
   double _staffHeightScale = 1.0;
+  _SettingsTab _selectedSettingsTab = _SettingsTab.gameplay;
+  GameStaffBackground _staffBackground = _backgroundPresets.first.$2;
+  Color _noteColor = _defaultColors.note.idle;
+  Color _staffStrokeColor = _defaultColors.staff.border;
+  Color _notationGlyphColor = _defaultColors.notation.clef;
+  Color _keyboardBlackColor = _defaultColors.keyboard.black;
+  Color _keyboardWhiteColor = _defaultColors.keyboard.white;
+  Color _keyboardActiveColor = _defaultColors.keyboard.active;
+  Color _neutralGlyphColor = _defaultColors.rest.glyph;
+  Color _passAccentColor = _defaultColors.note.pass;
+  Color _missAccentColor = _defaultColors.note.miss;
+  Color _judgeLineColor = _defaultColors.staff.judgeLine;
+
+  static const GameColorScheme _defaultColors = GameColorScheme.classic;
+  static const List<(String, GameStaffBackground)> _backgroundPresets = [
+    (
+      'White',
+      GameStaffBackground.color(Color(0xE6F4F4F4)),
+    ),
+    (
+      'Forest',
+      GameStaffBackground.image(
+        assetPath:
+            'assets/backgrounds/luxury-plain-green-gradient-abstract-studio-background-empty-room-with-space-your-text-picture.jpg',
+        fallbackColor: Color(0xFFE5EFE5),
+      ),
+    ),
+    (
+      'Paper',
+      GameStaffBackground.image(
+        assetPath: 'assets/backgrounds/pexels-fwstudio-33348-172295.jpg',
+        fallbackColor: Color(0xFFF1E6D6),
+      ),
+    ),
+    (
+      'Stone',
+      GameStaffBackground.image(
+        assetPath: 'assets/backgrounds/pexels-pixabay-235985.jpg',
+        fallbackColor: Color(0xFFE8E8E4),
+      ),
+    ),
+    (
+      'Soft',
+      GameStaffBackground.image(
+        assetPath:
+            'assets/backgrounds/f8cd0a0d-0f8a-447f-b73c-37e87c224e31.jpg',
+        fallbackColor: Color(0xFFE7DFD7),
+      ),
+    ),
+  ];
+
+  static const List<Color> _noteColorOptions = [
+    Color(0xFF111111),
+    Color(0xFF1C2A3A),
+    Color(0xFF2D1E2F),
+    Color(0xFF243322),
+    Color(0xFF3A2418),
+  ];
+
+  static const List<Color> _staffStrokeOptions = [
+    Color(0xFF111111),
+    Color(0xFF22313F),
+    Color(0xFF4A403A),
+    Color(0xFF2E3D2F),
+    Color(0xFF47312A),
+  ];
+
+  static const List<Color> _notationGlyphOptions = [
+    Color(0xFF111111),
+    Color(0xFF1F2D3A),
+    Color(0xFF2F253D),
+    Color(0xFF30422C),
+    Color(0xFF4C3423),
+  ];
+
+  static const List<Color> _keyboardBlackOptions = [
+    Color(0xFF1A1A1C),
+    Color(0xFF15222D),
+    Color(0xFF2A2434),
+    Color(0xFF233123),
+    Color(0xFF35251E),
+  ];
+
+  static const List<Color> _keyboardWhiteOptions = [
+    Color(0xFFE7EBF0),
+    Color(0xFFF5F1E8),
+    Color(0xFFE9F0EA),
+    Color(0xFFEDE7F3),
+    Color(0xFFF2E7E1),
+  ];
+
+  static const List<Color> _keyboardActiveOptions = [
+    Color(0xFF8A6DB8),
+    Color(0xFF2B7FFF),
+    Color(0xFF2E9C6A),
+    Color(0xFFE07A2D),
+    Color(0xFFC05780),
+  ];
+
+  static const List<Color> _neutralGlyphOptions = [
+    Color(0xFF222222),
+    Color(0xFF34495E),
+    Color(0xFF5B4B3A),
+    Color(0xFF38553C),
+    Color(0xFF5C3B3B),
+  ];
+
+  static const List<Color> _passAccentOptions = [
+    Color(0xFF1E5D31),
+    Color(0xFF2E9C6A),
+    Color(0xFF2C7A7B),
+    Color(0xFF4D8B31),
+    Color(0xFF0F766E),
+  ];
+
+  static const List<Color> _missAccentOptions = [
+    Color(0xFF98273B),
+    Color(0xFFC44536),
+    Color(0xFFD97706),
+    Color(0xFFB42318),
+    Color(0xFF9F1239),
+  ];
+
+  static const List<Color> _judgeLineOptions = [
+    Color(0xFF0D3750),
+    Color(0xFF2B7FFF),
+    Color(0xFF0F766E),
+    Color(0xFF7C3AED),
+    Color(0xFFB45309),
+  ];
+
+  GameColorScheme get _effectiveColors {
+    return GameColorScheme(
+      staff: GameStaffColorScheme(
+        background: _staffBackground,
+        border: _staffStrokeColor,
+        line: _staffStrokeColor,
+        measureLine: _staffStrokeColor,
+        judgeLine: _judgeLineColor,
+      ),
+      note: GameNoteColorScheme(
+        idle: _noteColor,
+        active: _noteColor,
+        pass: _passAccentColor,
+        miss: _missAccentColor,
+      ),
+      accidentalAndSlur: GameAccidentalSlurColorScheme(
+        accidental: _neutralGlyphColor,
+        slurIdle: _neutralGlyphColor,
+        slurPass: _passAccentColor,
+        slurMiss: _missAccentColor,
+      ),
+      fingering: GameFingeringColorScheme(text: _neutralGlyphColor),
+      rest: GameRestColorScheme(glyph: _neutralGlyphColor),
+      notation: GameNotationColorScheme(
+        keySignature: _notationGlyphColor,
+        clef: _notationGlyphColor,
+        timeSignature: _notationGlyphColor,
+      ),
+      keyboard: GameKeyboardColorScheme(
+        white: _keyboardWhiteColor,
+        active: _keyboardActiveColor,
+        whiteBorder: _keyboardBlackColor,
+        black: _keyboardBlackColor,
+      ),
+      progress: GameProgressColorScheme(line: _judgeLineColor),
+    );
+  }
 
   @override
   void initState() {
@@ -103,12 +272,22 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
             if (score == null) {
               return const SizedBox.shrink();
             }
+            final effectiveScore = score.copyWith(colors: _effectiveColors);
+            final hasCompletedSong =
+                !state.isPlaying &&
+                cubit.maxDurationMs > 0 &&
+                cubit.currentMs >= cubit.maxDurationMs;
 
             return Stack(
               children: [
+                Positioned.fill(
+                  child: _GameScreenBackground(
+                    background: _staffBackground,
+                  ),
+                ),
                 CustomPaint(
                   painter: _StaffScrollerPainter(
-                    score: score,
+                    score: effectiveScore,
                     elapsedMsListenable: cubit.elapsedMsListenable,
                     passedNoteIndexesListenable:
                         cubit.passedNoteIndexesListenable,
@@ -146,7 +325,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                           .toDouble();
                       return _TopProgressLine(
                         progress: progress,
-                        color: score.colors.progress.line,
+                        color: effectiveScore.colors.progress.line,
                       );
                     },
                   ),
@@ -155,7 +334,14 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                   Positioned.fill(
                     child: _GameSettingsOverlay(
                       songTitle: cubit.songTitle,
-                      controls: _GameLayoutControls(
+                      hasCompletedSong: hasCompletedSong,
+                      selectedTab: _selectedSettingsTab,
+                      onSelectTab: (tab) {
+                        setState(() {
+                          _selectedSettingsTab = tab;
+                        });
+                      },
+                      gameplayControls: _GameLayoutControls(
                         useCard: false,
                         showKeyboard: _showKeyboard,
                         staffHeightScale: _staffHeightScale,
@@ -207,6 +393,90 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                           );
                         },
                       ),
+                      colorControls: _GameColorControls(
+                        noteColor: _noteColor,
+                        staffStrokeColor: _staffStrokeColor,
+                        notationGlyphColor: _notationGlyphColor,
+                        keyboardBlackColor: _keyboardBlackColor,
+                        keyboardWhiteColor: _keyboardWhiteColor,
+                        keyboardActiveColor: _keyboardActiveColor,
+                        neutralGlyphColor: _neutralGlyphColor,
+                        passAccentColor: _passAccentColor,
+                        missAccentColor: _missAccentColor,
+                        judgeLineColor: _judgeLineColor,
+                        staffBackground: _staffBackground,
+                        noteColorOptions: _noteColorOptions,
+                        staffStrokeOptions: _staffStrokeOptions,
+                        notationGlyphOptions: _notationGlyphOptions,
+                        keyboardBlackOptions: _keyboardBlackOptions,
+                        keyboardWhiteOptions: _keyboardWhiteOptions,
+                        keyboardActiveOptions: _keyboardActiveOptions,
+                        neutralGlyphOptions: _neutralGlyphOptions,
+                        passAccentOptions: _passAccentOptions,
+                        missAccentOptions: _missAccentOptions,
+                        judgeLineOptions: _judgeLineOptions,
+                        backgroundOptions: _backgroundPresets,
+                        onNoteColorChanged: (value) {
+                          setState(() {
+                            _noteColor = value;
+                          });
+                        },
+                        onStaffStrokeColorChanged: (value) {
+                          setState(() {
+                            _staffStrokeColor = value;
+                          });
+                        },
+                        onNotationGlyphColorChanged: (value) {
+                          setState(() {
+                            _notationGlyphColor = value;
+                          });
+                        },
+                        onKeyboardBlackColorChanged: (value) {
+                          setState(() {
+                            _keyboardBlackColor = value;
+                          });
+                        },
+                        onKeyboardWhiteColorChanged: (value) {
+                          setState(() {
+                            _keyboardWhiteColor = value;
+                          });
+                        },
+                        onKeyboardActiveColorChanged: (value) {
+                          setState(() {
+                            _keyboardActiveColor = value;
+                          });
+                        },
+                        onNeutralGlyphColorChanged: (value) {
+                          setState(() {
+                            _neutralGlyphColor = value;
+                          });
+                        },
+                        onPassAccentColorChanged: (value) {
+                          setState(() {
+                            _passAccentColor = value;
+                          });
+                        },
+                        onMissAccentColorChanged: (value) {
+                          setState(() {
+                            _missAccentColor = value;
+                          });
+                        },
+                        onJudgeLineColorChanged: (value) {
+                          setState(() {
+                            _judgeLineColor = value;
+                          });
+                        },
+                        onStaffBackgroundChanged: (value) {
+                          setState(() {
+                            _staffBackground = value;
+                          });
+                        },
+                      ),
+                      onRepeat: cubit.repeat,
+                      onBack: () {
+                        cubit.pause();
+                        Navigator.of(context).maybePop();
+                      },
                       onPlay: cubit.play,
                     ),
                   ),
@@ -215,6 +485,32 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
           },
         ),
       ),
+    );
+  }
+}
+
+enum _SettingsTab { gameplay, color }
+
+class _GameScreenBackground extends StatelessWidget {
+  const _GameScreenBackground({required this.background});
+
+  final GameStaffBackground background;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background.color ?? background.fallbackColor ?? Colors.transparent,
+        gradient: background.gradient,
+        image: background.imageAssetPath != null
+            ? DecorationImage(
+                image: AssetImage(background.imageAssetPath!),
+                fit: background.imageFit,
+                alignment: background.imageAlignment,
+              )
+            : null,
+      ),
+      child: const SizedBox.expand(),
     );
   }
 }
@@ -265,6 +561,10 @@ class _GameLayoutControls extends StatelessWidget {
       fontSize: 13,
       fontWeight: FontWeight.w600,
     );
+    final timelineMultiplier = NoteTiming
+        .timelineMultiplierFromMsPerDurationDivision(
+          timelineMsPerDurationDivision,
+        );
 
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -353,7 +653,10 @@ class _GameLayoutControls extends StatelessWidget {
                 onTap: onDecreaseTimeline,
               ),
               const SizedBox(width: 8),
-              Text('$timelineMsPerDurationDivision', style: labelStyle),
+              Text(
+                'x${timelineMultiplier.toStringAsFixed(1)}',
+                style: labelStyle,
+              ),
               const SizedBox(width: 8),
               _MiniIconButton(
                 icon: Icons.add_rounded,
@@ -391,12 +694,24 @@ class _GameLayoutControls extends StatelessWidget {
 
 class _GameSettingsOverlay extends StatelessWidget {
   const _GameSettingsOverlay({
-    required this.controls,
+    required this.hasCompletedSong,
+    required this.selectedTab,
+    required this.onSelectTab,
+    required this.gameplayControls,
+    required this.colorControls,
+    required this.onRepeat,
+    required this.onBack,
     required this.onPlay,
     this.songTitle,
   });
 
-  final Widget controls;
+  final bool hasCompletedSong;
+  final _SettingsTab selectedTab;
+  final ValueChanged<_SettingsTab> onSelectTab;
+  final Widget gameplayControls;
+  final Widget colorControls;
+  final VoidCallback onRepeat;
+  final VoidCallback onBack;
   final VoidCallback onPlay;
   final String? songTitle;
 
@@ -426,7 +741,9 @@ class _GameSettingsOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Chinh cau hinh truoc khi choi, hoac tiep tuc tu vi tri da pause.',
+                    hasCompletedSong
+                        ? 'Bai nhac da ket thuc. Ban co the repeat, quay lai, hoac dieu chinh cau hinh truoc khi choi tiep.'
+                        : 'Chinh cau hinh truoc khi choi, hoac tiep tuc tu vi tri da pause.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: const Color(0xD9FFFFFF),
@@ -442,14 +759,69 @@ class _GameSettingsOverlay extends StatelessWidget {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                      child: controls,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SettingsTabBar(
+                            selectedTab: selectedTab,
+                            onSelectTab: onSelectTab,
+                          ),
+                          const SizedBox(height: 18),
+                          if (selectedTab == _SettingsTab.gameplay)
+                            gameplayControls
+                          else
+                            colorControls,
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onBack,
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          label: const Text('Back'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0x40FFFFFF)),
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: onRepeat,
+                          icon: const Icon(Icons.replay_rounded),
+                          label: const Text('Repeat'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            backgroundColor: const Color(0xFF1F8A70),
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: onPlay,
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Play'),
+                    onPressed: hasCompletedSong ? onRepeat : onPlay,
+                    icon: Icon(
+                      hasCompletedSong
+                          ? Icons.replay_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                    label: Text(hasCompletedSong ? 'Play Again' : 'Play'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(56),
                       backgroundColor: const Color(0xFF2B7FFF),
@@ -461,6 +833,424 @@ class _GameSettingsOverlay extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTabBar extends StatelessWidget {
+  const _SettingsTabBar({
+    required this.selectedTab,
+    required this.onSelectTab,
+  });
+
+  final _SettingsTab selectedTab;
+  final ValueChanged<_SettingsTab> onSelectTab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _SettingsTabButton(
+            label: 'Gameplay',
+            selected: selectedTab == _SettingsTab.gameplay,
+            onTap: () => onSelectTab(_SettingsTab.gameplay),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SettingsTabButton(
+            label: 'Color',
+            selected: selectedTab == _SettingsTab.color,
+            onTap: () => onSelectTab(_SettingsTab.color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsTabButton extends StatelessWidget {
+  const _SettingsTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Ink(
+        height: 42,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF284B63) : const Color(0xFF1C2735),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GameColorControls extends StatelessWidget {
+  const _GameColorControls({
+    required this.noteColor,
+    required this.staffStrokeColor,
+    required this.notationGlyphColor,
+    required this.keyboardBlackColor,
+    required this.keyboardWhiteColor,
+    required this.keyboardActiveColor,
+    required this.neutralGlyphColor,
+    required this.passAccentColor,
+    required this.missAccentColor,
+    required this.judgeLineColor,
+    required this.staffBackground,
+    required this.noteColorOptions,
+    required this.staffStrokeOptions,
+    required this.notationGlyphOptions,
+    required this.keyboardBlackOptions,
+    required this.keyboardWhiteOptions,
+    required this.keyboardActiveOptions,
+    required this.neutralGlyphOptions,
+    required this.passAccentOptions,
+    required this.missAccentOptions,
+    required this.judgeLineOptions,
+    required this.backgroundOptions,
+    required this.onNoteColorChanged,
+    required this.onStaffStrokeColorChanged,
+    required this.onNotationGlyphColorChanged,
+    required this.onKeyboardBlackColorChanged,
+    required this.onKeyboardWhiteColorChanged,
+    required this.onKeyboardActiveColorChanged,
+    required this.onNeutralGlyphColorChanged,
+    required this.onPassAccentColorChanged,
+    required this.onMissAccentColorChanged,
+    required this.onJudgeLineColorChanged,
+    required this.onStaffBackgroundChanged,
+  });
+
+  final Color noteColor;
+  final Color staffStrokeColor;
+  final Color notationGlyphColor;
+  final Color keyboardBlackColor;
+  final Color keyboardWhiteColor;
+  final Color keyboardActiveColor;
+  final Color neutralGlyphColor;
+  final Color passAccentColor;
+  final Color missAccentColor;
+  final Color judgeLineColor;
+  final GameStaffBackground staffBackground;
+  final List<Color> noteColorOptions;
+  final List<Color> staffStrokeOptions;
+  final List<Color> notationGlyphOptions;
+  final List<Color> keyboardBlackOptions;
+  final List<Color> keyboardWhiteOptions;
+  final List<Color> keyboardActiveOptions;
+  final List<Color> neutralGlyphOptions;
+  final List<Color> passAccentOptions;
+  final List<Color> missAccentOptions;
+  final List<Color> judgeLineOptions;
+  final List<(String, GameStaffBackground)> backgroundOptions;
+  final ValueChanged<Color> onNoteColorChanged;
+  final ValueChanged<Color> onStaffStrokeColorChanged;
+  final ValueChanged<Color> onNotationGlyphColorChanged;
+  final ValueChanged<Color> onKeyboardBlackColorChanged;
+  final ValueChanged<Color> onKeyboardWhiteColorChanged;
+  final ValueChanged<Color> onKeyboardActiveColorChanged;
+  final ValueChanged<Color> onNeutralGlyphColorChanged;
+  final ValueChanged<Color> onPassAccentColorChanged;
+  final ValueChanged<Color> onMissAccentColorChanged;
+  final ValueChanged<Color> onJudgeLineColorChanged;
+  final ValueChanged<GameStaffBackground> onStaffBackgroundChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BackgroundPicker(
+          selected: staffBackground,
+          options: backgroundOptions,
+          onSelected: onStaffBackgroundChanged,
+        ),
+        const SizedBox(height: 14),
+        _ColorOptionRow(
+          label: 'Note',
+          selected: noteColor,
+          options: noteColorOptions,
+          onSelected: onNoteColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Staff stroke',
+          selected: staffStrokeColor,
+          options: staffStrokeOptions,
+          onSelected: onStaffStrokeColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Notation glyph',
+          selected: notationGlyphColor,
+          options: notationGlyphOptions,
+          onSelected: onNotationGlyphColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Keyboard black',
+          selected: keyboardBlackColor,
+          options: keyboardBlackOptions,
+          onSelected: onKeyboardBlackColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Keyboard white',
+          selected: keyboardWhiteColor,
+          options: keyboardWhiteOptions,
+          onSelected: onKeyboardWhiteColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Keyboard active',
+          selected: keyboardActiveColor,
+          options: keyboardActiveOptions,
+          onSelected: onKeyboardActiveColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Neutral glyph',
+          selected: neutralGlyphColor,
+          options: neutralGlyphOptions,
+          onSelected: onNeutralGlyphColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Pass accent',
+          selected: passAccentColor,
+          options: passAccentOptions,
+          onSelected: onPassAccentColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Miss accent',
+          selected: missAccentColor,
+          options: missAccentOptions,
+          onSelected: onMissAccentColorChanged,
+        ),
+        _ColorOptionRow(
+          label: 'Judge line',
+          selected: judgeLineColor,
+          options: judgeLineOptions,
+          onSelected: onJudgeLineColorChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _ColorOptionRow extends StatelessWidget {
+  const _ColorOptionRow({
+    required this.label,
+    required this.selected,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final String label;
+  final Color selected;
+  final List<Color> options;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final option in options)
+                _ColorSwatchButton(
+                  color: option,
+                  selected: option.value == selected.value,
+                  onTap: () => onSelected(option),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorSwatchButton extends StatelessWidget {
+  const _ColorSwatchButton({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? Colors.white : Colors.white24,
+            width: selected ? 3 : 1.2,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BackgroundPicker extends StatelessWidget {
+  const _BackgroundPicker({
+    required this.selected,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final GameStaffBackground selected;
+  final List<(String, GameStaffBackground)> options;
+  final ValueChanged<GameStaffBackground> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Background',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 92,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: options.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final option = options[index];
+              final isSelected = _sameBackground(selected, option.$2);
+              return _BackgroundOptionCard(
+                label: option.$1,
+                background: option.$2,
+                selected: isSelected,
+                onTap: () => onSelected(option.$2),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _sameBackground(GameStaffBackground a, GameStaffBackground b) {
+    return a.color?.value == b.color?.value &&
+        a.imageAssetPath == b.imageAssetPath &&
+        a.fallbackColor?.value == b.fallbackColor?.value;
+  }
+}
+
+class _BackgroundOptionCard extends StatelessWidget {
+  const _BackgroundOptionCard({
+    required this.label,
+    required this.background,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final GameStaffBackground background;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final decoration = BoxDecoration(
+      color: background.color ?? background.fallbackColor ?? Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: selected ? Colors.white : Colors.white24,
+        width: selected ? 2.4 : 1.0,
+      ),
+      image: background.imageAssetPath != null
+          ? DecorationImage(
+              image: AssetImage(background.imageAssetPath!),
+              fit: background.imageFit,
+              alignment: background.imageAlignment,
+            )
+          : null,
+    );
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Ink(
+        width: 116,
+        decoration: decoration,
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0x99000000),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1399,8 +2189,8 @@ class _StaffScrollerPainter extends CustomPainter {
     final lineSpacing = metrics.staffSpace;
     final scale = metrics.visualScale;
     return switch (restType) {
-      'whole' => (lineSpacing * 1.7).clamp(14.0 * scale, 26.0 * scale),
-      'half' => (lineSpacing * 1.7).clamp(14.0 * scale, 26.0 * scale),
+      'whole' => (lineSpacing * 1.38).clamp(12.0 * scale, 22.0 * scale),
+      'half' => (lineSpacing * 1.38).clamp(12.0 * scale, 22.0 * scale),
       'quarter' => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
       '8th' => (lineSpacing * 2.55).clamp(20.0 * scale, 40.0 * scale),
       '16th' => (lineSpacing * 2.8).clamp(22.0 * scale, 43.0 * scale),

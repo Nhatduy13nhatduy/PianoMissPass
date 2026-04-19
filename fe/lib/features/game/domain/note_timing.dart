@@ -7,10 +7,30 @@ class NoteTiming {
   static const double defaultPlaybackSpeed = 1.0;
   static const double minPlaybackSpeed = 0.1;
   static const double maxPlaybackSpeed = 2.0;
+  static const double defaultTimelineMultiplier = 1.0;
+  static const double minTimelineMultiplier = 0.1;
+  static const double maxTimelineMultiplier = 2.0;
+  static const double timelineMultiplierStep = 0.1;
   static const int defaultTimelineMsPerDurationDivision = 800;
-  static const int minTimelineMsPerDurationDivision = 400;
+  static const int minTimelineMsPerDurationDivision = 80;
   static const int maxTimelineMsPerDurationDivision = 1600;
-  static const int timelineMsPerDurationDivisionStep = 100;
+  static const int timelineMsPerDurationDivisionStep = 80;
+
+  static double timelineMultiplierFromMsPerDurationDivision(
+    int timelineMsPerDurationDivision,
+  ) {
+    return timelineMsPerDurationDivision / defaultTimelineMsPerDurationDivision;
+  }
+
+  static int timelineMsPerDurationDivisionFromMultiplier(
+    double multiplier,
+  ) {
+    final normalizedMultiplier = multiplier.clamp(
+      minTimelineMultiplier,
+      maxTimelineMultiplier,
+    );
+    return (defaultTimelineMsPerDurationDivision * normalizedMultiplier).round();
+  }
 
   static double notePxPerMsForScore(
     ScoreData score, {

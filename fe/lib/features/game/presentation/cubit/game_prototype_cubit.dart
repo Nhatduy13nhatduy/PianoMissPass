@@ -33,7 +33,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const int _songPlaybackVelocity = 92;
   static const int _midiInputVelocityFallback = 96;
   static const int _songPlaybackMinimumHoldMs = 90;
-  static const int _songAudioLatencyCompensationMs = 160;
+  static const int _songAudioLatencyCompensationMs = 0;
   static const int _songPlaybackDispatchLookaheadMs = 12;
   static const int _synthProgramPiano = 0;
   static const int _synthVolume = 110;
@@ -442,6 +442,27 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void play() => _play();
 
+  void repeat() {
+    _stopwatch
+      ..stop()
+      ..reset();
+    _ticker.stop();
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
+    _baseElapsedMs = -initialLeadInMs;
+    _elapsedMsNotifier.value = _baseElapsedMs;
+    _nextMissScanIndex = 0;
+    _nextSongPlaybackEventIndex = 0;
+    _emitState(
+      state.copyWith(
+        isPlaying: false,
+        passedNoteIndexes: const <int>{},
+        missedNoteIndexes: const <int>{},
+      ),
+    );
+    _play();
+  }
+
   void _pause() {
     if (!state.isPlaying) {
       return;
@@ -536,7 +557,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final updatedMisses = _updateMissesIncremental(current);
 
     if (current >= maxDurationMs) {
-      _pause();
+      _completePlayback();
       return;
     }
 
@@ -552,6 +573,18 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     if (updatedMisses != null) {
       _emitState(state.copyWith(missedNoteIndexes: updatedMisses));
     }
+  }
+
+  void _completePlayback() {
+    _baseElapsedMs = maxDurationMs;
+    _elapsedMsNotifier.value = maxDurationMs;
+    _stopwatch
+      ..stop()
+      ..reset();
+    _ticker.stop();
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
+    _emitState(state.copyWith(isPlaying: false));
   }
 
   Set<int>? _updateMissesIncremental(int currentMs) {
@@ -850,7 +883,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     // separate timer to tear down here.
   }
 
-  bool get _isSongAudioEnabled => state.audioStaffMode != GameAudioStaffMode.off;
+  bool get _isSongAudioEnabled =>
+      state.audioStaffMode != GameAudioStaffMode.off;
 
   bool _shouldPlayAudioStaff(int? staffNumber) {
     final resolvedStaff = staffNumber ?? 1;

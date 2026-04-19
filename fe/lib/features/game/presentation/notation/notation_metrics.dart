@@ -28,7 +28,7 @@ class NotationMetrics {
         .toDouble();
 
     final safeScale = staffHeightScale.clamp(0.5, 2.0).toDouble();
-    var staffHeight = (resolvedStaffRegionHeight / 4.0) * safeScale;
+    var staffHeight = (resolvedStaffRegionHeight / 5.0) * safeScale;
     final maxStaffHeight = resolvedStaffRegionHeight / 2.0;
     staffHeight = staffHeight
         .clamp(28.0, maxStaffHeight > 28 ? maxStaffHeight : 28.0)
@@ -66,7 +66,7 @@ class NotationMetrics {
 
   double get staffSpace => staffHeight / 4;
   double get visualScale {
-    final baseStaffHeight = staffRegionHeight / 4.0;
+    final baseStaffHeight = staffRegionHeight / 5.0;
     if (baseStaffHeight <= 0) {
       return 1.0;
     }
@@ -184,10 +184,10 @@ class NotationMetrics {
   double get symbolLabelOffsetX => staffSpace * 0.27;
 
   double get noteInkColorFontScale => staffSpace;
-  double get restWholeHalfScaleFactor => 4.2;
+  double get restWholeHalfScaleFactor => 3.55;
   double get restOtherScaleFactor => 2.8;
-  double get restWholeHalfMinFontSize => 50.0 * visualScale;
-  double get restWholeHalfMaxFontSize => 124.0 * visualScale;
+  double get restWholeHalfMinFontSize => 41.0 * visualScale;
+  double get restWholeHalfMaxFontSize => 98.0 * visualScale;
   double get restOtherMinFontSize => 32.0 * visualScale;
   double get restOtherMaxFontSize => 84.0 * visualScale;
 
