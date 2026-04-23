@@ -195,17 +195,9 @@ class MidiGameInputAdapter implements GameInputAdapter {
   }
 
   void _emitSnapshot() {
-    final confidenceByMidi = <int, double>{
-      for (final midi in _activeInputNotes) midi: 1.0,
-    };
     _onSnapshot?.call(
       GameInputSnapshot(
         detectedMidis: Set<int>.from(_activeInputNotes),
-        noteLabels: gameInputMidiLabels(_activeInputNotes),
-        confidenceByMidi: confidenceByMidi,
-        detectorLabel: _inputMode == GameInputMode.bluetoothMidi
-            ? 'Bluetooth MIDI'
-            : 'Wired MIDI',
       ),
     );
   }

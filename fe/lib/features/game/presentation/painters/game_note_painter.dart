@@ -22,7 +22,7 @@ class GameNotePainter {
   static const double _preRenderMeasuresRight = 20;
   static const double _renderWindowPaddingMs = 1400;
   static const int _passPulseDurationMs = 260;
-  static const double _passPulseMaxScale = 0.2;
+  static const double _passPulseMaxScale = 0.28;
   static const double _accidentalCollisionPaddingTuning = 1.0;
   static const double _accidentalCollisionPaddingScale = 0.04;
   static const int _trebleBottomLineStep = 30; // E4

@@ -43,7 +43,7 @@ dependencies:
   flutter_midi_command: ^0.5.3
   flutter_audio_capture: ^1.1.12
   permission_handler: ^11.4.0
-  tflite_flutter: ^0.12.1
+  pitch_detector_dart: ^0.0.7
   flutter_midi_16kb:
     path: third_party/flutter_midi_16kb
 
@@ -73,7 +73,6 @@ flutter:
     - assets/icons/
     - assets/backgrounds/
     - assets/mxl/
-    - assets/ml/
     - assets/soundfonts/
 
   fonts:

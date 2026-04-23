@@ -11,9 +11,13 @@ class TimedExpectedChord {
 }
 
 class GameNoteJudgeEngine {
-  GameNoteJudgeEngine({required this.hitWindowMs});
+  GameNoteJudgeEngine({
+    required this.lateHitWindowMs,
+    required this.earlyHitWindowMs,
+  });
 
-  final int hitWindowMs;
+  final int lateHitWindowMs;
+  final int earlyHitWindowMs;
   List<TimedExpectedChord> _expectedChords = const <TimedExpectedChord>[];
 
   void loadScore(ScoreData score) {
@@ -36,31 +40,6 @@ class GameNoteJudgeEngine {
     _expectedChords = List<TimedExpectedChord>.unmodifiable(chords);
   }
 
-  Set<int> candidateExpectedMidisAroundTime({
-    required int currentMs,
-    required ScoreData score,
-    required Set<int> passedNoteIndexes,
-    required Set<int> missedNoteIndexes,
-  }) {
-    final targetChord = nearestUnresolvedChordWithinWindow(
-      currentMs: currentMs,
-      passedNoteIndexes: passedNoteIndexes,
-      missedNoteIndexes: missedNoteIndexes,
-    );
-    if (targetChord == null) {
-      return const <int>{};
-    }
-    final candidateMidis = <int>{};
-    for (final noteIndex in targetChord.noteIndexes) {
-      if (passedNoteIndexes.contains(noteIndex) ||
-          missedNoteIndexes.contains(noteIndex)) {
-        continue;
-      }
-      candidateMidis.add(score.notes[noteIndex].midi);
-    }
-    return candidateMidis;
-  }
-
   Set<int>? judgeDetectedNotes({
     required int currentMs,
     required ScoreData score,
@@ -72,8 +51,8 @@ class GameNoteJudgeEngine {
       return null;
     }
 
-    final windowStart = currentMs - hitWindowMs;
-    final windowEnd = currentMs + hitWindowMs;
+    final windowStart = currentMs - lateHitWindowMs;
+    final windowEnd = currentMs + earlyHitWindowMs;
     final startIndex = _lowerBoundChordHitTime(windowStart);
     final endIndex = _upperBoundChordHitTime(windowEnd);
 
@@ -127,8 +106,8 @@ class GameNoteJudgeEngine {
       return null;
     }
 
-    final windowStart = currentMs - hitWindowMs;
-    final windowEnd = currentMs + hitWindowMs;
+    final windowStart = currentMs - lateHitWindowMs;
+    final windowEnd = currentMs + earlyHitWindowMs;
     final startIndex = _lowerBoundChordHitTime(windowStart);
     final endIndex = _upperBoundChordHitTime(windowEnd);
     TimedExpectedChord? bestChord;

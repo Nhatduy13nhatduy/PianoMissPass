@@ -4,9 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_audio_capture/flutter_audio_capture.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../../core/audio/basic_pitch_tflite_detector.dart';
-import '../../../../core/audio/expected_note_microphone_detector.dart';
 import '../../../../core/audio/microphone_note_detector.dart';
+import '../../../../core/audio/pitch_detector_dart_microphone_detector.dart';
 import '../../presentation/cubit/game_prototype_state.dart';
 import 'game_input_adapter.dart';
 
@@ -34,6 +33,7 @@ class MicrophoneGameInputAdapter implements GameInputAdapter {
   bool _isCapturing = false;
   bool _isStarting = false;
   bool _isStopping = false;
+  bool _isProcessingBuffer = false;
   GameInputSnapshotCallback? _onSnapshot;
   GameInputStatusCallback? _onStatusChanged;
 
@@ -143,6 +143,14 @@ class MicrophoneGameInputAdapter implements GameInputAdapter {
   }
 
   void _handleBuffer(dynamic obj) {
+    if (_isProcessingBuffer) {
+      return;
+    }
+    _isProcessingBuffer = true;
+    unawaited(_processBuffer(obj).whenComplete(() => _isProcessingBuffer = false));
+  }
+
+  Future<void> _processBuffer(dynamic obj) async {
     final samples = _coerceAudioSamples(obj);
     if (samples.isEmpty) {
       return;
@@ -160,7 +168,7 @@ class MicrophoneGameInputAdapter implements GameInputAdapter {
       return;
     }
 
-    final detection = _activeDetector?.addSamples(
+    final detection = await _activeDetector?.addSamples(
       samples,
       candidateMidis: candidateMidis,
       calibration: calibration,
@@ -174,13 +182,7 @@ class MicrophoneGameInputAdapter implements GameInputAdapter {
       activationFrames: calibration.activationFrames,
       releaseFrames: calibration.releaseFrames,
     );
-    _emitSnapshot(
-      stableDetected,
-      confidenceByMidi: detection.confidenceByMidi,
-      expectedMidis: candidateMidis,
-      signalLevel: detection.rms,
-      noiseFloor: detection.noiseFloor,
-    );
+    _emitSnapshot(stableDetected);
   }
 
   void _handleError(Object error) {
@@ -266,27 +268,16 @@ class MicrophoneGameInputAdapter implements GameInputAdapter {
 
   static List<MicrophoneNoteDetector> _defaultDetectorCandidatesFactory() {
     return <MicrophoneNoteDetector>[
-      ExpectedNoteMicrophoneDetector(),
-      BasicPitchTfliteDetector(),
+      PitchDetectorDartMicrophoneDetector(),
     ];
   }
 
   void _emitSnapshot(
-    Set<int> detectedMidis, {
-    Map<int, double> confidenceByMidi = const <int, double>{},
-    Set<int> expectedMidis = const <int>{},
-    double signalLevel = 0,
-    double noiseFloor = 0,
-  }) {
+    Set<int> detectedMidis,
+  ) {
     _onSnapshot?.call(
       GameInputSnapshot(
         detectedMidis: detectedMidis,
-        noteLabels: gameInputMidiLabels(detectedMidis),
-        confidenceByMidi: confidenceByMidi,
-        expectedMidis: expectedMidis,
-        signalLevel: signalLevel,
-        noiseFloor: noiseFloor,
-        detectorLabel: _activeDetector?.debugName,
       ),
     );
   }

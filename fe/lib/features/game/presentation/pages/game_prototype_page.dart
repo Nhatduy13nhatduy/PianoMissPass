@@ -396,16 +396,6 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                                 NoteTiming.timelineMsPerDurationDivisionStep,
                           );
                         },
-                        onOpenMicrophoneTuner: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => BlocProvider.value(
-                                value: cubit,
-                                child: const _MicrophoneTuningPage(),
-                              ),
-                            ),
-                          );
-                        },
                       ),
                       colorControls: _GameColorControls(
                         noteColor: _noteColor,
@@ -553,7 +543,6 @@ class _GameLayoutControls extends StatelessWidget {
     required this.onIncreaseSpeed,
     required this.onDecreaseTimeline,
     required this.onIncreaseTimeline,
-    required this.onOpenMicrophoneTuner,
   });
 
   final bool useCard;
@@ -577,7 +566,6 @@ class _GameLayoutControls extends StatelessWidget {
   final VoidCallback onIncreaseSpeed;
   final VoidCallback onDecreaseTimeline;
   final VoidCallback onIncreaseTimeline;
-  final VoidCallback onOpenMicrophoneTuner;
 
   @override
   Widget build(BuildContext context) {
@@ -736,29 +724,6 @@ class _GameLayoutControls extends StatelessWidget {
               ),
             ],
           ),
-          if (inputMode == GameInputMode.microphone) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: onOpenMicrophoneTuner,
-                icon: const Icon(Icons.tune_rounded, size: 18),
-                label: const Text('Open Micro Tuner'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF284B63),
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1376,50 +1341,6 @@ class _MiniIconButton extends StatelessWidget {
   }
 }
 
-class _InlineStepperRow extends StatelessWidget {
-  const _InlineStepperRow({
-    required this.label,
-    required this.value,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final String label;
-  final String value;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xB3FFFFFF),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(width: 10),
-        _MiniIconButton(icon: Icons.remove_rounded, onTap: onDecrease),
-        const SizedBox(width: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(width: 8),
-        _MiniIconButton(icon: Icons.add_rounded, onTap: onIncrease),
-      ],
-    );
-  }
-}
-
 class _ModeRow<T> extends StatelessWidget {
   const _ModeRow({
     required this.label,
@@ -1516,284 +1437,6 @@ class _TopProgressLine extends StatelessWidget {
                 child: const SizedBox.expand(),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MicrophoneTuningPage extends StatelessWidget {
-  const _MicrophoneTuningPage();
-
-  @override
-  Widget build(BuildContext context) {
-    final cubit = context.read<GamePrototypeCubit>();
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1118),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF101923),
-        foregroundColor: Colors.white,
-        title: const Text('Microphone Tuner'),
-      ),
-      body: SafeArea(
-        child: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
-          buildWhen: (previous, current) =>
-              previous.inputMode != current.inputMode ||
-              previous.isMicrophoneActive != current.isMicrophoneActive ||
-              previous.inputDeviceName != current.inputDeviceName ||
-              previous.inputDetectorLabel != current.inputDetectorLabel ||
-              previous.recentDetectedNoteLabels !=
-                  current.recentDetectedNoteLabels ||
-              previous.recentExpectedNoteLabels !=
-                  current.recentExpectedNoteLabels ||
-              previous.recentDetectedConfidenceLabels !=
-                  current.recentDetectedConfidenceLabels ||
-              previous.inputSignalLevel != current.inputSignalLevel ||
-              previous.inputNoiseFloor != current.inputNoiseFloor ||
-              previous.microphoneCalibration != current.microphoneCalibration,
-          builder: (context, state) {
-            final calibration = state.microphoneCalibration;
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _DetectedNotesOverlay(
-                  inputMode: state.inputMode,
-                  detectorLabel: state.inputDetectorLabel,
-                  noteLabels: state.recentDetectedNoteLabels,
-                  expectedNoteLabels: state.recentExpectedNoteLabels,
-                  confidenceLabels: state.recentDetectedConfidenceLabels,
-                  signalLevel: state.inputSignalLevel,
-                  noiseFloor: state.inputNoiseFloor,
-                  calibration: calibration,
-                ),
-                const SizedBox(height: 16),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF101923),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0x1FFFFFFF)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          state.isMicrophoneActive
-                              ? (state.inputDeviceName?.trim().isNotEmpty == true
-                                    ? state.inputDeviceName!.trim()
-                                    : 'Microphone ready')
-                              : (state.inputDeviceName?.trim().isNotEmpty == true
-                                    ? state.inputDeviceName!.trim()
-                                    : 'Microphone has not started yet.'),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _InlineStepperRow(
-                          label: 'Note conf',
-                          value: calibration.noteThreshold.toStringAsFixed(2),
-                          onDecrease: () => cubit.setMicrophoneNoteThreshold(
-                            calibration.noteThreshold - 0.02,
-                          ),
-                          onIncrease: () => cubit.setMicrophoneNoteThreshold(
-                            calibration.noteThreshold + 0.02,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _InlineStepperRow(
-                          label: 'Onset conf',
-                          value: calibration.onsetThreshold.toStringAsFixed(2),
-                          onDecrease: () => cubit.setMicrophoneOnsetThreshold(
-                            calibration.onsetThreshold - 0.02,
-                          ),
-                          onIncrease: () => cubit.setMicrophoneOnsetThreshold(
-                            calibration.onsetThreshold + 0.02,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _InlineStepperRow(
-                          label: 'RMS gate',
-                          value: calibration.rmsGate.toStringAsFixed(3),
-                          onDecrease: () => cubit.setMicrophoneRmsGate(
-                            calibration.rmsGate - 0.001,
-                          ),
-                          onIncrease: () => cubit.setMicrophoneRmsGate(
-                            calibration.rmsGate + 0.001,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _InlineStepperRow(
-                          label: 'Latency',
-                          value: '${calibration.latencyMs} ms',
-                          onDecrease: () => cubit.setMicrophoneLatencyMs(
-                            calibration.latencyMs - 10,
-                          ),
-                          onIncrease: () => cubit.setMicrophoneLatencyMs(
-                            calibration.latencyMs + 10,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _InlineStepperRow(
-                          label: 'Attack',
-                          value: '${calibration.activationFrames} fr',
-                          onDecrease: () =>
-                              cubit.setMicrophoneActivationFrames(
-                                calibration.activationFrames - 1,
-                              ),
-                          onIncrease: () =>
-                              cubit.setMicrophoneActivationFrames(
-                                calibration.activationFrames + 1,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        _InlineStepperRow(
-                          label: 'Release',
-                          value: '${calibration.releaseFrames} fr',
-                          onDecrease: () => cubit.setMicrophoneReleaseFrames(
-                            calibration.releaseFrames - 1,
-                          ),
-                          onIncrease: () => cubit.setMicrophoneReleaseFrames(
-                            calibration.releaseFrames + 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _DetectedNotesOverlay extends StatelessWidget {
-  const _DetectedNotesOverlay({
-    required this.inputMode,
-    required this.detectorLabel,
-    required this.noteLabels,
-    required this.expectedNoteLabels,
-    required this.confidenceLabels,
-    required this.signalLevel,
-    required this.noiseFloor,
-    required this.calibration,
-  });
-
-  final GameInputMode inputMode;
-  final String? detectorLabel;
-  final List<String> noteLabels;
-  final List<String> expectedNoteLabels;
-  final List<String> confidenceLabels;
-  final double signalLevel;
-  final double noiseFloor;
-  final GameMicrophoneCalibration calibration;
-
-  @override
-  Widget build(BuildContext context) {
-    final sourceLabel = switch (inputMode) {
-      GameInputMode.wiredMidi => 'Wired MIDI',
-      GameInputMode.bluetoothMidi => 'Bluetooth MIDI',
-      GameInputMode.microphone => 'Micro',
-    };
-    final notesText = noteLabels.isEmpty ? '-' : noteLabels.join('  ');
-    final expectedText = expectedNoteLabels.isEmpty
-        ? '-'
-        : expectedNoteLabels.join('  ');
-    final confidenceText = confidenceLabels.isEmpty
-        ? '-'
-        : confidenceLabels.join('  ');
-    final detectorText = detectorLabel?.trim().isNotEmpty == true
-        ? detectorLabel!.trim()
-        : sourceLabel;
-
-    return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xCC0E1620),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Detected • $detectorText',
-                style: const TextStyle(
-                  color: Color(0xB3FFFFFF),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                notesText,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Expected: $expectedText',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Color(0xFFD6E4FF),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Confidence: $confidenceText',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Color(0xFFE7C56B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (inputMode == GameInputMode.microphone) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'RMS ${signalLevel.toStringAsFixed(3)} • Noise ${noiseFloor.toStringAsFixed(3)}',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Color(0xB3FFFFFF),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Tune N ${calibration.noteThreshold.toStringAsFixed(2)} • O ${calibration.onsetThreshold.toStringAsFixed(2)} • G ${calibration.rmsGate.toStringAsFixed(3)} • L ${calibration.latencyMs}ms',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Color(0xB3FFFFFF),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ],
           ),
         ),
       ),
@@ -2244,6 +1887,22 @@ class _StaffScrollerPainter extends CustomPainter {
         );
         continue;
       }
+    }
+
+    final earlyHitWindowWidth =
+        GamePrototypeCubit.earlyHitWindowMs * notePxPerMs;
+    if (earlyHitWindowWidth > 0) {
+      final hitZonePaint = Paint()
+        ..color = score.colors.staff.judgeLine.withAlpha(0);
+      canvas.drawRect(
+        Rect.fromLTRB(
+          playheadX,
+          playheadTopY,
+          math.min(size.width, playheadX + earlyHitWindowWidth),
+          stavesBottomY,
+        ),
+        hitZonePaint,
+      );
     }
 
     _notePainter.paintNotes(

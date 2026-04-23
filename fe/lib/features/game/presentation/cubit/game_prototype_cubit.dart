@@ -28,8 +28,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       'assets/soundfonts/GeneralUser-GS.sf2';
 
   static const int initialLeadInMs = 5200;
-  static const int hitWindowMs = 140;
-  static const int missWindowMs = 180;
+  static const int lateHitWindowMs = 160;
+  static const int earlyHitWindowMs = 240;
+  static const int missWindowMs = 240;
   static const int _songAudioChannel = 0;
   static const int _midiInputAudioChannel = 1;
   static const int _songPlaybackVelocity = 92;
@@ -40,12 +41,20 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const int _synthProgramPiano = 0;
   static const int _synthVolume = 110;
   static const int _synthPanCenter = 64;
+  static const int _microphoneLatencyMs = 20;
+  static const MicrophoneCalibration _microphoneCalibration =
+      MicrophoneCalibration(
+        rmsGate: 0.004,
+        activationFrames: 1,
+        releaseFrames: 1,
+      );
   static const Duration _inputModeSwitchSettleDelay = Duration(
     milliseconds: 180,
   );
   final AppMidiEngine _midiEngine = AppMidiEngine();
   final GameNoteJudgeEngine _judgeEngine = GameNoteJudgeEngine(
-    hitWindowMs: hitWindowMs,
+    lateHitWindowMs: lateHitWindowMs,
+    earlyHitWindowMs: earlyHitWindowMs,
   );
   final String? assetMxlPath;
   final String? songTitle;
@@ -66,8 +75,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   final Set<int> _activeInputNotes = <int>{};
   Set<int> _latestDetectedInputMidis = const <int>{};
   GameInputAdapter? _inputAdapter;
-  static const int _microphoneDebugUpdateIntervalMs = 180;
-  static const int _microphoneFallbackCandidateLimit = 8;
 
   int _baseElapsedMs = 0;
   int _nextMissScanIndex = 0;
@@ -78,13 +85,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   bool _isSynthLoading = false;
   bool _isInputReady = false;
   String? _inputStatusLabel;
-  String? _inputDetectorLabel;
-  DateTime? _lastDetectedNotesLoggedAt;
-  List<String> _recentDetectedNoteLabels = const <String>[];
-  List<String> _recentExpectedNoteLabels = const <String>[];
-  List<String> _recentDetectedConfidenceLabels = const <String>[];
-  double _inputSignalLevel = 0;
-  double _inputNoiseFloor = 0;
 
   Future<void> initialize() async {
     final playbackSpeed = state.playbackSpeed;
@@ -110,14 +110,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _nextMissScanIndex = 0;
     _isInputReady = false;
     _inputStatusLabel = null;
-    _inputDetectorLabel = null;
-    _recentDetectedNoteLabels = const <String>[];
-    _recentExpectedNoteLabels = const <String>[];
-    _recentDetectedConfidenceLabels = const <String>[];
     _latestDetectedInputMidis = const <int>{};
-    _inputSignalLevel = 0;
-    _inputNoiseFloor = 0;
-    _lastDetectedNotesLoggedAt = null;
 
     _emitState(
       GamePrototypeState(
@@ -157,13 +150,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           baseState.inputMode == GameInputMode.microphone && _isInputReady,
       inputDeviceName: _inputStatusLabel,
       clearInputDeviceName: _inputStatusLabel == null,
-      inputDetectorLabel: _inputDetectorLabel,
-      clearInputDetectorLabel: _inputDetectorLabel == null,
-      recentDetectedNoteLabels: _recentDetectedNoteLabels,
-      recentExpectedNoteLabels: _recentExpectedNoteLabels,
-      recentDetectedConfidenceLabels: _recentDetectedConfidenceLabels,
-      inputSignalLevel: _inputSignalLevel,
-      inputNoiseFloor: _inputNoiseFloor,
     );
   }
 
@@ -235,28 +221,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       GameInputMode.wiredMidi ||
       GameInputMode.bluetoothMidi => MidiGameInputAdapter(),
       GameInputMode.microphone => MicrophoneGameInputAdapter(
-        calibrationProvider: () => MicrophoneCalibration(
-          noteThreshold: state.microphoneCalibration.noteThreshold,
-          onsetThreshold: state.microphoneCalibration.onsetThreshold,
-          rmsGate: state.microphoneCalibration.rmsGate,
-          activationFrames: state.microphoneCalibration.activationFrames,
-          releaseFrames: state.microphoneCalibration.releaseFrames,
-        ),
+        calibrationProvider: () => _microphoneCalibration,
         candidateMidisProvider: () {
           final score = state.score;
           if (score == null) {
             return const <int>{};
           }
-          final focused = _judgeEngine.candidateExpectedMidisAroundTime(
-            currentMs: currentMs,
-            score: score,
-            passedNoteIndexes: state.passedNoteIndexes,
-            missedNoteIndexes: state.missedNoteIndexes,
-          );
-          if (focused.isNotEmpty) {
-            return focused;
-          }
-          return _buildMicrophoneFallbackCandidateMidis(score);
+          return _buildMicrophoneCandidateMidis(score);
         },
       ),
     };
@@ -311,7 +282,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     await adapter?.stop();
     _isInputReady = false;
     _inputStatusLabel = null;
-    _inputDetectorLabel = null;
     _latestDetectedInputMidis = const <int>{};
   }
 
@@ -325,7 +295,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void _handleInputSnapshot(GameInputSnapshot snapshot) {
     _latestDetectedInputMidis = Set<int>.unmodifiable(snapshot.detectedMidis);
-    _updateInputDebugSnapshot(snapshot);
     unawaited(_syncInputPreviewNotes(snapshot.detectedMidis));
 
     final score = state.score;
@@ -393,9 +362,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       }
       if (previous.midi == note.midi) {
         final previousHeldThroughCurrent =
-            previous.hitTimeMs + previous.holdMs + hitWindowMs >=
+            previous.hitTimeMs + previous.holdMs + lateHitWindowMs >=
             note.hitTimeMs;
-        return previousHeldThroughCurrent && state.passedNoteIndexes.contains(i);
+        return previousHeldThroughCurrent &&
+            state.passedNoteIndexes.contains(i);
       }
     }
     return false;
@@ -407,7 +377,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     required ScoreData score,
   }) {
     final judgeCurrentMs = state.inputMode == GameInputMode.microphone
-        ? currentMs + state.microphoneCalibration.latencyMs
+        ? currentMs + _microphoneLatencyMs
         : currentMs;
     final updatedPassed = _judgeEngine.judgeDetectedNotes(
       currentMs: judgeCurrentMs,
@@ -439,73 +409,17 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     );
   }
 
-  void _updateInputDebugSnapshot(GameInputSnapshot snapshot) {
-    final now = DateTime.now();
-    final detectedLabels = snapshot.noteLabels;
-    final expectedLabels = gameInputMidiLabels(snapshot.expectedMidis);
-    final confidenceLabels = _buildConfidenceLabels(snapshot);
-    if (_lastDetectedNotesLoggedAt != null &&
-        now.difference(_lastDetectedNotesLoggedAt!) <
-            const Duration(milliseconds: _microphoneDebugUpdateIntervalMs) &&
-        listEquals(detectedLabels, _recentDetectedNoteLabels) &&
-        listEquals(expectedLabels, _recentExpectedNoteLabels) &&
-        listEquals(confidenceLabels, _recentDetectedConfidenceLabels) &&
-        _inputDetectorLabel == snapshot.detectorLabel &&
-        (_inputSignalLevel - snapshot.signalLevel).abs() < 0.0005 &&
-        (_inputNoiseFloor - snapshot.noiseFloor).abs() < 0.0005) {
-      return;
-    }
-
-    _lastDetectedNotesLoggedAt = now;
-    _recentDetectedNoteLabels = List<String>.unmodifiable(detectedLabels);
-    _recentExpectedNoteLabels = List<String>.unmodifiable(expectedLabels);
-    _recentDetectedConfidenceLabels = List<String>.unmodifiable(
-      confidenceLabels,
-    );
-    _inputDetectorLabel = snapshot.detectorLabel;
-    _inputSignalLevel = snapshot.signalLevel;
-    _inputNoiseFloor = snapshot.noiseFloor;
-    if (!isClosed) {
-      _emitState(_applyInputStatus(state));
-    }
-  }
-
-  List<String> _buildConfidenceLabels(GameInputSnapshot snapshot) {
-    final rankedMidis = snapshot.confidenceByMidi.keys.toList()
-      ..sort((a, b) {
-        final confidenceCompare = (snapshot.confidenceByMidi[b] ?? 0)
-            .compareTo(snapshot.confidenceByMidi[a] ?? 0);
-        if (confidenceCompare != 0) {
-          return confidenceCompare;
-        }
-        return a.compareTo(b);
-      });
-    final midisToShow = snapshot.detectedMidis.isNotEmpty
-        ? (snapshot.detectedMidis.toList()..sort())
-        : rankedMidis.take(4).toList(growable: false);
-    return midisToShow
-        .map((midi) {
-          final label = gameInputMidiToLabel(midi);
-          final confidence = snapshot.confidenceByMidi[midi] ?? 0;
-          return '$label ${(confidence * 100).round()}%';
-        })
-        .toList(growable: false);
-  }
-
-  Set<int> _buildMicrophoneFallbackCandidateMidis(ScoreData score) {
-    final fallback = <int>{};
+  Set<int> _buildMicrophoneCandidateMidis(ScoreData score) {
+    final candidates = <int>{};
     for (var i = 0; i < score.notes.length; i++) {
       if (state.passedNoteIndexes.contains(i) ||
           state.missedNoteIndexes.contains(i)) {
         continue;
       }
-      fallback.add(score.notes[i].midi);
-      if (fallback.length >= _microphoneFallbackCandidateLimit) {
-        break;
-      }
+      candidates.add(score.notes[i].midi);
     }
-    if (fallback.isNotEmpty) {
-      return fallback;
+    if (candidates.isNotEmpty) {
+      return candidates;
     }
     return score.notes.map((note) => note.midi).toSet();
   }
@@ -761,78 +675,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _emitState(_applyInputStatus(state.copyWith(visibleStaffMode: mode)));
   }
 
-  void setMicrophoneNoteThreshold(double value) {
-    final normalized = value.clamp(0.05, 0.95).toDouble();
-    _emitState(
-      _applyInputStatus(
-        state.copyWith(
-          microphoneCalibration: state.microphoneCalibration.copyWith(
-            noteThreshold: normalized,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void setMicrophoneOnsetThreshold(double value) {
-    final normalized = value.clamp(0.05, 0.95).toDouble();
-    _emitState(
-      _applyInputStatus(
-        state.copyWith(
-          microphoneCalibration: state.microphoneCalibration.copyWith(
-            onsetThreshold: normalized,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void setMicrophoneRmsGate(double value) {
-    final normalized = value.clamp(0.001, 0.050).toDouble();
-    _emitState(
-      _applyInputStatus(
-        state.copyWith(
-          microphoneCalibration: state.microphoneCalibration.copyWith(
-            rmsGate: normalized,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void setMicrophoneLatencyMs(int value) {
-    final normalized = value.clamp(-300, 300);
-    _emitState(
-      _applyInputStatus(
-        state.copyWith(
-          microphoneCalibration: state.microphoneCalibration.copyWith(
-            latencyMs: normalized,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void setMicrophoneActivationFrames(int value) {
-    final normalized = value.clamp(1, 6);
-    final calibration = state.microphoneCalibration.copyWith(
-      activationFrames: normalized,
-    );
-    _emitState(
-      _applyInputStatus(state.copyWith(microphoneCalibration: calibration)),
-    );
-  }
-
-  void setMicrophoneReleaseFrames(int value) {
-    final normalized = value.clamp(1, 8);
-    final calibration = state.microphoneCalibration.copyWith(
-      releaseFrames: normalized,
-    );
-    _emitState(
-      _applyInputStatus(state.copyWith(microphoneCalibration: calibration)),
-    );
-  }
-
   void setPlaybackSpeed(double value) {
     final clamped = value
         .clamp(NoteTiming.minPlaybackSpeed, NoteTiming.maxPlaybackSpeed)
@@ -961,7 +803,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       _passedNoteIndexesNotifier;
   ValueListenable<Set<int>> get missedNoteIndexesListenable =>
       _missedNoteIndexesNotifier;
-  ValueListenable<Map<int, int>> get passAnimationStartMsByNoteIndexListenable =>
+  ValueListenable<Map<int, int>>
+  get passAnimationStartMsByNoteIndexListenable =>
       _passAnimationStartMsByNoteIndexNotifier;
 
   int get maxDurationMs => _maxDurationMs;
@@ -1179,7 +1022,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   bool get _isSongAudioEnabled =>
-      state.inputMode != GameInputMode.microphone &&
       state.audioStaffMode != GameAudioStaffMode.off;
 
   bool _shouldPlayAudioStaff(int? staffNumber) {
