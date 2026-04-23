@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  flutter_audio_capture
   flutter_midi_command_linux
 )
 

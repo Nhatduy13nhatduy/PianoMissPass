@@ -82,7 +82,6 @@ class MidiGameInputAdapter implements GameInputAdapter {
     if (_connectedInputDevice != null) {
       _midiCommand.disconnectDevice(_connectedInputDevice!);
     }
-    _midiCommand.teardown();
     _connectedInputDevice = null;
     _activeInputNotes.clear();
     _emitSnapshot();

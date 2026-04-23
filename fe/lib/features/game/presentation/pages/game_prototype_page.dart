@@ -253,6 +253,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               previous.isSoundfontReady != current.isSoundfontReady ||
               previous.isMicrophoneActive != current.isMicrophoneActive ||
               previous.inputDeviceName != current.inputDeviceName ||
+              previous.activeInputMidis != current.activeInputMidis ||
               previous.playbackSpeed != current.playbackSpeed ||
               previous.timelineMsPerDurationDivision !=
                   current.timelineMsPerDurationDivision,
@@ -308,6 +309,14 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                     child: _PlaybackButton(
                       isPlaying: true,
                       onPressed: cubit.pause,
+                    ),
+                  ),
+                if (state.isPlaying)
+                  Positioned(
+                    top: 68,
+                    left: 16,
+                    child: _ActiveInputNotesBadge(
+                      activeMidis: state.activeInputMidis,
                     ),
                   ),
                 Positioned(
@@ -1495,6 +1504,68 @@ class _PlaybackButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ActiveInputNotesBadge extends StatelessWidget {
+  const _ActiveInputNotesBadge({required this.activeMidis});
+
+  final Set<int> activeMidis;
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = activeMidis.toList()..sort();
+    final text = labels.isEmpty
+        ? '-'
+        : labels.map(_midiToNoteLabel).join('  ');
+
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xCC0E1620),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0x33FFFFFF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _midiToNoteLabel(int midi) {
+  const pitchNames = <String>[
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
+  ];
+  final pitchClass = midi % 12;
+  final octave = (midi ~/ 12) - 1;
+  return '${pitchNames[pitchClass]}$octave';
 }
 
 class _ErrorView extends StatelessWidget {

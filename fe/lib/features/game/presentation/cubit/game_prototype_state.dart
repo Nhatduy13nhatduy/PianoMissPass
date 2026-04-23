@@ -21,6 +21,7 @@ class GamePrototypeState extends Equatable {
     this.isSoundfontReady = false,
     this.isMicrophoneActive = false,
     this.inputDeviceName,
+    this.activeInputMidis = const <int>{},
     this.playbackSpeed = NoteTiming.defaultPlaybackSpeed,
     this.timelineMsPerDurationDivision =
         NoteTiming.defaultTimelineMsPerDurationDivision,
@@ -38,6 +39,7 @@ class GamePrototypeState extends Equatable {
   final bool isSoundfontReady;
   final bool isMicrophoneActive;
   final String? inputDeviceName;
+  final Set<int> activeInputMidis;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final Set<int> passedNoteIndexes;
@@ -56,6 +58,7 @@ class GamePrototypeState extends Equatable {
     bool? isMicrophoneActive,
     String? inputDeviceName,
     bool clearInputDeviceName = false,
+    Set<int>? activeInputMidis,
     double? playbackSpeed,
     int? timelineMsPerDurationDivision,
     Set<int>? passedNoteIndexes,
@@ -76,6 +79,7 @@ class GamePrototypeState extends Equatable {
       inputDeviceName: clearInputDeviceName
           ? null
           : inputDeviceName ?? this.inputDeviceName,
+      activeInputMidis: activeInputMidis ?? this.activeInputMidis,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       timelineMsPerDurationDivision:
           timelineMsPerDurationDivision ?? this.timelineMsPerDurationDivision,
@@ -96,6 +100,7 @@ class GamePrototypeState extends Equatable {
     isSoundfontReady,
     isMicrophoneActive,
     inputDeviceName,
+    activeInputMidis,
     playbackSpeed,
     timelineMsPerDurationDivision,
     passedNoteIndexes,

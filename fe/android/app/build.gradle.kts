@@ -42,3 +42,7 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.github.st-h:TarsosDSP:2.4.1")
+}

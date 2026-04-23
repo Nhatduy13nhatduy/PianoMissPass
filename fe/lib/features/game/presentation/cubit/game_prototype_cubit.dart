@@ -8,8 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pianomisspass_fe/core/audio/microphone_note_detector.dart';
 
 import '../../application/input/game_input_adapter.dart';
-import '../../application/input/microphone_game_input_adapter.dart';
 import '../../application/input/midi_game_input_adapter.dart';
+import '../../application/input/tarsos_microphone_game_input_adapter.dart';
 import '../../application/judging/game_note_judge_engine.dart';
 import '../../../../core/audio/app_midi_engine.dart';
 import '../../domain/game_score.dart';
@@ -121,6 +121,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         audioStaffMode: audioStaffMode,
         visibleStaffMode: visibleStaffMode,
         isSoundfontReady: _isSynthReady,
+        activeInputMidis: const <int>{},
       ),
     );
 
@@ -220,14 +221,19 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final adapter = switch (mode) {
       GameInputMode.wiredMidi ||
       GameInputMode.bluetoothMidi => MidiGameInputAdapter(),
-      GameInputMode.microphone => MicrophoneGameInputAdapter(
+      GameInputMode.microphone => TarsosMicrophoneGameInputAdapter(
         calibrationProvider: () => _microphoneCalibration,
         candidateMidisProvider: () {
           final score = state.score;
           if (score == null) {
             return const <int>{};
           }
-          return _buildMicrophoneCandidateMidis(score);
+          return _judgeEngine.candidateExpectedMidisAroundTime(
+            currentMs: currentMs + _microphoneLatencyMs,
+            score: score,
+            passedNoteIndexes: state.passedNoteIndexes,
+            missedNoteIndexes: state.missedNoteIndexes,
+          );
         },
       ),
     };
@@ -283,6 +289,11 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _isInputReady = false;
     _inputStatusLabel = null;
     _latestDetectedInputMidis = const <int>{};
+    if (!isClosed) {
+      _emitState(
+        _applyInputStatus(state.copyWith(activeInputMidis: const <int>{})),
+      );
+    }
   }
 
   void _handleInputStatusChanged(GameInputStatus status) {
@@ -295,6 +306,15 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
   void _handleInputSnapshot(GameInputSnapshot snapshot) {
     _latestDetectedInputMidis = Set<int>.unmodifiable(snapshot.detectedMidis);
+    if (state.activeInputMidis != snapshot.activeMidis) {
+      _emitState(
+        _applyInputStatus(
+          state.copyWith(
+            activeInputMidis: Set<int>.unmodifiable(snapshot.activeMidis),
+          ),
+        ),
+      );
+    }
     unawaited(_syncInputPreviewNotes(snapshot.detectedMidis));
 
     final score = state.score;
@@ -407,21 +427,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _emitState(
       _applyInputStatus(state.copyWith(passedNoteIndexes: updatedPassed)),
     );
-  }
-
-  Set<int> _buildMicrophoneCandidateMidis(ScoreData score) {
-    final candidates = <int>{};
-    for (var i = 0; i < score.notes.length; i++) {
-      if (state.passedNoteIndexes.contains(i) ||
-          state.missedNoteIndexes.contains(i)) {
-        continue;
-      }
-      candidates.add(score.notes[i].midi);
-    }
-    if (candidates.isNotEmpty) {
-      return candidates;
-    }
-    return score.notes.map((note) => note.midi).toSet();
   }
 
   Future<void> _syncInputPreviewNotes(Set<int> detectedMidis) async {

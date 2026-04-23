@@ -40,6 +40,31 @@ class GameNoteJudgeEngine {
     _expectedChords = List<TimedExpectedChord>.unmodifiable(chords);
   }
 
+  Set<int> candidateExpectedMidisAroundTime({
+    required int currentMs,
+    required ScoreData score,
+    required Set<int> passedNoteIndexes,
+    required Set<int> missedNoteIndexes,
+  }) {
+    final windowStart = currentMs - lateHitWindowMs;
+    final windowEnd = currentMs + earlyHitWindowMs;
+    final startIndex = _lowerBoundChordHitTime(windowStart);
+    final endIndex = _upperBoundChordHitTime(windowEnd);
+    final candidateMidis = <int>{};
+
+    for (var i = startIndex; i < endIndex; i++) {
+      final chord = _expectedChords[i];
+      for (final noteIndex in chord.noteIndexes) {
+        if (passedNoteIndexes.contains(noteIndex) ||
+            missedNoteIndexes.contains(noteIndex)) {
+          continue;
+        }
+        candidateMidis.add(score.notes[noteIndex].midi);
+      }
+    }
+    return candidateMidis;
+  }
+
   Set<int>? judgeDetectedNotes({
     required int currentMs,
     required ScoreData score,

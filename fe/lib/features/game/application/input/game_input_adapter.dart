@@ -3,9 +3,11 @@ import '../../presentation/cubit/game_prototype_state.dart';
 class GameInputSnapshot {
   const GameInputSnapshot({
     required this.detectedMidis,
-  });
+    Set<int>? activeMidis,
+  }) : activeMidis = activeMidis ?? detectedMidis;
 
   final Set<int> detectedMidis;
+  final Set<int> activeMidis;
 }
 
 class GameInputStatus {
