@@ -2,7 +2,7 @@ name: pianomisspass_fe
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -41,6 +41,9 @@ dependencies:
   archive: ^3.6.1
   xml: ^6.5.0
   flutter_midi_command: ^0.5.3
+  flutter_audio_capture: ^1.1.12
+  permission_handler: ^11.4.0
+  tflite_flutter: ^0.12.1
   flutter_midi_16kb:
     path: third_party/flutter_midi_16kb
 
@@ -60,7 +63,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -71,6 +73,7 @@ flutter:
     - assets/icons/
     - assets/backgrounds/
     - assets/mxl/
+    - assets/ml/
     - assets/soundfonts/
 
   fonts:

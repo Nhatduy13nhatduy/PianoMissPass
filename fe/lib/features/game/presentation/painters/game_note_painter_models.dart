@@ -31,6 +31,7 @@ class _RenderNote {
   _StemDirection stemDirection;
   _StemDirection stemXAxisDirection;
   double headDx = 0;
+  double passPulseScale = 1.0;
   Offset? stemTip;
 }
 

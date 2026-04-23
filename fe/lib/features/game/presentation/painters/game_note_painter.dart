@@ -21,6 +21,8 @@ class GameNotePainter {
   static const double cleanupWindowMs = 2500;
   static const double _preRenderMeasuresRight = 20;
   static const double _renderWindowPaddingMs = 1400;
+  static const int _passPulseDurationMs = 260;
+  static const double _passPulseMaxScale = 0.2;
   static const double _accidentalCollisionPaddingTuning = 1.0;
   static const double _accidentalCollisionPaddingScale = 0.04;
   static const int _trebleBottomLineStep = 30; // E4
@@ -71,6 +73,7 @@ class GameNotePainter {
     required int currentMs,
     required Set<int> passedNoteIndexes,
     required Set<int> missedNoteIndexes,
+    required Map<int, int> passAnimationStartMsByNoteIndex,
     required double playheadX,
     required double trebleTop,
     required double bassTop,
@@ -419,6 +422,12 @@ class GameNotePainter {
           holdDistanceMultiplier: 1.8,
         ),
       );
+      final passPulseScale = _passPulseScaleForNote(
+        item,
+        currentMs: currentMs,
+        passAnimationStartMsByNoteIndex: passAnimationStartMsByNoteIndex,
+      );
+      item.passPulseScale = passPulseScale;
       final layoutStemDirection =
           chordLayout.stemDirectionByVisibleIndex[visibleIndex] ??
           item.stemDirection;
@@ -452,6 +461,7 @@ class GameNotePainter {
         durationType: item.durationType,
         metrics: metrics,
         color: noteColor,
+        scaleMultiplier: passPulseScale,
       );
 
       final chordKey = chordLayout.chordKeyByVisibleIndex[visibleIndex];
@@ -513,6 +523,7 @@ class GameNotePainter {
           extraOppositeStemHeight: chordOppositeStemHeight,
           stemXOverride: stemXOverride,
           useButtCap: shouldHideTail,
+          scaleMultiplier: passPulseScale,
         );
       }
 
@@ -524,6 +535,7 @@ class GameNotePainter {
           flagCount: _flagCountForDuration(item.durationType),
           spacing: lineSpacing,
           color: noteColor,
+          scaleMultiplier: passPulseScale,
         );
       }
 
@@ -1760,6 +1772,7 @@ class GameNotePainter {
     required _DurationType durationType,
     required NotationMetrics metrics,
     required Color color,
+    double scaleMultiplier = 1.0,
   }) {
     final fillPaint = Paint()
       ..color = color
@@ -1772,7 +1785,7 @@ class GameNotePainter {
         _wholeHeadTemplateCached,
         referenceBounds: _wholeHeadBoundsCached,
         center: center,
-        targetHeight: metrics.wholeNoteHeadHeight,
+        targetHeight: metrics.wholeNoteHeadHeight * scaleMultiplier,
         paint: fillPaint,
       );
       return;
@@ -1784,7 +1797,7 @@ class GameNotePainter {
         _halfHeadTemplateCached,
         referenceBounds: _halfHeadBoundsCached,
         center: center,
-        targetHeight: metrics.noteHeadHeight,
+        targetHeight: metrics.noteHeadHeight * scaleMultiplier,
         paint: fillPaint,
       );
       return;
@@ -1795,9 +1808,30 @@ class GameNotePainter {
       _quarterHeadTemplateCached,
       referenceBounds: _quarterHeadBoundsCached,
       center: center,
-      targetHeight: metrics.noteHeadHeight,
+      targetHeight: metrics.noteHeadHeight * scaleMultiplier,
       paint: fillPaint,
     );
+  }
+
+  double _passPulseScaleForNote(
+    _RenderNote note, {
+    required int currentMs,
+    required Map<int, int> passAnimationStartMsByNoteIndex,
+  }) {
+    if (note.status != _NoteJudge.pass) {
+      return 1.0;
+    }
+    final startMs = passAnimationStartMsByNoteIndex[note.index];
+    if (startMs == null) {
+      return 1.0;
+    }
+    final elapsedMs = currentMs - startMs;
+    if (elapsedMs < 0 || elapsedMs > _passPulseDurationMs) {
+      return 1.0;
+    }
+    final progress = (elapsedMs / _passPulseDurationMs).clamp(0.0, 1.0);
+    final pulse = math.sin(progress * math.pi);
+    return 1.0 + pulse * _passPulseMaxScale;
   }
 
   void _drawTemplatePathAligned(
@@ -1894,30 +1928,32 @@ class GameNotePainter {
     double extraOppositeStemHeight = 0,
     double? stemXOverride,
     bool useButtCap = false,
+    double scaleMultiplier = 1.0,
   }) {
     if (!drawStem) {
       return center;
     }
 
+    final scaledSpacing = spacing * scaleMultiplier;
     final p = Paint()
       ..color = color
-      ..strokeWidth = math.max(spacing * 0.19, 1.7)
+      ..strokeWidth = math.max(scaledSpacing * 0.19, 1.7)
       ..strokeCap = useButtCap ? StrokeCap.butt : StrokeCap.round;
 
     final stemStart = _stemStartForGeometry(
       center: center,
       direction: direction,
       xAxisDirection: xAxisDirection,
-      spacing: spacing,
-      extraOppositeStemHeight: extraOppositeStemHeight,
+      spacing: scaledSpacing,
+      extraOppositeStemHeight: extraOppositeStemHeight * scaleMultiplier,
       stemXOverride: stemXOverride,
     );
     final stemEnd = _stemTipForGeometry(
       center: center,
       direction: direction,
       xAxisDirection: xAxisDirection,
-      spacing: spacing,
-      extraOppositeStemHeight: extraOppositeStemHeight,
+      spacing: scaledSpacing,
+      extraOppositeStemHeight: extraOppositeStemHeight * scaleMultiplier,
       stemXOverride: stemXOverride,
     );
 
@@ -1932,6 +1968,7 @@ class GameNotePainter {
     required int flagCount,
     required double spacing,
     required Color color,
+    double scaleMultiplier = 1.0,
   }) {
     if (flagCount <= 0) {
       return;
@@ -1941,10 +1978,11 @@ class GameNotePainter {
       ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
-    final stemDirectionNudge = spacing * 0.72;
+    final scaledSpacing = spacing * scaleMultiplier;
+    final stemDirectionNudge = scaledSpacing * 0.72;
 
     for (var i = 0; i < flagCount; i++) {
-      final yOffset = i * (spacing * 0.72);
+      final yOffset = i * (scaledSpacing * 0.72);
       final anchor = direction == _StemDirection.up
           ? Offset(stemTip.dx, stemTip.dy + stemDirectionNudge + yOffset)
           : Offset(stemTip.dx, stemTip.dy - stemDirectionNudge - yOffset);
@@ -1955,7 +1993,7 @@ class GameNotePainter {
         continue;
       }
 
-      final flagTargetHeight = math.max(spacing * 2.2, 14.0);
+      final flagTargetHeight = math.max(scaledSpacing * 2.2, 14.0);
       final scale = flagTargetHeight / bounds.height;
       final matrix = Matrix4.identity()
         ..translateByDouble(anchor.dx, anchor.dy, 0.0, 1.0)
@@ -2278,9 +2316,10 @@ double _notePainterLeftFadeOpacityAtX(
 }
 
 Color _notePainterApplyOpacity(Color base, double opacity) {
-  final alpha = ((base.a * 255.0) * opacity.clamp(0.0, 1.0))
-      .round()
-      .clamp(0, 255);
+  final alpha = ((base.a * 255.0) * opacity.clamp(0.0, 1.0)).round().clamp(
+    0,
+    255,
+  );
   return base.withAlpha(alpha);
 }
 

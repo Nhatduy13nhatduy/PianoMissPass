@@ -5,10 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_midi_command/flutter_midi_command.dart';
+import 'package:pianomisspass_fe/core/audio/microphone_note_detector.dart';
 
+import '../../application/input/game_input_adapter.dart';
+import '../../application/input/microphone_game_input_adapter.dart';
+import '../../application/input/midi_game_input_adapter.dart';
+import '../../application/judging/game_note_judge_engine.dart';
 import '../../../../core/audio/app_midi_engine.dart';
-
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
 import 'game_prototype_state.dart';
@@ -24,7 +27,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const String _soundfontAssetPath =
       'assets/soundfonts/GeneralUser-GS.sf2';
 
-  static const bool _midiInputEnabled = true;
   static const int initialLeadInMs = 5200;
   static const int hitWindowMs = 140;
   static const int missWindowMs = 180;
@@ -38,14 +40,16 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const int _synthProgramPiano = 0;
   static const int _synthVolume = 110;
   static const int _synthPanCenter = 64;
-
-  final MidiCommand _midiCommand = MidiCommand();
+  static const Duration _inputModeSwitchSettleDelay = Duration(
+    milliseconds: 180,
+  );
   final AppMidiEngine _midiEngine = AppMidiEngine();
+  final GameNoteJudgeEngine _judgeEngine = GameNoteJudgeEngine(
+    hitWindowMs: hitWindowMs,
+  );
   final String? assetMxlPath;
   final String? songTitle;
-  StreamSubscription<MidiPacket>? _midiSub;
-  StreamSubscription<String>? _midiSetupSub;
-  MidiDevice? _connectedInputDevice;
+
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
   final ValueNotifier<int> _elapsedMsNotifier = ValueNotifier<int>(0);
@@ -53,24 +57,48 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ValueNotifier<Set<int>>(const <int>{});
   final ValueNotifier<Set<int>> _missedNoteIndexesNotifier =
       ValueNotifier<Set<int>>(const <int>{});
+  final ValueNotifier<Map<int, int>> _passAnimationStartMsByNoteIndexNotifier =
+      ValueNotifier<Map<int, int>>(const <int, int>{});
   final List<_ScheduledMidiEvent> _scheduledSongEvents =
       <_ScheduledMidiEvent>[];
+
   final Map<int, int> _activeSongPlaybackTokenByMidi = <int, int>{};
   final Set<int> _activeInputNotes = <int>{};
+  Set<int> _latestDetectedInputMidis = const <int>{};
+  GameInputAdapter? _inputAdapter;
+  static const int _microphoneDebugUpdateIntervalMs = 180;
+  static const int _microphoneFallbackCandidateLimit = 8;
+
   int _baseElapsedMs = 0;
   int _nextMissScanIndex = 0;
   int _nextSongPlaybackEventIndex = 0;
+  int _inputConfigurationGeneration = 0;
   int _maxDurationMs = 10000;
   bool _isSynthReady = false;
   bool _isSynthLoading = false;
+  bool _isInputReady = false;
+  String? _inputStatusLabel;
+  String? _inputDetectorLabel;
+  DateTime? _lastDetectedNotesLoggedAt;
+  List<String> _recentDetectedNoteLabels = const <String>[];
+  List<String> _recentExpectedNoteLabels = const <String>[];
+  List<String> _recentDetectedConfidenceLabels = const <String>[];
+  double _inputSignalLevel = 0;
+  double _inputNoiseFloor = 0;
 
   Future<void> initialize() async {
     final playbackSpeed = state.playbackSpeed;
     final timelineMsPerDurationDivision = state.timelineMsPerDurationDivision;
     final audioStaffMode = state.audioStaffMode;
+    final visibleStaffMode = state.visibleStaffMode;
+    final inputMode = state.inputMode;
+
     _ticker.stop();
     _stopSongPlaybackScheduler();
     await _silenceSongPlaybackNotes();
+    await _silenceInputNotes();
+    _inputConfigurationGeneration++;
+    await _teardownInputAdapter();
     _stopwatch
       ..stop()
       ..reset();
@@ -78,20 +106,33 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _elapsedMsNotifier.value = _baseElapsedMs;
     _passedNoteIndexesNotifier.value = const <int>{};
     _missedNoteIndexesNotifier.value = const <int>{};
+    _passAnimationStartMsByNoteIndexNotifier.value = const <int, int>{};
     _nextMissScanIndex = 0;
+    _isInputReady = false;
+    _inputStatusLabel = null;
+    _inputDetectorLabel = null;
+    _recentDetectedNoteLabels = const <String>[];
+    _recentExpectedNoteLabels = const <String>[];
+    _recentDetectedConfidenceLabels = const <String>[];
+    _latestDetectedInputMidis = const <int>{};
+    _inputSignalLevel = 0;
+    _inputNoiseFloor = 0;
+    _lastDetectedNotesLoggedAt = null;
 
     _emitState(
       GamePrototypeState(
         isLoading: true,
+        inputMode: inputMode,
         playbackSpeed: playbackSpeed,
         timelineMsPerDurationDivision: timelineMsPerDurationDivision,
         audioStaffMode: audioStaffMode,
+        visibleStaffMode: visibleStaffMode,
         isSoundfontReady: _isSynthReady,
       ),
     );
 
     await _initializeSynth();
-    await _setupMidiInput();
+    await _configureSelectedInputMode(state.inputMode);
     await _loadScore();
   }
 
@@ -110,10 +151,28 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     emit(nextState);
   }
 
+  GamePrototypeState _applyInputStatus(GamePrototypeState baseState) {
+    return baseState.copyWith(
+      isMicrophoneActive:
+          baseState.inputMode == GameInputMode.microphone && _isInputReady,
+      inputDeviceName: _inputStatusLabel,
+      clearInputDeviceName: _inputStatusLabel == null,
+      inputDetectorLabel: _inputDetectorLabel,
+      clearInputDetectorLabel: _inputDetectorLabel == null,
+      recentDetectedNoteLabels: _recentDetectedNoteLabels,
+      recentExpectedNoteLabels: _recentExpectedNoteLabels,
+      recentDetectedConfidenceLabels: _recentDetectedConfidenceLabels,
+      inputSignalLevel: _inputSignalLevel,
+      inputNoiseFloor: _inputNoiseFloor,
+    );
+  }
+
   Future<void> _initializeSynth() async {
     if (_isSynthReady || _isSynthLoading) {
       if (!isClosed) {
-        _emitState(state.copyWith(isSoundfontReady: _isSynthReady));
+        _emitState(
+          _applyInputStatus(state.copyWith(isSoundfontReady: _isSynthReady)),
+        );
       }
       return;
     }
@@ -143,7 +202,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     } finally {
       _isSynthLoading = false;
       if (!isClosed) {
-        _emitState(state.copyWith(isSoundfontReady: _isSynthReady));
+        _emitState(
+          _applyInputStatus(state.copyWith(isSoundfontReady: _isSynthReady)),
+        );
       }
     }
   }
@@ -157,121 +218,324 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     await _midiEngine.setPan(pan: _synthPanCenter, channel: channel);
   }
 
-  Future<void> _setupMidiInput() async {
-    if (!_midiInputEnabled) {
-      await _midiSub?.cancel();
-      _midiSub = null;
-      await _midiSetupSub?.cancel();
-      _midiSetupSub = null;
-      _connectedInputDevice = null;
+  Future<void> _configureSelectedInputMode(GameInputMode mode) async {
+    final generation = ++_inputConfigurationGeneration;
+    await _teardownInputAdapter();
+    if (mode == GameInputMode.microphone) {
+      await Future<void>.delayed(_inputModeSwitchSettleDelay);
+    }
+
+    if (isClosed ||
+        generation != _inputConfigurationGeneration ||
+        state.inputMode != mode) {
       return;
     }
 
-    try {
-      await _connectPreferredMidiInputDevice();
-      _midiSetupSub ??= _midiCommand.onMidiSetupChanged?.listen((_) {
-        _connectPreferredMidiInputDevice();
-      });
-      _midiSub ??= _midiCommand.onMidiDataReceived?.listen((packet) {
-        _handleMidiPacket(packet.data);
-      });
-    } catch (_) {
-      // Keep gameplay running even if MIDI input is unavailable.
-    }
-  }
-
-  Future<void> _connectPreferredMidiInputDevice() async {
-    try {
-      final devices = await _midiCommand.devices ?? const <MidiDevice>[];
-      final target = _selectPreferredMidiInputDevice(devices);
-      if (target == null) {
-        if (_connectedInputDevice != null) {
-          _midiCommand.disconnectDevice(_connectedInputDevice!);
-        }
-        _connectedInputDevice = null;
-        return;
-      }
-
-      if (_connectedInputDevice?.id == target.id) {
-        return;
-      }
-
-      if (_connectedInputDevice != null) {
-        _midiCommand.disconnectDevice(_connectedInputDevice!);
-      }
-      await _midiCommand.connectToDevice(target);
-      _connectedInputDevice = target;
-    } catch (_) {
-      _connectedInputDevice = null;
-    }
-  }
-
-  MidiDevice? _selectPreferredMidiInputDevice(List<MidiDevice> devices) {
-    final preferred = devices
-        .where((device) => device.inputPorts.isNotEmpty)
-        .toList();
-    if (preferred.isEmpty) {
-      return null;
-    }
-
-    for (final device in preferred) {
-      if (device.connected) {
-        return device;
-      }
-    }
-    return preferred.first;
-  }
-
-  void _handleMidiPacket(List<int> data) {
-    if (!_midiInputEnabled || data.length < 3) {
-      return;
-    }
-
-    final status = data[0] & 0xF0;
-    final note = data[1];
-    final velocity = data[2];
-
-    if (status == 0x90 && velocity > 0) {
-      _playInputMidiNote(note, velocity);
-      if (state.score != null && state.isPlaying) {
-        _judgeNoteInput(note);
-      }
-      return;
-    }
-
-    if (status == 0x80 || (status == 0x90 && velocity == 0)) {
-      _stopInputMidiNote(note);
-    }
-  }
-
-  void _playInputMidiNote(int midiNote, int velocity) {
-    _activeInputNotes.add(midiNote);
-    if (!_isSynthReady) {
-      return;
-    }
-
-    unawaited(
-      _midiEngine.playNote(
-        note: midiNote,
-        velocity: velocity > 0 ? velocity : _midiInputVelocityFallback,
-        channel: _midiInputAudioChannel,
+    final adapter = switch (mode) {
+      GameInputMode.wiredMidi ||
+      GameInputMode.bluetoothMidi => MidiGameInputAdapter(),
+      GameInputMode.microphone => MicrophoneGameInputAdapter(
+        calibrationProvider: () => MicrophoneCalibration(
+          noteThreshold: state.microphoneCalibration.noteThreshold,
+          onsetThreshold: state.microphoneCalibration.onsetThreshold,
+          rmsGate: state.microphoneCalibration.rmsGate,
+          activationFrames: state.microphoneCalibration.activationFrames,
+          releaseFrames: state.microphoneCalibration.releaseFrames,
+        ),
+        candidateMidisProvider: () {
+          final score = state.score;
+          if (score == null) {
+            return const <int>{};
+          }
+          final focused = _judgeEngine.candidateExpectedMidisAroundTime(
+            currentMs: currentMs,
+            score: score,
+            passedNoteIndexes: state.passedNoteIndexes,
+            missedNoteIndexes: state.missedNoteIndexes,
+          );
+          if (focused.isNotEmpty) {
+            return focused;
+          }
+          return _buildMicrophoneFallbackCandidateMidis(score);
+        },
       ),
+    };
+    _inputAdapter = adapter;
+
+    await adapter.start(
+      inputMode: mode,
+      onSnapshot: (snapshot) {
+        if (generation == _inputConfigurationGeneration &&
+            state.inputMode == mode) {
+          _handleInputSnapshot(snapshot);
+        }
+      },
+      onStatusChanged: (status) {
+        if (generation == _inputConfigurationGeneration &&
+            state.inputMode == mode) {
+          _handleInputStatusChanged(status);
+        }
+      },
+    );
+
+    if (isClosed ||
+        generation != _inputConfigurationGeneration ||
+        state.inputMode != mode) {
+      if (identical(_inputAdapter, adapter)) {
+        _inputAdapter = null;
+      }
+      await adapter.stop();
+      return;
+    }
+
+    if (!isClosed) {
+      _emitState(_applyInputStatus(state));
+    }
+
+    if (!state.isPlaying) {
+      return;
+    }
+
+    if (_isSongAudioEnabled) {
+      _restartSongPlaybackFromCurrentPosition();
+      return;
+    }
+
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
+  }
+
+  Future<void> _teardownInputAdapter() async {
+    final adapter = _inputAdapter;
+    _inputAdapter = null;
+    await adapter?.stop();
+    _isInputReady = false;
+    _inputStatusLabel = null;
+    _inputDetectorLabel = null;
+    _latestDetectedInputMidis = const <int>{};
+  }
+
+  void _handleInputStatusChanged(GameInputStatus status) {
+    _isInputReady = status.isReady;
+    _inputStatusLabel = status.label;
+    if (!isClosed) {
+      _emitState(_applyInputStatus(state));
+    }
+  }
+
+  void _handleInputSnapshot(GameInputSnapshot snapshot) {
+    _latestDetectedInputMidis = Set<int>.unmodifiable(snapshot.detectedMidis);
+    _updateInputDebugSnapshot(snapshot);
+    unawaited(_syncInputPreviewNotes(snapshot.detectedMidis));
+
+    final score = state.score;
+    if (!state.isPlaying || score == null || snapshot.detectedMidis.isEmpty) {
+      return;
+    }
+
+    _judgeDetectedInputMidis(
+      detectedMidis: snapshot.detectedMidis,
+      currentMs: currentMs,
+      score: score,
     );
   }
 
-  void _stopInputMidiNote(int midiNote) {
-    final removed = _activeInputNotes.remove(midiNote);
-    if (!removed || !_isSynthReady) {
+  void _judgeLatestHeldInputNotes(int currentMs) {
+    final score = state.score;
+    if (!state.isPlaying ||
+        score == null ||
+        _latestDetectedInputMidis.isEmpty ||
+        state.inputMode == GameInputMode.microphone) {
       return;
     }
 
-    unawaited(
-      _midiEngine.stopNote(
-        note: midiNote,
+    final targetChord = _judgeEngine.nearestUnresolvedChordWithinWindow(
+      currentMs: currentMs,
+      passedNoteIndexes: state.passedNoteIndexes,
+      missedNoteIndexes: state.missedNoteIndexes,
+    );
+    if (targetChord == null) {
+      return;
+    }
+
+    final heldContinuationMidis = <int>{};
+    for (final noteIndex in targetChord.noteIndexes) {
+      if (state.passedNoteIndexes.contains(noteIndex) ||
+          state.missedNoteIndexes.contains(noteIndex)) {
+        continue;
+      }
+      final midi = score.notes[noteIndex].midi;
+      if (_latestDetectedInputMidis.contains(midi) &&
+          _hasPassedSameMidiBefore(score: score, noteIndex: noteIndex)) {
+        heldContinuationMidis.add(midi);
+      }
+    }
+    if (heldContinuationMidis.isEmpty) {
+      return;
+    }
+
+    _judgeDetectedInputMidis(
+      detectedMidis: heldContinuationMidis,
+      currentMs: currentMs,
+      score: score,
+    );
+  }
+
+  bool _hasPassedSameMidiBefore({
+    required ScoreData score,
+    required int noteIndex,
+  }) {
+    final note = score.notes[noteIndex];
+    for (var i = noteIndex - 1; i >= 0; i--) {
+      final previous = score.notes[i];
+      if (previous.hitTimeMs >= note.hitTimeMs) {
+        continue;
+      }
+      if (previous.midi == note.midi) {
+        final previousHeldThroughCurrent =
+            previous.hitTimeMs + previous.holdMs + hitWindowMs >=
+            note.hitTimeMs;
+        return previousHeldThroughCurrent && state.passedNoteIndexes.contains(i);
+      }
+    }
+    return false;
+  }
+
+  void _judgeDetectedInputMidis({
+    required Set<int> detectedMidis,
+    required int currentMs,
+    required ScoreData score,
+  }) {
+    final judgeCurrentMs = state.inputMode == GameInputMode.microphone
+        ? currentMs + state.microphoneCalibration.latencyMs
+        : currentMs;
+    final updatedPassed = _judgeEngine.judgeDetectedNotes(
+      currentMs: judgeCurrentMs,
+      score: score,
+      passedNoteIndexes: state.passedNoteIndexes,
+      missedNoteIndexes: state.missedNoteIndexes,
+      detectedMidis: detectedMidis,
+    );
+    if (updatedPassed == null) {
+      return;
+    }
+
+    final newlyPassedNoteIndexes = updatedPassed.difference(
+      state.passedNoteIndexes,
+    );
+    if (newlyPassedNoteIndexes.isNotEmpty) {
+      final passAnimationStartMsByNoteIndex = Map<int, int>.from(
+        _passAnimationStartMsByNoteIndexNotifier.value,
+      );
+      for (final noteIndex in newlyPassedNoteIndexes) {
+        passAnimationStartMsByNoteIndex[noteIndex] = currentMs;
+      }
+      _passAnimationStartMsByNoteIndexNotifier.value =
+          Map<int, int>.unmodifiable(passAnimationStartMsByNoteIndex);
+    }
+
+    _emitState(
+      _applyInputStatus(state.copyWith(passedNoteIndexes: updatedPassed)),
+    );
+  }
+
+  void _updateInputDebugSnapshot(GameInputSnapshot snapshot) {
+    final now = DateTime.now();
+    final detectedLabels = snapshot.noteLabels;
+    final expectedLabels = gameInputMidiLabels(snapshot.expectedMidis);
+    final confidenceLabels = _buildConfidenceLabels(snapshot);
+    if (_lastDetectedNotesLoggedAt != null &&
+        now.difference(_lastDetectedNotesLoggedAt!) <
+            const Duration(milliseconds: _microphoneDebugUpdateIntervalMs) &&
+        listEquals(detectedLabels, _recentDetectedNoteLabels) &&
+        listEquals(expectedLabels, _recentExpectedNoteLabels) &&
+        listEquals(confidenceLabels, _recentDetectedConfidenceLabels) &&
+        _inputDetectorLabel == snapshot.detectorLabel &&
+        (_inputSignalLevel - snapshot.signalLevel).abs() < 0.0005 &&
+        (_inputNoiseFloor - snapshot.noiseFloor).abs() < 0.0005) {
+      return;
+    }
+
+    _lastDetectedNotesLoggedAt = now;
+    _recentDetectedNoteLabels = List<String>.unmodifiable(detectedLabels);
+    _recentExpectedNoteLabels = List<String>.unmodifiable(expectedLabels);
+    _recentDetectedConfidenceLabels = List<String>.unmodifiable(
+      confidenceLabels,
+    );
+    _inputDetectorLabel = snapshot.detectorLabel;
+    _inputSignalLevel = snapshot.signalLevel;
+    _inputNoiseFloor = snapshot.noiseFloor;
+    if (!isClosed) {
+      _emitState(_applyInputStatus(state));
+    }
+  }
+
+  List<String> _buildConfidenceLabels(GameInputSnapshot snapshot) {
+    final rankedMidis = snapshot.confidenceByMidi.keys.toList()
+      ..sort((a, b) {
+        final confidenceCompare = (snapshot.confidenceByMidi[b] ?? 0)
+            .compareTo(snapshot.confidenceByMidi[a] ?? 0);
+        if (confidenceCompare != 0) {
+          return confidenceCompare;
+        }
+        return a.compareTo(b);
+      });
+    final midisToShow = snapshot.detectedMidis.isNotEmpty
+        ? (snapshot.detectedMidis.toList()..sort())
+        : rankedMidis.take(4).toList(growable: false);
+    return midisToShow
+        .map((midi) {
+          final label = gameInputMidiToLabel(midi);
+          final confidence = snapshot.confidenceByMidi[midi] ?? 0;
+          return '$label ${(confidence * 100).round()}%';
+        })
+        .toList(growable: false);
+  }
+
+  Set<int> _buildMicrophoneFallbackCandidateMidis(ScoreData score) {
+    final fallback = <int>{};
+    for (var i = 0; i < score.notes.length; i++) {
+      if (state.passedNoteIndexes.contains(i) ||
+          state.missedNoteIndexes.contains(i)) {
+        continue;
+      }
+      fallback.add(score.notes[i].midi);
+      if (fallback.length >= _microphoneFallbackCandidateLimit) {
+        break;
+      }
+    }
+    if (fallback.isNotEmpty) {
+      return fallback;
+    }
+    return score.notes.map((note) => note.midi).toSet();
+  }
+
+  Future<void> _syncInputPreviewNotes(Set<int> detectedMidis) async {
+    if (state.inputMode == GameInputMode.microphone || !_isSynthReady) {
+      await _silenceInputNotes();
+      return;
+    }
+
+    final notesToStop = _activeInputNotes.difference(detectedMidis).toList();
+    final notesToPlay = detectedMidis.difference(_activeInputNotes).toList();
+
+    for (final note in notesToStop) {
+      _activeInputNotes.remove(note);
+      await _midiEngine.stopNote(
+        note: note,
         velocity: 0,
         channel: _midiInputAudioChannel,
-      ),
-    );
+      );
+    }
+
+    for (final note in notesToPlay) {
+      _activeInputNotes.add(note);
+      await _midiEngine.playNote(
+        note: note,
+        velocity: _midiInputVelocityFallback,
+        channel: _midiInputAudioChannel,
+      );
+    }
   }
 
   Future<void> _silenceInputNotes() async {
@@ -291,46 +555,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
   }
 
-  void _judgeNoteInput(int midiNote) {
-    final score = state.score;
-    if (score == null) {
-      return;
-    }
-
-    var bestIndex = -1;
-    var bestDelta = 1 << 30;
-    final windowStart = currentMs - hitWindowMs;
-    final windowEnd = currentMs + hitWindowMs;
-    final startIndex = _lowerBoundHitTime(score.notes, windowStart);
-    final endIndex = _upperBoundHitTime(score.notes, windowEnd);
-
-    for (var i = startIndex; i < endIndex; i++) {
-      if (state.passedNoteIndexes.contains(i) ||
-          state.missedNoteIndexes.contains(i)) {
-        continue;
-      }
-
-      final expected = score.notes[i];
-      if (expected.midi != midiNote) {
-        continue;
-      }
-
-      final delta = (expected.hitTimeMs - currentMs).abs();
-      if (delta <= hitWindowMs && delta < bestDelta) {
-        bestDelta = delta;
-        bestIndex = i;
-      }
-    }
-
-    if (bestIndex < 0) {
-      return;
-    }
-
-    final updatedPassed = Set<int>.from(state.passedNoteIndexes)
-      ..add(bestIndex);
-    _emitState(state.copyWith(passedNoteIndexes: updatedPassed));
-  }
-
   Future<void> _loadScore() async {
     if (assetMxlPath != null) {
       await _loadAssetScore(assetMxlPath!);
@@ -345,19 +569,22 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       final mxlDocument = parseMxlDocument(bytes.buffer.asUint8List());
       final score = buildScoreDataFromMxlDocument(mxlDocument);
       _nextMissScanIndex = 0;
+      _judgeEngine.loadScore(score);
 
       if (isClosed) {
         return;
       }
 
       _emitState(
-        state.copyWith(
-          isLoading: false,
-          clearErrorMessage: true,
-          score: score,
-          passedNoteIndexes: const <int>{},
-          missedNoteIndexes: const <int>{},
-          isSoundfontReady: _isSynthReady,
+        _applyInputStatus(
+          state.copyWith(
+            isLoading: false,
+            clearErrorMessage: true,
+            score: score,
+            passedNoteIndexes: const <int>{},
+            missedNoteIndexes: const <int>{},
+            isSoundfontReady: _isSynthReady,
+          ),
         ),
       );
 
@@ -369,11 +596,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       }
 
       _emitState(
-        state.copyWith(
-          isLoading: false,
-          errorMessage: 'Khong tai duoc bai hat tu asset: $assetPath\n$error',
-          isPlaying: false,
-          isSoundfontReady: _isSynthReady,
+        _applyInputStatus(
+          state.copyWith(
+            isLoading: false,
+            errorMessage: 'Khong tai duoc bai hat tu asset: $assetPath\n$error',
+            isPlaying: false,
+            isSoundfontReady: _isSynthReady,
+          ),
         ),
       );
     }
@@ -393,19 +622,22 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       final mxlDocument = parseMxlDocument(Uint8List.fromList(bytes));
       final score = buildScoreDataFromMxlDocument(mxlDocument);
       _nextMissScanIndex = 0;
+      _judgeEngine.loadScore(score);
 
       if (isClosed) {
         return;
       }
 
       _emitState(
-        state.copyWith(
-          isLoading: false,
-          clearErrorMessage: true,
-          score: score,
-          passedNoteIndexes: const <int>{},
-          missedNoteIndexes: const <int>{},
-          isSoundfontReady: _isSynthReady,
+        _applyInputStatus(
+          state.copyWith(
+            isLoading: false,
+            clearErrorMessage: true,
+            score: score,
+            passedNoteIndexes: const <int>{},
+            missedNoteIndexes: const <int>{},
+            isSoundfontReady: _isSynthReady,
+          ),
         ),
       );
 
@@ -417,11 +649,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       }
 
       _emitState(
-        state.copyWith(
-          isLoading: false,
-          errorMessage: error.toString(),
-          isPlaying: false,
-          isSoundfontReady: _isSynthReady,
+        _applyInputStatus(
+          state.copyWith(
+            isLoading: false,
+            errorMessage: error.toString(),
+            isPlaying: false,
+            isSoundfontReady: _isSynthReady,
+          ),
         ),
       );
     }
@@ -436,7 +670,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..reset()
       ..start();
     _ticker.start();
-    _emitState(state.copyWith(isPlaying: true));
+    _emitState(_applyInputStatus(state.copyWith(isPlaying: true)));
     _restartSongPlaybackFromCurrentPosition();
   }
 
@@ -453,11 +687,14 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _elapsedMsNotifier.value = _baseElapsedMs;
     _nextMissScanIndex = 0;
     _nextSongPlaybackEventIndex = 0;
+    _passAnimationStartMsByNoteIndexNotifier.value = const <int, int>{};
     _emitState(
-      state.copyWith(
-        isPlaying: false,
-        passedNoteIndexes: const <int>{},
-        missedNoteIndexes: const <int>{},
+      _applyInputStatus(
+        state.copyWith(
+          isPlaying: false,
+          passedNoteIndexes: const <int>{},
+          missedNoteIndexes: const <int>{},
+        ),
       ),
     );
     _play();
@@ -477,7 +714,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _ticker.stop();
     _stopSongPlaybackScheduler();
     unawaited(_silenceSongPlaybackNotes());
-    _emitState(state.copyWith(isPlaying: false));
+    _emitState(_applyInputStatus(state.copyWith(isPlaying: false)));
   }
 
   void pause() => _pause();
@@ -490,13 +727,22 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _play();
   }
 
+  void setInputMode(GameInputMode mode) {
+    if (mode == state.inputMode) {
+      return;
+    }
+
+    _emitState(_applyInputStatus(state.copyWith(inputMode: mode)));
+    unawaited(_configureSelectedInputMode(mode));
+  }
+
   void setAudioStaffMode(GameAudioStaffMode mode) {
     if (mode == state.audioStaffMode) {
       return;
     }
 
-    _emitState(state.copyWith(audioStaffMode: mode));
-    if (mode == GameAudioStaffMode.off) {
+    _emitState(_applyInputStatus(state.copyWith(audioStaffMode: mode)));
+    if (!_isSongAudioEnabled) {
       _stopSongPlaybackScheduler();
       unawaited(_silenceSongPlaybackNotes());
       return;
@@ -512,7 +758,79 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    _emitState(state.copyWith(visibleStaffMode: mode));
+    _emitState(_applyInputStatus(state.copyWith(visibleStaffMode: mode)));
+  }
+
+  void setMicrophoneNoteThreshold(double value) {
+    final normalized = value.clamp(0.05, 0.95).toDouble();
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          microphoneCalibration: state.microphoneCalibration.copyWith(
+            noteThreshold: normalized,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void setMicrophoneOnsetThreshold(double value) {
+    final normalized = value.clamp(0.05, 0.95).toDouble();
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          microphoneCalibration: state.microphoneCalibration.copyWith(
+            onsetThreshold: normalized,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void setMicrophoneRmsGate(double value) {
+    final normalized = value.clamp(0.001, 0.050).toDouble();
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          microphoneCalibration: state.microphoneCalibration.copyWith(
+            rmsGate: normalized,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void setMicrophoneLatencyMs(int value) {
+    final normalized = value.clamp(-300, 300);
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          microphoneCalibration: state.microphoneCalibration.copyWith(
+            latencyMs: normalized,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void setMicrophoneActivationFrames(int value) {
+    final normalized = value.clamp(1, 6);
+    final calibration = state.microphoneCalibration.copyWith(
+      activationFrames: normalized,
+    );
+    _emitState(
+      _applyInputStatus(state.copyWith(microphoneCalibration: calibration)),
+    );
+  }
+
+  void setMicrophoneReleaseFrames(int value) {
+    final normalized = value.clamp(1, 8);
+    final calibration = state.microphoneCalibration.copyWith(
+      releaseFrames: normalized,
+    );
+    _emitState(
+      _applyInputStatus(state.copyWith(microphoneCalibration: calibration)),
+    );
   }
 
   void setPlaybackSpeed(double value) {
@@ -529,7 +847,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         ..start();
     }
 
-    _emitState(state.copyWith(playbackSpeed: clamped));
+    _emitState(_applyInputStatus(state.copyWith(playbackSpeed: clamped)));
     if (state.isPlaying && _isSongAudioEnabled) {
       _restartSongPlaybackFromCurrentPosition();
     }
@@ -542,7 +860,11 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final normalized = ((value / step).round() * step)
         .clamp(minTimeline, maxTimeline)
         .toInt();
-    _emitState(state.copyWith(timelineMsPerDurationDivision: normalized));
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(timelineMsPerDurationDivision: normalized),
+      ),
+    );
   }
 
   void _onTick(Duration _) {
@@ -554,6 +876,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     if (_isSongAudioEnabled) {
       _pumpSongPlayback(current);
     }
+    _judgeLatestHeldInputNotes(current);
     final updatedMisses = _updateMissesIncremental(current);
 
     if (current >= maxDurationMs) {
@@ -565,13 +888,17 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       if (updatedMisses == null) {
         return;
       }
-      _emitState(state.copyWith(missedNoteIndexes: updatedMisses));
+      _emitState(
+        _applyInputStatus(state.copyWith(missedNoteIndexes: updatedMisses)),
+      );
       return;
     }
 
     _elapsedMsNotifier.value = current;
     if (updatedMisses != null) {
-      _emitState(state.copyWith(missedNoteIndexes: updatedMisses));
+      _emitState(
+        _applyInputStatus(state.copyWith(missedNoteIndexes: updatedMisses)),
+      );
     }
   }
 
@@ -584,7 +911,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _ticker.stop();
     _stopSongPlaybackScheduler();
     unawaited(_silenceSongPlaybackNotes());
-    _emitState(state.copyWith(isPlaying: false));
+    _emitState(_applyInputStatus(state.copyWith(isPlaying: false)));
   }
 
   Set<int>? _updateMissesIncremental(int currentMs) {
@@ -620,34 +947,6 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     return changed ? missed : null;
   }
 
-  int _lowerBoundHitTime(List<MusicNote> notes, int targetMs) {
-    var low = 0;
-    var high = notes.length;
-    while (low < high) {
-      final mid = low + ((high - low) >> 1);
-      if (notes[mid].hitTimeMs < targetMs) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-    return low;
-  }
-
-  int _upperBoundHitTime(List<MusicNote> notes, int targetMs) {
-    var low = 0;
-    var high = notes.length;
-    while (low < high) {
-      final mid = low + ((high - low) >> 1);
-      if (notes[mid].hitTimeMs <= targetMs) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-    return low;
-  }
-
   int get currentMs {
     if (!state.isPlaying) {
       return _baseElapsedMs;
@@ -662,10 +961,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       _passedNoteIndexesNotifier;
   ValueListenable<Set<int>> get missedNoteIndexesListenable =>
       _missedNoteIndexesNotifier;
+  ValueListenable<Map<int, int>> get passAnimationStartMsByNoteIndexListenable =>
+      _passAnimationStartMsByNoteIndexNotifier;
 
-  int get maxDurationMs {
-    return _maxDurationMs;
-  }
+  int get maxDurationMs => _maxDurationMs;
 
   int _computeMaxDurationMs(ScoreData score) {
     final timedNotes = score.playbackNotes.isEmpty
@@ -820,11 +1119,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   void _dispatchSongPlaybackEvent(_ScheduledMidiEvent event) {
-    if (!_isSynthReady) {
-      return;
-    }
-
-    if (!_shouldPlayAudioStaff(event.staffNumber)) {
+    if (!_isSynthReady || !_shouldPlayAudioStaff(event.staffNumber)) {
       return;
     }
 
@@ -884,6 +1179,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   }
 
   bool get _isSongAudioEnabled =>
+      state.inputMode != GameInputMode.microphone &&
       state.audioStaffMode != GameAudioStaffMode.off;
 
   bool _shouldPlayAudioStaff(int? staffNumber) {
@@ -918,6 +1214,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _stopSongPlaybackScheduler();
     await _silenceSongPlaybackNotes();
     await _silenceInputNotes();
+    await _teardownInputAdapter();
     if (_isSynthReady) {
       try {
         await _midiEngine.stopAllNotes();
@@ -927,17 +1224,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       }
     }
     _ticker.dispose();
-    await _midiSub?.cancel();
-    await _midiSetupSub?.cancel();
-    if (_connectedInputDevice != null) {
-      _midiCommand.disconnectDevice(_connectedInputDevice!);
-    }
     _stopwatch
       ..stop()
       ..reset();
     _elapsedMsNotifier.dispose();
     _passedNoteIndexesNotifier.dispose();
     _missedNoteIndexesNotifier.dispose();
+    _passAnimationStartMsByNoteIndexNotifier.dispose();
     return super.close();
   }
 }
