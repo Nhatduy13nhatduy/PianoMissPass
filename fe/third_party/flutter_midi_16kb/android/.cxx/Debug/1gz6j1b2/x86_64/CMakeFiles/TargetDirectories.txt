@@ -1,0 +1,14 @@
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/flutter_midi_16kb.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/rebuild_cache.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/list_install_components.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/install.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/install/local.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/CMakeFiles/install/strip.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/oboe.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/edit_cache.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/rebuild_cache.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/list_install_components.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/install.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/install/local.dir
+C:/Users/duyvi/Documents/Github/PianoMissPass/fe/third_party/flutter_midi_16kb/android/.cxx/Debug/1gz6j1b2/x86_64/_deps/oboe-build/CMakeFiles/install/strip.dir
