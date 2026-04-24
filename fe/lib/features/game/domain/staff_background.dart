@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 
 class GameStaffBackground {
-  const GameStaffBackground.color(Color color)
-    : color = color,
-      gradient = null,
+  const GameStaffBackground.color(Color this.color)
+    : gradient = null,
       imageAssetPath = null,
       imageFit = BoxFit.cover,
       imageAlignment = Alignment.center,
       fallbackColor = null;
 
-  const GameStaffBackground.gradient(Gradient gradient)
+  const GameStaffBackground.gradient(Gradient this.gradient)
     : color = null,
-      gradient = gradient,
       imageAssetPath = null,
       imageFit = BoxFit.cover,
       imageAlignment = Alignment.center,
@@ -21,13 +19,12 @@ class GameStaffBackground {
     required String assetPath,
     BoxFit fit = BoxFit.cover,
     Alignment alignment = Alignment.center,
-    Color? fallbackColor,
+    this.fallbackColor,
   }) : color = null,
        gradient = null,
        imageAssetPath = assetPath,
        imageFit = fit,
-       imageAlignment = alignment,
-       fallbackColor = fallbackColor;
+       imageAlignment = alignment;
 
   final Color? color;
   final Gradient? gradient;

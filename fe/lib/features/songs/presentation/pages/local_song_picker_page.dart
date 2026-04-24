@@ -15,14 +15,16 @@ class _LocalSongPickerPageState extends State<LocalSongPickerPage> {
 
   Future<List<_LocalSongAsset>> _loadSongs() async {
     final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    final assetPaths = assetManifest.listAssets()
-        .where(
-          (path) =>
-              path.startsWith('assets/mxl/') &&
-              path.toLowerCase().endsWith('.mxl'),
-        )
-        .toList()
-      ..sort();
+    final assetPaths =
+        assetManifest
+            .listAssets()
+            .where(
+              (path) =>
+                  path.startsWith('assets/mxl/') &&
+                  path.toLowerCase().endsWith('.mxl'),
+            )
+            .toList()
+          ..sort();
 
     return assetPaths
         .map(
@@ -49,7 +51,9 @@ class _LocalSongPickerPageState extends State<LocalSongPickerPage> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Khong doc duoc danh sach bai hat.\n${snapshot.error}'),
+                child: Text(
+                  'Khong doc duoc danh sach bai hat.\n${snapshot.error}',
+                ),
               ),
             );
           }
@@ -70,11 +74,13 @@ class _LocalSongPickerPageState extends State<LocalSongPickerPage> {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: songs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final song = songs[index];
               return ListTile(
-                tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                tileColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -102,10 +108,7 @@ class _LocalSongPickerPageState extends State<LocalSongPickerPage> {
 }
 
 class _LocalSongAsset {
-  const _LocalSongAsset({
-    required this.assetPath,
-    required this.title,
-  });
+  const _LocalSongAsset({required this.assetPath, required this.title});
 
   final String assetPath;
   final String title;

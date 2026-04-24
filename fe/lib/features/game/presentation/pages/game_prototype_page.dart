@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
@@ -15,6 +16,7 @@ import '../painters/game_keyboard_painter.dart';
 import '../painters/game_note_painter.dart';
 import '../painters/game_staff_painter.dart';
 import '../painters/game_text_painter.dart';
+import '../provider/game_prototype_provider.dart';
 
 class GamePrototypePage extends StatelessWidget {
   const GamePrototypePage({super.key, this.assetMxlPath, this.songTitle});
@@ -24,10 +26,16 @@ class GamePrototypePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) =>
-          GamePrototypeCubit(assetMxlPath: assetMxlPath, songTitle: songTitle)
-            ..initialize(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => GamePrototypeSettingsProvider()),
+        BlocProvider(
+          create: (_) => GamePrototypeCubit(
+            assetMxlPath: assetMxlPath,
+            songTitle: songTitle,
+          )..initialize(),
+        ),
+      ],
       child: const _GamePrototypeChromeScope(),
     );
   }
@@ -46,174 +54,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
     'pianomisspass/screen_control',
   );
 
-  bool _showKeyboard = true;
-  double _staffHeightScale = 1.0;
-  _SettingsTab _selectedSettingsTab = _SettingsTab.gameplay;
-  GameStaffBackground _staffBackground = _backgroundPresets.first.$2;
-  Color? _staffBackgroundColor;
-  Color _noteColor = _defaultColors.note.idle;
-  Color _staffStrokeColor = _defaultColors.staff.border;
-  Color _notationGlyphColor = _defaultColors.notation.clef;
-  Color _keyboardBlackColor = _defaultColors.keyboard.black;
-  Color _keyboardWhiteColor = _defaultColors.keyboard.white;
-  Color _keyboardActiveColor = _defaultColors.keyboard.active;
-  Color _neutralGlyphColor = _defaultColors.rest.glyph;
-  Color _passAccentColor = _defaultColors.note.pass;
-  Color _missAccentColor = _defaultColors.note.miss;
   bool _isKeepingScreenOn = false;
-
-  static const GameColorScheme _defaultColors = GameColorScheme.classic;
-  static const List<(String, GameStaffBackground)> _backgroundPresets = [
-    ('White', GameStaffBackground.color(Color(0xE6F4F4F4))),
-    (
-      'Forest',
-      GameStaffBackground.image(
-        assetPath:
-            'assets/backgrounds/luxury-plain-green-gradient-abstract-studio-background-empty-room-with-space-your-text-picture.jpg',
-        fallbackColor: Color(0xFFE5EFE5),
-      ),
-    ),
-    (
-      'Paper',
-      GameStaffBackground.image(
-        assetPath: 'assets/backgrounds/pexels-fwstudio-33348-172295.jpg',
-        fallbackColor: Color(0xFFF1E6D6),
-      ),
-    ),
-    (
-      'Stone',
-      GameStaffBackground.image(
-        assetPath: 'assets/backgrounds/pexels-pixabay-235985.jpg',
-        fallbackColor: Color(0xFFE8E8E4),
-      ),
-    ),
-    (
-      'Soft',
-      GameStaffBackground.image(
-        assetPath:
-            'assets/backgrounds/f8cd0a0d-0f8a-447f-b73c-37e87c224e31.jpg',
-        fallbackColor: Color(0xFFE7DFD7),
-      ),
-    ),
-  ];
-  static const List<(String, Color?)> _staffBackgroundColorOptions = [
-    ('Transparent', null),
-    ('Mist', Color(0x66EDF3F8)),
-    ('Warm Paper', Color(0x73F5E8D7)),
-    ('Sage', Color(0x666C8268)),
-    ('Blue Slate', Color(0x66687794)),
-  ];
-
-  static const List<Color> _noteColorOptions = [
-    Color(0xFF111111),
-    Color(0xFF1C2A3A),
-    Color(0xFF2D1E2F),
-    Color(0xFF243322),
-    Color(0xFF3A2418),
-  ];
-
-  static const List<Color> _staffStrokeOptions = [
-    Color(0xFF111111),
-    Color(0xFF22313F),
-    Color(0xFF4A403A),
-    Color(0xFF2E3D2F),
-    Color(0xFF47312A),
-  ];
-
-  static const List<Color> _notationGlyphOptions = [
-    Color(0xFF111111),
-    Color(0xFF1F2D3A),
-    Color(0xFF2F253D),
-    Color(0xFF30422C),
-    Color(0xFF4C3423),
-  ];
-
-  static const List<Color> _keyboardBlackOptions = [
-    Color(0xFF1A1A1C),
-    Color(0xFF15222D),
-    Color(0xFF2A2434),
-    Color(0xFF233123),
-    Color(0xFF35251E),
-  ];
-
-  static const List<Color> _keyboardWhiteOptions = [
-    Color(0xFFE7EBF0),
-    Color(0xFFF5F1E8),
-    Color(0xFFE9F0EA),
-    Color(0xFFEDE7F3),
-    Color(0xFFF2E7E1),
-  ];
-
-  static const List<Color> _keyboardActiveOptions = [
-    Color(0xFF8A6DB8),
-    Color(0xFF2B7FFF),
-    Color(0xFF2E9C6A),
-    Color(0xFFE07A2D),
-    Color(0xFFC05780),
-  ];
-
-  static const List<Color> _neutralGlyphOptions = [
-    Color(0xFF222222),
-    Color(0xFF34495E),
-    Color(0xFF5B4B3A),
-    Color(0xFF38553C),
-    Color(0xFF5C3B3B),
-  ];
-
-  static const List<Color> _passAccentOptions = [
-    Color(0xFF1E5D31),
-    Color(0xFF2E9C6A),
-    Color(0xFF2C7A7B),
-    Color(0xFF4D8B31),
-    Color(0xFF0F766E),
-  ];
-
-  static const List<Color> _missAccentOptions = [
-    Color(0xFF98273B),
-    Color(0xFFC44536),
-    Color(0xFFD97706),
-    Color(0xFFB42318),
-    Color(0xFF9F1239),
-  ];
-
-  GameColorScheme get _effectiveColors {
-    return GameColorScheme(
-      staff: GameStaffColorScheme(
-        background: _staffBackground,
-        backgroundColor: _staffBackgroundColor ?? Colors.transparent,
-        border: _staffStrokeColor,
-        line: _staffStrokeColor,
-        measureLine: _staffStrokeColor,
-        judgeLine: _defaultColors.staff.judgeLine,
-      ),
-      note: GameNoteColorScheme(
-        idle: _noteColor,
-        active: _noteColor,
-        pass: _passAccentColor,
-        miss: _missAccentColor,
-      ),
-      accidentalAndSlur: GameAccidentalSlurColorScheme(
-        accidental: _neutralGlyphColor,
-        slurIdle: _neutralGlyphColor,
-        slurPass: _passAccentColor,
-        slurMiss: _missAccentColor,
-      ),
-      fingering: GameFingeringColorScheme(text: _neutralGlyphColor),
-      rest: GameRestColorScheme(glyph: _neutralGlyphColor),
-      notation: GameNotationColorScheme(
-        keySignature: _notationGlyphColor,
-        clef: _notationGlyphColor,
-        timeSignature: _notationGlyphColor,
-      ),
-      keyboard: GameKeyboardColorScheme(
-        white: _keyboardWhiteColor,
-        active: _keyboardActiveColor,
-        whiteBorder: _keyboardBlackColor,
-        black: _keyboardBlackColor,
-      ),
-      progress: GameProgressColorScheme(line: _passAccentColor),
-    );
-  }
 
   @override
   void initState() {
@@ -241,273 +82,251 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<GamePrototypeCubit>();
-    return BlocListener<GamePrototypeCubit, GamePrototypeState>(
-      listenWhen: (previous, current) =>
-          previous.isPlaying != current.isPlaying,
-      listener: (_, state) {
-        _setKeepScreenOn(state.isPlaying);
-      },
-      child: PopScope(
-        canPop: true,
-        onPopInvokedWithResult: (_, _) {
-          cubit.pause();
-        },
-        child: Scaffold(
-          body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
-            buildWhen: (previous, current) =>
-                previous.isLoading != current.isLoading ||
-                previous.errorMessage != current.errorMessage ||
-                previous.score != current.score ||
-                previous.isPlaying != current.isPlaying ||
-                previous.inputMode != current.inputMode ||
-                previous.audioStaffMode != current.audioStaffMode ||
-                previous.visibleStaffMode != current.visibleStaffMode ||
-                previous.isSoundfontReady != current.isSoundfontReady ||
-                previous.isMicrophoneActive != current.isMicrophoneActive ||
-                previous.inputDeviceName != current.inputDeviceName ||
-                previous.activeInputMidis != current.activeInputMidis ||
-                previous.microphoneDebug != current.microphoneDebug ||
-                previous.playbackSpeed != current.playbackSpeed ||
-                previous.timelineMsPerDurationDivision !=
-                    current.timelineMsPerDurationDivision,
-            builder: (context, state) {
-              if (state.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
+    return Consumer<GamePrototypeSettingsProvider>(
+      builder: (context, settings, _) {
+        return BlocListener<GamePrototypeCubit, GamePrototypeState>(
+          listenWhen: (previous, current) =>
+              previous.isPlaying != current.isPlaying,
+          listener: (_, state) {
+            _setKeepScreenOn(state.isPlaying);
+          },
+          child: PopScope(
+            canPop: true,
+            onPopInvokedWithResult: (_, _) {
+              cubit.pause();
+            },
+            child: Scaffold(
+              body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
+                buildWhen: (previous, current) =>
+                    previous.isLoading != current.isLoading ||
+                    previous.errorMessage != current.errorMessage ||
+                    previous.score != current.score ||
+                    previous.isPlaying != current.isPlaying ||
+                    previous.inputMode != current.inputMode ||
+                    previous.audioStaffMode != current.audioStaffMode ||
+                    previous.visibleStaffMode != current.visibleStaffMode ||
+                    previous.isSoundfontReady != current.isSoundfontReady ||
+                    previous.isMicrophoneActive != current.isMicrophoneActive ||
+                    previous.inputDeviceName != current.inputDeviceName ||
+                    previous.activeInputMidis != current.activeInputMidis ||
+                    previous.playbackSpeed != current.playbackSpeed ||
+                    previous.timelineMsPerDurationDivision !=
+                        current.timelineMsPerDurationDivision,
+                builder: (context, state) {
+                  if (state.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              if (state.errorMessage != null) {
-                return _ErrorView(
-                  error: state.errorMessage!,
-                  onRetry: () => context.read<GamePrototypeCubit>().retry(),
-                );
-              }
+                  if (state.errorMessage != null) {
+                    return _ErrorView(
+                      error: state.errorMessage!,
+                      onRetry: () => context.read<GamePrototypeCubit>().retry(),
+                    );
+                  }
 
-              final score = state.score;
-              if (score == null) {
-                return const SizedBox.shrink();
-              }
-              final effectiveScore = score.copyWith(colors: _effectiveColors);
-              final hasCompletedSong =
-                  !state.isPlaying &&
-                  cubit.maxDurationMs > 0 &&
-                  cubit.currentMs >= cubit.maxDurationMs;
-              final completionScore = _calculateCompletionScore(
-                passedNotes: state.passedNoteIndexes.length,
-                totalNotes: score.notes.length,
-              );
+                  final score = state.score;
+                  if (score == null) {
+                    return const SizedBox.shrink();
+                  }
+                  final effectiveScore = settings.resolveEffectiveScore(score);
+                  final hasCompletedSong =
+                      !state.isPlaying &&
+                      cubit.maxDurationMs > 0 &&
+                      cubit.currentMs >= cubit.maxDurationMs;
+                  final completionScore = _calculateCompletionScore(
+                    passedNotes: state.passedNoteIndexes.length,
+                    totalNotes: score.notes.length,
+                  );
 
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: _GameScreenBackground(background: _staffBackground),
-                  ),
-                  CustomPaint(
-                    painter: _StaffScrollerPainter(
-                      score: effectiveScore,
-                      inputMode: state.inputMode,
-                      activeInputMidis: state.activeInputMidis,
-                      elapsedMsListenable: cubit.elapsedMsListenable,
-                      passedNoteIndexesListenable:
-                          cubit.passedNoteIndexesListenable,
-                      missedNoteIndexesListenable:
-                          cubit.missedNoteIndexesListenable,
-                      passAnimationStartMsByNoteIndexListenable:
-                          cubit.passAnimationStartMsByNoteIndexListenable,
-                      showKeyboard: _showKeyboard,
-                      staffHeightScale: _staffHeightScale,
-                      visibleStaffMode: state.visibleStaffMode,
-                      timelineMsPerDurationDivision:
-                          state.timelineMsPerDurationDivision,
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                  if (state.isPlaying)
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: _PlaybackButton(
-                        isPlaying: true,
-                        onPressed: cubit.pause,
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: _GameScreenBackground(
+                          background: settings.staffBackground,
+                        ),
                       ),
-                    ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: ValueListenableBuilder<int>(
-                      valueListenable: cubit.elapsedMsListenable,
-                      builder: (context, elapsedMs, _) {
-                        final safeMaxDuration = cubit.maxDurationMs <= 0
-                            ? 1
-                            : cubit.maxDurationMs;
-                        final progress = (elapsedMs / safeMaxDuration)
-                            .clamp(0.0, 1.0)
-                            .toDouble();
-                        return _TopProgressLine(
-                          progress: progress,
-                          color: effectiveScore.colors.note.pass,
-                        );
-                      },
-                    ),
-                  ),
-                  if (!state.isPlaying)
-                    Positioned.fill(
-                      child: _GameSettingsOverlay(
-                        songTitle: cubit.songTitle,
-                        hasCompletedSong: hasCompletedSong,
-                        completionScore: completionScore,
-                        selectedTab: _selectedSettingsTab,
-                        onSelectTab: (tab) {
-                          setState(() {
-                            _selectedSettingsTab = tab;
-                          });
-                        },
-                        gameplayControls: _GameLayoutControls(
-                          useCard: false,
-                          showKeyboard: _showKeyboard,
-                          staffHeightScale: _staffHeightScale,
+                      CustomPaint(
+                        painter: _StaffScrollerPainter(
+                          score: effectiveScore,
                           inputMode: state.inputMode,
-                          audioStaffMode: state.audioStaffMode,
+                          activeInputMidis: state.activeInputMidis,
+                          elapsedMsListenable: cubit.elapsedMsListenable,
+                          passedNoteIndexesListenable:
+                              cubit.passedNoteIndexesListenable,
+                          missedNoteIndexesListenable:
+                              cubit.missedNoteIndexesListenable,
+                          passAnimationStartMsByNoteIndexListenable:
+                              cubit.passAnimationStartMsByNoteIndexListenable,
+                          showKeyboard: settings.showKeyboard,
+                          staffHeightScale: settings.staffHeightScale,
                           visibleStaffMode: state.visibleStaffMode,
-                          isSoundfontReady: state.isSoundfontReady,
-                          isMicrophoneActive: state.isMicrophoneActive,
-                          inputDeviceName: state.inputDeviceName,
-                          playbackSpeed: state.playbackSpeed,
                           timelineMsPerDurationDivision:
                               state.timelineMsPerDurationDivision,
-                          onToggleKeyboard: (value) {
-                            setState(() {
-                              _showKeyboard = value;
-                            });
-                          },
-                          onSelectInputMode: cubit.setInputMode,
-                          onSelectAudioStaffMode: cubit.setAudioStaffMode,
-                          onSelectVisibleStaffMode: cubit.setVisibleStaffMode,
-                          onDecreaseScale: () {
-                            setState(() {
-                              _staffHeightScale = (_staffHeightScale - 0.1)
-                                  .clamp(0.5, 2.0);
-                            });
-                          },
-                          onIncreaseScale: () {
-                            setState(() {
-                              _staffHeightScale = (_staffHeightScale + 0.1)
-                                  .clamp(0.5, 2.0);
-                            });
-                          },
-                          onDecreaseSpeed: () {
-                            cubit.setPlaybackSpeed(state.playbackSpeed - 0.1);
-                          },
-                          onIncreaseSpeed: () {
-                            cubit.setPlaybackSpeed(state.playbackSpeed + 0.1);
-                          },
-                          onDecreaseTimeline: () {
-                            cubit.setTimelineMsPerDurationDivision(
-                              state.timelineMsPerDurationDivision -
-                                  NoteTiming.timelineMsPerDurationDivisionStep,
-                            );
-                          },
-                          onIncreaseTimeline: () {
-                            cubit.setTimelineMsPerDurationDivision(
-                              state.timelineMsPerDurationDivision +
-                                  NoteTiming.timelineMsPerDurationDivisionStep,
-                            );
-                          },
                         ),
-                        colorControls: _GameColorControls(
-                          noteColor: _noteColor,
-                          staffStrokeColor: _staffStrokeColor,
-                          notationGlyphColor: _notationGlyphColor,
-                          keyboardBlackColor: _keyboardBlackColor,
-                          keyboardWhiteColor: _keyboardWhiteColor,
-                          keyboardActiveColor: _keyboardActiveColor,
-                          neutralGlyphColor: _neutralGlyphColor,
-                          passAccentColor: _passAccentColor,
-                          missAccentColor: _missAccentColor,
-                          staffBackground: _staffBackground,
-                          staffBackgroundColor: _staffBackgroundColor,
-                          noteColorOptions: _noteColorOptions,
-                          staffStrokeOptions: _staffStrokeOptions,
-                          notationGlyphOptions: _notationGlyphOptions,
-                          keyboardBlackOptions: _keyboardBlackOptions,
-                          keyboardWhiteOptions: _keyboardWhiteOptions,
-                          keyboardActiveOptions: _keyboardActiveOptions,
-                          neutralGlyphOptions: _neutralGlyphOptions,
-                          passAccentOptions: _passAccentOptions,
-                          missAccentOptions: _missAccentOptions,
-                          backgroundOptions: _backgroundPresets,
-                          staffBackgroundColorOptions:
-                              _staffBackgroundColorOptions,
-                          onNoteColorChanged: (value) {
-                            setState(() {
-                              _noteColor = value;
-                            });
-                          },
-                          onStaffStrokeColorChanged: (value) {
-                            setState(() {
-                              _staffStrokeColor = value;
-                            });
-                          },
-                          onNotationGlyphColorChanged: (value) {
-                            setState(() {
-                              _notationGlyphColor = value;
-                            });
-                          },
-                          onKeyboardBlackColorChanged: (value) {
-                            setState(() {
-                              _keyboardBlackColor = value;
-                            });
-                          },
-                          onKeyboardWhiteColorChanged: (value) {
-                            setState(() {
-                              _keyboardWhiteColor = value;
-                            });
-                          },
-                          onKeyboardActiveColorChanged: (value) {
-                            setState(() {
-                              _keyboardActiveColor = value;
-                            });
-                          },
-                          onNeutralGlyphColorChanged: (value) {
-                            setState(() {
-                              _neutralGlyphColor = value;
-                            });
-                          },
-                          onPassAccentColorChanged: (value) {
-                            setState(() {
-                              _passAccentColor = value;
-                            });
-                          },
-                          onMissAccentColorChanged: (value) {
-                            setState(() {
-                              _missAccentColor = value;
-                            });
-                          },
-                          onStaffBackgroundColorChanged: (value) {
-                            setState(() {
-                              _staffBackgroundColor = value;
-                            });
-                          },
-                          onStaffBackgroundChanged: (value) {
-                            setState(() {
-                              _staffBackground = value;
-                            });
-                          },
-                        ),
-                        onRepeat: cubit.repeat,
-                        onBack: () {
-                          cubit.pause();
-                          Navigator.of(context).maybePop();
-                        },
-                        onPlay: cubit.play,
+                        child: const SizedBox.expand(),
                       ),
-                    ),
-                ],
-              );
-            },
+                      if (state.isPlaying)
+                        Positioned(
+                          top: 16,
+                          left: 16,
+                          child: _PlaybackButton(
+                            isPlaying: true,
+                            onPressed: cubit.pause,
+                          ),
+                        ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: cubit.elapsedMsListenable,
+                          builder: (context, elapsedMs, _) {
+                            final safeMaxDuration = cubit.maxDurationMs <= 0
+                                ? 1
+                                : cubit.maxDurationMs;
+                            final progress = (elapsedMs / safeMaxDuration)
+                                .clamp(0.0, 1.0)
+                                .toDouble();
+                            return _TopProgressLine(
+                              progress: progress,
+                              color: effectiveScore.colors.note.pass,
+                            );
+                          },
+                        ),
+                      ),
+                      if (!state.isPlaying)
+                        Positioned.fill(
+                          child: _GameSettingsOverlay(
+                            songTitle: cubit.songTitle,
+                            hasCompletedSong: hasCompletedSong,
+                            completionScore: completionScore,
+                            selectedTab: settings.selectedSettingsTab,
+                            onSelectTab: settings.selectSettingsTab,
+                            gameplayControls: _GameLayoutControls(
+                              useCard: false,
+                              showKeyboard: settings.showKeyboard,
+                              staffHeightScale: settings.staffHeightScale,
+                              inputMode: state.inputMode,
+                              audioStaffMode: state.audioStaffMode,
+                              visibleStaffMode: state.visibleStaffMode,
+                              isSoundfontReady: state.isSoundfontReady,
+                              isMicrophoneActive: state.isMicrophoneActive,
+                              inputDeviceName: state.inputDeviceName,
+                              playbackSpeed: state.playbackSpeed,
+                              timelineMsPerDurationDivision:
+                                  state.timelineMsPerDurationDivision,
+                              onToggleKeyboard: settings.setShowKeyboard,
+                              onSelectInputMode: cubit.setInputMode,
+                              onSelectAudioStaffMode: cubit.setAudioStaffMode,
+                              onSelectVisibleStaffMode:
+                                  cubit.setVisibleStaffMode,
+                              onDecreaseScale:
+                                  settings.decreaseStaffHeightScale,
+                              onIncreaseScale:
+                                  settings.increaseStaffHeightScale,
+                              onDecreaseSpeed: () {
+                                cubit.setPlaybackSpeed(
+                                  state.playbackSpeed - 0.1,
+                                );
+                              },
+                              onIncreaseSpeed: () {
+                                cubit.setPlaybackSpeed(
+                                  state.playbackSpeed + 0.1,
+                                );
+                              },
+                              onDecreaseTimeline: () {
+                                cubit.setTimelineMsPerDurationDivision(
+                                  state.timelineMsPerDurationDivision -
+                                      NoteTiming
+                                          .timelineMsPerDurationDivisionStep,
+                                );
+                              },
+                              onIncreaseTimeline: () {
+                                cubit.setTimelineMsPerDurationDivision(
+                                  state.timelineMsPerDurationDivision +
+                                      NoteTiming
+                                          .timelineMsPerDurationDivisionStep,
+                                );
+                              },
+                            ),
+                            colorControls: _GameColorControls(
+                              noteColor: settings.noteColor,
+                              staffStrokeColor: settings.staffStrokeColor,
+                              notationGlyphColor: settings.notationGlyphColor,
+                              keyboardBlackColor: settings.keyboardBlackColor,
+                              keyboardWhiteColor: settings.keyboardWhiteColor,
+                              keyboardActiveColor: settings.keyboardActiveColor,
+                              neutralGlyphColor: settings.neutralGlyphColor,
+                              passAccentColor: settings.passAccentColor,
+                              missAccentColor: settings.missAccentColor,
+                              staffBackground: settings.staffBackground,
+                              staffBackgroundColor:
+                                  settings.staffBackgroundColor,
+                              noteColorOptions: GamePrototypeSettingsProvider
+                                  .noteColorOptions,
+                              staffStrokeOptions: GamePrototypeSettingsProvider
+                                  .staffStrokeOptions,
+                              notationGlyphOptions:
+                                  GamePrototypeSettingsProvider
+                                      .notationGlyphOptions,
+                              keyboardBlackOptions:
+                                  GamePrototypeSettingsProvider
+                                      .keyboardBlackOptions,
+                              keyboardWhiteOptions:
+                                  GamePrototypeSettingsProvider
+                                      .keyboardWhiteOptions,
+                              keyboardActiveOptions:
+                                  GamePrototypeSettingsProvider
+                                      .keyboardActiveOptions,
+                              neutralGlyphOptions: GamePrototypeSettingsProvider
+                                  .neutralGlyphOptions,
+                              passAccentOptions: GamePrototypeSettingsProvider
+                                  .passAccentOptions,
+                              missAccentOptions: GamePrototypeSettingsProvider
+                                  .missAccentOptions,
+                              backgroundOptions: GamePrototypeSettingsProvider
+                                  .backgroundPresets,
+                              staffBackgroundColorOptions:
+                                  GamePrototypeSettingsProvider
+                                      .staffBackgroundColorOptions,
+                              onNoteColorChanged: settings.setNoteColor,
+                              onStaffStrokeColorChanged:
+                                  settings.setStaffStrokeColor,
+                              onNotationGlyphColorChanged:
+                                  settings.setNotationGlyphColor,
+                              onKeyboardBlackColorChanged:
+                                  settings.setKeyboardBlackColor,
+                              onKeyboardWhiteColorChanged:
+                                  settings.setKeyboardWhiteColor,
+                              onKeyboardActiveColorChanged:
+                                  settings.setKeyboardActiveColor,
+                              onNeutralGlyphColorChanged:
+                                  settings.setNeutralGlyphColor,
+                              onPassAccentColorChanged:
+                                  settings.setPassAccentColor,
+                              onMissAccentColorChanged:
+                                  settings.setMissAccentColor,
+                              onStaffBackgroundColorChanged:
+                                  settings.setStaffBackgroundColor,
+                              onStaffBackgroundChanged:
+                                  settings.setStaffBackground,
+                            ),
+                            onRepeat: cubit.repeat,
+                            onBack: () {
+                              cubit.pause();
+                              Navigator.of(context).maybePop();
+                            },
+                            onPlay: cubit.play,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -536,8 +355,6 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
     return ((passedNotes / totalNotes) * 100).round();
   }
 }
-
-enum _SettingsTab { gameplay, color }
 
 class _GameScreenBackground extends StatelessWidget {
   const _GameScreenBackground({required this.background});
@@ -812,8 +629,8 @@ class _GameSettingsOverlay extends StatelessWidget {
 
   final bool hasCompletedSong;
   final int completionScore;
-  final _SettingsTab selectedTab;
-  final ValueChanged<_SettingsTab> onSelectTab;
+  final GamePrototypeSettingsTab selectedTab;
+  final ValueChanged<GamePrototypeSettingsTab> onSelectTab;
   final Widget gameplayControls;
   final Widget colorControls;
   final VoidCallback onRepeat;
@@ -879,12 +696,12 @@ class _GameSettingsOverlay extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _SettingsTabBar(
+                          GamePrototypeSettingsTabBar(
                             selectedTab: selectedTab,
                             onSelectTab: onSelectTab,
                           ),
                           const SizedBox(height: 18),
-                          if (selectedTab == _SettingsTab.gameplay)
+                          if (selectedTab == GamePrototypeSettingsTab.gameplay)
                             gameplayControls
                           else
                             colorControls,
@@ -959,29 +776,33 @@ class _GameSettingsOverlay extends StatelessWidget {
   }
 }
 
-class _SettingsTabBar extends StatelessWidget {
-  const _SettingsTabBar({required this.selectedTab, required this.onSelectTab});
+class GamePrototypeSettingsTabBar extends StatelessWidget {
+  const GamePrototypeSettingsTabBar({
+    super.key,
+    required this.selectedTab,
+    required this.onSelectTab,
+  });
 
-  final _SettingsTab selectedTab;
-  final ValueChanged<_SettingsTab> onSelectTab;
+  final GamePrototypeSettingsTab selectedTab;
+  final ValueChanged<GamePrototypeSettingsTab> onSelectTab;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: _SettingsTabButton(
+          child: GamePrototypeSettingsTabButton(
             label: 'Gameplay',
-            selected: selectedTab == _SettingsTab.gameplay,
-            onTap: () => onSelectTab(_SettingsTab.gameplay),
+            selected: selectedTab == GamePrototypeSettingsTab.gameplay,
+            onTap: () => onSelectTab(GamePrototypeSettingsTab.gameplay),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _SettingsTabButton(
+          child: GamePrototypeSettingsTabButton(
             label: 'Color',
-            selected: selectedTab == _SettingsTab.color,
-            onTap: () => onSelectTab(_SettingsTab.color),
+            selected: selectedTab == GamePrototypeSettingsTab.color,
+            onTap: () => onSelectTab(GamePrototypeSettingsTab.color),
           ),
         ),
       ],
@@ -989,8 +810,9 @@ class _SettingsTabBar extends StatelessWidget {
   }
 }
 
-class _SettingsTabButton extends StatelessWidget {
-  const _SettingsTabButton({
+class GamePrototypeSettingsTabButton extends StatelessWidget {
+  const GamePrototypeSettingsTabButton({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

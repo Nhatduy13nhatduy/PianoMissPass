@@ -84,29 +84,7 @@ class GameNotePainter {
     final lineSpacing = metrics.staffSpace;
     final precomputedScore = _getPrecomputedScoreRenderData(score);
     final precomputedNotes = precomputedScore.notes;
-    final maxBeamLookbackMs = precomputedScore
-        .beamAnchorAdjustedHitMsByScoreIndex
-        .asMap()
-        .entries
-        .fold<int>(0, (currentMax, entry) {
-          final anchorMs = entry.value;
-          if (anchorMs == null) {
-            return currentMax;
-          }
-          final noteMs = precomputedNotes[entry.key].adjustedHitMs;
-          final delta = anchorMs - noteMs;
-          return delta > currentMax ? delta : currentMax;
-        });
-    final beamLastAdjustedHitMsByScoreIndex = <int, int>{};
-    for (final group in precomputedScore.beamGroupsByScoreIndex) {
-      if (group.isEmpty) {
-        continue;
-      }
-      final lastAdjustedHitMs = precomputedNotes[group.last].adjustedHitMs;
-      for (final scoreIndex in group) {
-        beamLastAdjustedHitMsByScoreIndex[scoreIndex] = lastAdjustedHitMs;
-      }
-    }
+    final maxBeamLookbackMs = precomputedScore.maxBeamLookbackMs;
     final beatMs = 60000.0 / score.bpm;
     final measureMs = score.beatsPerMeasure * beatMs;
     final leftInvisibleMeasureMs = measureMs;
@@ -153,7 +131,8 @@ class GameNotePainter {
           : _NoteJudge.pending;
       final x = playheadX + (adjustedHitMs - currentMs) * notePxPerMs;
       final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
-      final beamLastAdjustedHitMs = beamLastAdjustedHitMsByScoreIndex[i];
+      final beamLastAdjustedHitMs =
+          precomputedScore.beamLastAdjustedHitMsByScoreIndex[i];
       final beamLastX = beamLastAdjustedHitMs == null
           ? null
           : playheadX + (beamLastAdjustedHitMs - currentMs) * notePxPerMs;
@@ -865,6 +844,31 @@ class GameNotePainter {
       );
     }
 
+    final beamLastAdjustedHitMsByScoreIndex = List<int?>.filled(
+      precomputedNotes.length,
+      null,
+      growable: false,
+    );
+    for (final group in beamGroups) {
+      if (group.isEmpty) {
+        continue;
+      }
+      final lastAdjustedHitMs = precomputedNotes[group.last].adjustedHitMs;
+      for (final scoreIndex in group) {
+        beamLastAdjustedHitMsByScoreIndex[scoreIndex] = lastAdjustedHitMs;
+      }
+    }
+    final maxBeamLookbackMs = beamAnchorAdjustedHitMsByScoreIndex.asMap().entries
+        .fold<int>(0, (currentMax, entry) {
+          final anchorMs = entry.value;
+          if (anchorMs == null) {
+            return currentMax;
+          }
+          final noteMs = precomputedNotes[entry.key].adjustedHitMs;
+          final delta = anchorMs - noteMs;
+          return delta > currentMax ? delta : currentMax;
+        });
+
     final built = _PrecomputedScoreRenderData(
       notes: List<_PrecomputedRenderNote>.unmodifiable(precomputedNotes),
       beamGroupsByScoreIndex: List<List<int>>.unmodifiable(
@@ -873,6 +877,10 @@ class GameNotePainter {
       beamAnchorAdjustedHitMsByScoreIndex: List<int?>.unmodifiable(
         beamAnchorAdjustedHitMsByScoreIndex,
       ),
+      beamLastAdjustedHitMsByScoreIndex: List<int?>.unmodifiable(
+        beamLastAdjustedHitMsByScoreIndex,
+      ),
+      maxBeamLookbackMs: maxBeamLookbackMs,
     );
     _precomputedScoreCache[score] = built;
     return built;
