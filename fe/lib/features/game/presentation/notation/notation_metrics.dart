@@ -28,7 +28,12 @@ class NotationMetrics {
         .toDouble();
 
     final safeScale = staffHeightScale.clamp(0.5, 2.0).toDouble();
-    var staffHeight = (resolvedStaffRegionHeight / 5.0) * safeScale;
+    final widthCompression = _staffHeightWidthCompression(
+      screenWidth: screenWidth,
+      aspectRatio: aspectRatio,
+    );
+    var staffHeight =
+        (resolvedStaffRegionHeight / 5.0) * safeScale * widthCompression;
     final maxStaffHeight = resolvedStaffRegionHeight / 2.0;
     staffHeight = staffHeight
         .clamp(28.0, maxStaffHeight > 28 ? maxStaffHeight : 28.0)
@@ -63,6 +68,16 @@ class NotationMetrics {
   final double staffGap;
   final double staffLeftInset;
   final double staffRightInset;
+
+  static double _staffHeightWidthCompression({
+    required double screenWidth,
+    required double aspectRatio,
+  }) {
+    final widthFactor = ((screenWidth - 720.0) / 640.0).clamp(0.0, 1.0);
+    final wideAspectFactor = ((aspectRatio - 1.65) / 0.85).clamp(0.0, 1.0);
+    final compression = 1.0 - (0.18 * widthFactor * wideAspectFactor);
+    return compression.clamp(0.82, 1.0).toDouble();
+  }
 
   double get staffSpace => staffHeight / 4;
   double get visualScale {
@@ -161,9 +176,9 @@ class NotationMetrics {
   double get keySignatureBaselineNudgeSharp => staffSpace * 0.14;
   double get keySignatureBaselineNudgeFlat => staffSpace * 0.28;
   double get keySignatureSpacingX =>
-      _scaledClamp(staffSpace * 1.38, 11.0, 19.0);
+      _scaledClamp(staffSpace * 1.14, 9.0, 15.0);
   double get keySignatureTrailingGap =>
-      _scaledClamp(staffSpace * 1.95, 12.0, 26.0);
+      _scaledClamp(staffSpace * 1.35, 9.0, 18.0);
 
   double get timeSignatureTargetDigitHeight =>
       math.max(staffHeight * 0.55, 24.0 * visualScale);

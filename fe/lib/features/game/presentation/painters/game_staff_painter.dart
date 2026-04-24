@@ -9,6 +9,12 @@ class GameStaffPainter {
     double spacing, {
     required GameColorScheme colors,
   }) {
+    if (colors.staff.backgroundColor.alpha > 0) {
+      final fillPaint = Paint()
+        ..color = colors.staff.backgroundColor
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(rect, fillPaint);
+    }
     final border = Paint()
       ..color = colors.staff.border
       ..style = PaintingStyle.stroke

@@ -81,6 +81,7 @@ class GameColorScheme {
   static const GameColorScheme classic = GameColorScheme(
     staff: GameStaffColorScheme(
       background: GameStaffBackground.color(Color(0xE6F4F4F4)),
+      backgroundColor: Colors.transparent,
       border: _staffStroke,
       line: _staffStroke,
       measureLine: _staffStroke,
@@ -127,6 +128,7 @@ class GameColorScheme {
 class GameStaffColorScheme {
   const GameStaffColorScheme({
     required this.background,
+    required this.backgroundColor,
     required this.border,
     required this.line,
     required this.measureLine,
@@ -134,6 +136,7 @@ class GameStaffColorScheme {
   });
 
   final GameStaffBackground background;
+  final Color backgroundColor;
   final Color border;
   final Color line;
   final Color measureLine;

@@ -4,19 +4,24 @@ import 'package:flutter/material.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
+import '../cubit/game_prototype_state.dart';
 import '../notation/notation_metrics.dart';
 
 class GameKeyboardPainter {
-  static const int _activeWindowMs = 100;
   static const int _startMidi = 36; // C2
   static const int _endMidi = 88; // E6
   static const int _middleCMidi = 60; // C4
+  static const double _blackKeyStrokeWidth = 0.8;
 
   void paintKeyboard(
     Canvas canvas,
     Size size, {
     required ScoreData score,
     required int currentMs,
+    required GameInputMode inputMode,
+    required Set<int> activeInputMidis,
+    required Set<int> passedNoteIndexes,
+    required Set<int> missedNoteIndexes,
     required double keyboardTop,
     required NotationMetrics metrics,
   }) {
@@ -39,17 +44,28 @@ class GameKeyboardPainter {
         : metrics.keyboardBlackCornerRadius / blackWidth;
 
     final active = <int>{};
-    final startTime = currentMs - _activeWindowMs;
-    final endTime = currentMs + _activeWindowMs;
+    final passed = <int>{};
+    final startTime = currentMs - _keyboardLookbackMs;
+    final endTime = currentMs + _keyboardLookaheadMs;
     final startIndex = _lowerBoundHitTime(score.notes, startTime);
     final endIndex = _upperBoundHitTime(score.notes, endTime);
     for (var i = startIndex; i < endIndex; i++) {
       final note = score.notes[i];
-      if ((NoteTiming.adjustedHitTimeMs(note) - currentMs).abs() <=
-          _activeWindowMs) {
-        active.add(note.midi);
+      final adjustedHitMs = NoteTiming.adjustedHitTimeMs(note);
+      final noteEndMs = adjustedHitMs + math.max(note.holdMs, _minimumHoldMs);
+      if (adjustedHitMs <= currentMs && currentMs <= noteEndMs) {
+        if (passedNoteIndexes.contains(i)) {
+          passed.add(note.midi);
+        } else {
+          active.add(note.midi);
+        }
       }
     }
+    final userPressed = Set<int>.from(activeInputMidis);
+    final userPassed = userPressed.intersection({...active, ...passed});
+    final userMissed = inputMode == GameInputMode.microphone
+        ? <int>{}
+        : userPressed.difference({...active, ...passed});
 
     final bedRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
@@ -69,8 +85,16 @@ class GameKeyboardPainter {
       }
 
       final x = whiteIndex * whiteWidth;
-      final isActive = active.contains(midi);
-      final pressDepth = isActive ? metrics.keyboardWhitePressDepth : 0.0;
+      final keyState = _resolveKeyState(
+        midi,
+        active: active,
+        passed: passed,
+        userPassed: userPassed,
+        userMissed: userMissed,
+        userPressed: userPressed,
+      );
+      final isPressed = keyState.isPressed;
+      final pressDepth = isPressed ? metrics.keyboardWhitePressDepth : 0.0;
       final keyRect = Rect.fromLTWH(
         x + whiteGap,
         keyboardTop + pressDepth,
@@ -80,29 +104,23 @@ class GameKeyboardPainter {
       final whiteRadius = _radiusFromRatio(keyRect.width, whiteCornerRatio);
       final keyRRect = RRect.fromRectAndCorners(
         keyRect,
-        bottomLeft: whiteRadius,
-        bottomRight: whiteRadius,
+          bottomLeft: whiteRadius,
+          bottomRight: whiteRadius,
       );
-      final baseColor = isActive
-          ? Color.lerp(
-              score.colors.keyboard.white,
-              score.colors.keyboard.active,
-              0.82,
-            )!
-          : score.colors.keyboard.white;
+      final baseColor = _whiteKeyBaseColor(keyState, score.colors);
       final fill = Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            _lighten(baseColor, isActive ? 0.1 : 0.16),
+            _lighten(baseColor, isPressed ? 0.1 : 0.16),
             baseColor,
-            _darken(baseColor, isActive ? 0.1 : 0.06),
+            _darken(baseColor, isPressed ? 0.1 : 0.06),
           ],
           stops: const [0.0, 0.55, 1.0],
         ).createShader(keyRect);
       final shadow = Paint()
-        ..color = score.colors.keyboard.whiteBorder.withAlpha(isActive ? 8 : 14)
+        ..color = score.colors.keyboard.whiteBorder.withAlpha(isPressed ? 8 : 14)
         ..maskFilter = MaskFilter.blur(
           BlurStyle.normal,
           metrics.keyboardWhiteShadowBlur,
@@ -126,15 +144,15 @@ class GameKeyboardPainter {
         ),
         Paint()
           ..color = _lighten(
-            score.colors.keyboard.white,
-            isActive ? 0.06 : 0.14,
-          ).withAlpha(isActive ? 72 : 128),
+            baseColor,
+            isPressed ? 0.06 : 0.14,
+          ).withAlpha(isPressed ? 72 : 128),
       );
       if (midi == _middleCMidi) {
         _paintMiddleCLabel(
           canvas,
           keyRect: keyRect,
-          color: isActive
+          color: isPressed
               ? score.colors.keyboard.white
               : score.colors.keyboard.active,
           radiusRatio: whiteCornerRatio,
@@ -147,13 +165,22 @@ class GameKeyboardPainter {
     for (final midi in midiRange) {
       if (_isBlack(midi)) {
         final x = whiteIndex * whiteWidth - blackWidth / 2;
-        final isActive = active.contains(midi);
-        final pressDepth = isActive ? metrics.keyboardBlackPressDepth : 0.0;
+        final keyState = _resolveKeyState(
+          midi,
+          active: active,
+          passed: passed,
+          userPassed: userPassed,
+          userMissed: userMissed,
+          userPressed: userPressed,
+        );
+        final isPressed = keyState.isPressed;
+        final pressDepth = isPressed ? metrics.keyboardBlackPressDepth : 0.0;
+        final blackKeyBaseInset = _blackKeyStrokeWidth / 2;
         final blackKeyBaseRect = Rect.fromLTWH(
-          x,
-          keyboardTop - 1.0,
-          blackWidth,
-          blackHeight,
+          x - blackKeyBaseInset,
+          keyboardTop - 1.0 - blackKeyBaseInset,
+          blackWidth + (_blackKeyStrokeWidth),
+          blackHeight + (_blackKeyStrokeWidth),
         );
         final keyRect = Rect.fromLTWH(
           x,
@@ -172,17 +199,15 @@ class GameKeyboardPainter {
           bottomLeft: blackRadius,
           bottomRight: blackRadius,
         );
-        final baseColor = isActive
-            ? score.colors.keyboard.active
-            : score.colors.keyboard.black;
+        final baseColor = _blackKeyBaseColor(keyState, score.colors);
         final fill = Paint()
           ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              _lighten(baseColor, isActive ? 0.18 : 0.1),
+              _lighten(baseColor, isPressed ? 0.18 : 0.1),
               baseColor,
-              _darken(baseColor, isActive ? 0.24 : 0.18),
+              _darken(baseColor, isPressed ? 0.24 : 0.18),
             ],
             stops: const [0.0, 0.3, 1.0],
           ).createShader(keyRect);
@@ -200,7 +225,7 @@ class GameKeyboardPainter {
           keyRRect.shift(Offset(0, metrics.keyboardBlackShadowOffsetY)),
           Paint()
             ..color = score.colors.keyboard.whiteBorder.withAlpha(
-              isActive ? 18 : 34,
+              isPressed ? 18 : 34,
             )
             ..maskFilter = MaskFilter.blur(
               BlurStyle.normal,
@@ -216,17 +241,17 @@ class GameKeyboardPainter {
           highlight,
           Paint()
             ..color = _lighten(
-              isActive
-                  ? score.colors.keyboard.active
+              isPressed
+                  ? baseColor
                   : score.colors.keyboard.white,
-              isActive ? 0.1 : 0.04,
-            ).withAlpha(isActive ? 52 : 32),
+              isPressed ? 0.1 : 0.04,
+            ).withAlpha(isPressed ? 52 : 32),
         );
         canvas.drawRRect(
           keyRRect,
           Paint()
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 0.8
+            ..strokeWidth = _blackKeyStrokeWidth
             ..color = score.colors.keyboard.whiteBorder.withAlpha(78),
         );
       } else {
@@ -259,6 +284,56 @@ class GameKeyboardPainter {
     );
 
     canvas.drawRRect(markerRect, Paint()..color = markerColor);
+  }
+
+  _KeyboardKeyState _resolveKeyState(
+    int midi, {
+    required Set<int> active,
+    required Set<int> passed,
+    required Set<int> userPassed,
+    required Set<int> userMissed,
+    required Set<int> userPressed,
+  }) {
+    if (userPassed.contains(midi) || passed.contains(midi)) {
+      return _KeyboardKeyState.pass;
+    }
+    if (userMissed.contains(midi)) {
+      return _KeyboardKeyState.miss;
+    }
+    if (active.contains(midi) || userPressed.contains(midi)) {
+      return _KeyboardKeyState.active;
+    }
+    return _KeyboardKeyState.idle;
+  }
+
+  Color _whiteKeyBaseColor(_KeyboardKeyState state, GameColorScheme colors) {
+    return switch (state) {
+      _KeyboardKeyState.pass => Color.lerp(
+        colors.keyboard.white,
+        colors.note.pass,
+        0.78,
+      )!,
+      _KeyboardKeyState.miss => Color.lerp(
+        colors.keyboard.white,
+        colors.note.miss,
+        0.78,
+      )!,
+      _KeyboardKeyState.active => Color.lerp(
+        colors.keyboard.white,
+        colors.keyboard.active,
+        0.82,
+      )!,
+      _KeyboardKeyState.idle => colors.keyboard.white,
+    };
+  }
+
+  Color _blackKeyBaseColor(_KeyboardKeyState state, GameColorScheme colors) {
+    return switch (state) {
+      _KeyboardKeyState.pass => colors.note.pass,
+      _KeyboardKeyState.miss => colors.note.miss,
+      _KeyboardKeyState.active => colors.keyboard.active,
+      _KeyboardKeyState.idle => colors.keyboard.black,
+    };
   }
 
   Radius _radiusFromRatio(double base, double ratio) {
@@ -306,4 +381,14 @@ class GameKeyboardPainter {
     }
     return low;
   }
+
+  static const int _keyboardLookbackMs = 1200;
+  static const int _keyboardLookaheadMs = 100;
+  static const int _minimumHoldMs = 90;
+}
+
+enum _KeyboardKeyState { idle, active, pass, miss }
+
+extension on _KeyboardKeyState {
+  bool get isPressed => this != _KeyboardKeyState.idle;
 }

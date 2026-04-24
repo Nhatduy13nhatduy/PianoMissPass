@@ -113,9 +113,7 @@ extension on GameNotePainter {
         final startChordKey = startVisibleIndex == null
             ? null
             : chordLayout.chordKeyByVisibleIndex[startVisibleIndex];
-        final endChordKey = endVisibleIndex == null
-            ? null
-            : chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
+        final endChordKey = chordLayout.chordKeyByVisibleIndex[endVisibleIndex];
         final isChordToChord = startChordKey != null && endChordKey != null;
         if (isChordToChord) {
           final dedupeKey =
@@ -383,13 +381,6 @@ extension on GameNotePainter {
         ..color = score.colors.accidentalAndSlur.slurIdle
         ..style = PaintingStyle.fill
         ..isAntiAlias = true;
-      _notePainterApplyLeftFadeToPaint(
-        baseSlurPaint,
-        baseColor: score.colors.accidentalAndSlur.slurIdle,
-        bounds: slurPath.getBounds(),
-        playheadX: playheadX,
-        metrics: metrics,
-      );
       canvas.drawPath(slurPath, baseSlurPaint);
 
       if (judgedSlurColor != score.colors.accidentalAndSlur.slurIdle) {
