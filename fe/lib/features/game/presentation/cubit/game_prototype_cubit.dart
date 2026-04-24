@@ -291,7 +291,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _latestDetectedInputMidis = const <int>{};
     if (!isClosed) {
       _emitState(
-        _applyInputStatus(state.copyWith(activeInputMidis: const <int>{})),
+        _applyInputStatus(
+          state.copyWith(
+            activeInputMidis: const <int>{},
+            clearMicrophoneDebug: true,
+          ),
+        ),
       );
     }
   }
@@ -311,6 +316,41 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         _applyInputStatus(
           state.copyWith(
             activeInputMidis: Set<int>.unmodifiable(snapshot.activeMidis),
+            microphoneDebug: snapshot.microphoneDebug == null
+                ? null
+                : GameMicrophoneDebugData(
+                    rms: snapshot.microphoneDebug!.rms,
+                    maxScore: snapshot.microphoneDebug!.maxScore,
+                    expectedMidis: Set<int>.unmodifiable(
+                      snapshot.microphoneDebug!.expectedMidis,
+                    ),
+                    detectedMidis: Set<int>.unmodifiable(
+                      snapshot.microphoneDebug!.detectedMidis,
+                    ),
+                    scoresByMidi: Map<int, double>.unmodifiable(
+                      snapshot.microphoneDebug!.scoresByMidi,
+                    ),
+                  ),
+          ),
+        ),
+      );
+    } else if (snapshot.microphoneDebug != null) {
+      _emitState(
+        _applyInputStatus(
+          state.copyWith(
+            microphoneDebug: GameMicrophoneDebugData(
+              rms: snapshot.microphoneDebug!.rms,
+              maxScore: snapshot.microphoneDebug!.maxScore,
+              expectedMidis: Set<int>.unmodifiable(
+                snapshot.microphoneDebug!.expectedMidis,
+              ),
+              detectedMidis: Set<int>.unmodifiable(
+                snapshot.microphoneDebug!.detectedMidis,
+              ),
+              scoresByMidi: Map<int, double>.unmodifiable(
+                snapshot.microphoneDebug!.scoresByMidi,
+              ),
+            ),
           ),
         ),
       );

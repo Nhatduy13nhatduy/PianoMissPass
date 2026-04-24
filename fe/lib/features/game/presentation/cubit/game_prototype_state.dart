@@ -9,6 +9,31 @@ enum GameVisibleStaffMode { upperOnly, lowerOnly, both }
 
 enum GameInputMode { wiredMidi, bluetoothMidi, microphone }
 
+class GameMicrophoneDebugData extends Equatable {
+  const GameMicrophoneDebugData({
+    required this.rms,
+    required this.maxScore,
+    required this.expectedMidis,
+    required this.detectedMidis,
+    required this.scoresByMidi,
+  });
+
+  final double rms;
+  final double maxScore;
+  final Set<int> expectedMidis;
+  final Set<int> detectedMidis;
+  final Map<int, double> scoresByMidi;
+
+  @override
+  List<Object?> get props => [
+    rms,
+    maxScore,
+    expectedMidis,
+    detectedMidis,
+    scoresByMidi.entries.map((entry) => '${entry.key}:${entry.value}').toList(),
+  ];
+}
+
 class GamePrototypeState extends Equatable {
   const GamePrototypeState({
     this.isLoading = true,
@@ -22,6 +47,7 @@ class GamePrototypeState extends Equatable {
     this.isMicrophoneActive = false,
     this.inputDeviceName,
     this.activeInputMidis = const <int>{},
+    this.microphoneDebug,
     this.playbackSpeed = NoteTiming.defaultPlaybackSpeed,
     this.timelineMsPerDurationDivision =
         NoteTiming.defaultTimelineMsPerDurationDivision,
@@ -40,6 +66,7 @@ class GamePrototypeState extends Equatable {
   final bool isMicrophoneActive;
   final String? inputDeviceName;
   final Set<int> activeInputMidis;
+  final GameMicrophoneDebugData? microphoneDebug;
   final double playbackSpeed;
   final int timelineMsPerDurationDivision;
   final Set<int> passedNoteIndexes;
@@ -59,6 +86,8 @@ class GamePrototypeState extends Equatable {
     String? inputDeviceName,
     bool clearInputDeviceName = false,
     Set<int>? activeInputMidis,
+    GameMicrophoneDebugData? microphoneDebug,
+    bool clearMicrophoneDebug = false,
     double? playbackSpeed,
     int? timelineMsPerDurationDivision,
     Set<int>? passedNoteIndexes,
@@ -80,6 +109,9 @@ class GamePrototypeState extends Equatable {
           ? null
           : inputDeviceName ?? this.inputDeviceName,
       activeInputMidis: activeInputMidis ?? this.activeInputMidis,
+      microphoneDebug: clearMicrophoneDebug
+          ? null
+          : microphoneDebug ?? this.microphoneDebug,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       timelineMsPerDurationDivision:
           timelineMsPerDurationDivision ?? this.timelineMsPerDurationDivision,
@@ -101,6 +133,7 @@ class GamePrototypeState extends Equatable {
     isMicrophoneActive,
     inputDeviceName,
     activeInputMidis,
+    microphoneDebug,
     playbackSpeed,
     timelineMsPerDurationDivision,
     passedNoteIndexes,

@@ -4,10 +4,28 @@ class GameInputSnapshot {
   const GameInputSnapshot({
     required this.detectedMidis,
     Set<int>? activeMidis,
+    this.microphoneDebug,
   }) : activeMidis = activeMidis ?? detectedMidis;
 
   final Set<int> detectedMidis;
   final Set<int> activeMidis;
+  final MicrophoneDebugSnapshot? microphoneDebug;
+}
+
+class MicrophoneDebugSnapshot {
+  const MicrophoneDebugSnapshot({
+    required this.rms,
+    required this.maxScore,
+    required this.expectedMidis,
+    required this.detectedMidis,
+    required this.scoresByMidi,
+  });
+
+  final double rms;
+  final double maxScore;
+  final Set<int> expectedMidis;
+  final Set<int> detectedMidis;
+  final Map<int, double> scoresByMidi;
 }
 
 class GameInputStatus {

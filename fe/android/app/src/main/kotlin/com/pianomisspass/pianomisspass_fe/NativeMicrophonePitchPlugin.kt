@@ -238,28 +238,32 @@ class NativeMicrophonePitchPlugin private constructor(
         } else {
             emptySet()
         }
-        val detectedMidis = synchronized(verifierLock) {
-            val frameMidis = verifier.acceptFrame(
+        val detectionResult = synchronized(verifierLock) {
+            verifier.acceptFrame(
                 floatBuffer = audioEvent.floatBuffer,
                 sampleRate = SAMPLE_RATE,
                 timestampMs = nowMs,
             )
-            val pitchMidis = if (pitchResult.isPitched) {
-                verifier.matchSinglePitch(pitchResult.pitch)
-            } else {
-                emptySet()
-            }
-            frameMidis + pitchMidis
         }
         emitPitchEvent(
-            detectedMidis = detectedMidis,
-            activeMidis = activeMidis.ifEmpty { detectedMidis },
+            detectedMidis = detectionResult.detectedMidis,
+            activeMidis = activeMidis.ifEmpty { detectionResult.detectedMidis },
+            debugPayload = mapOf(
+                "rms" to detectionResult.rms,
+                "maxScore" to detectionResult.maxScore,
+                "expectedMidis" to detectionResult.expectedMidis.sorted(),
+                "detectedMidis" to detectionResult.detectedMidis.sorted(),
+                "scoresByMidi" to detectionResult.scoresByMidi
+                    .toSortedMap()
+                    .mapValues { (_, score) -> score },
+            ),
         )
     }
 
     private fun emitPitchEvent(
         detectedMidis: Set<Int>,
         activeMidis: Set<Int>,
+        debugPayload: Map<String, Any>,
     ) {
         if (
             detectedMidis == lastEmittedDetectedMidis &&
@@ -275,6 +279,7 @@ class NativeMicrophonePitchPlugin private constructor(
         val payload = mapOf(
             "detectedMidis" to detectedMidis.sorted(),
             "activeMidis" to activeMidis.sorted(),
+            "debug" to debugPayload,
         )
         mainHandler.post {
             if (eventSink === sink && isRunning.get()) {

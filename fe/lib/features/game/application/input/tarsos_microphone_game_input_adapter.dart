@@ -38,6 +38,7 @@ class TarsosMicrophoneGameInputAdapter implements GameInputAdapter {
   Set<int> _lastExpectedMidis = const <int>{};
   Set<int> _lastSnapshotDetectedMidis = const <int>{};
   Set<int> _lastSnapshotActiveMidis = const <int>{};
+  MicrophoneDebugSnapshot? _lastMicrophoneDebug;
   GameInputSnapshotCallback? _onSnapshot;
   GameInputStatusCallback? _onStatusChanged;
   bool _isCapturing = false;
@@ -176,6 +177,7 @@ class TarsosMicrophoneGameInputAdapter implements GameInputAdapter {
     _emitSnapshotIfChanged(
       detectedMidis: _currentHeldMidis(_heldDetectedUntilMs, nowMs),
       activeMidis: _currentHeldMidis(_heldActiveUntilMs, nowMs),
+      microphoneDebug: nativeFrame.debug,
     );
   }
 
@@ -200,14 +202,49 @@ class TarsosMicrophoneGameInputAdapter implements GameInputAdapter {
     if (event is Map) {
       final detectedMidis = _coerceMidiSet(event['detectedMidis']);
       final activeMidis = _coerceMidiSet(event['activeMidis']);
+      final debug = _coerceDebugSnapshot(event['debug']);
       return _NativePitchFrame(
         detectedMidis: detectedMidis,
         activeMidis: activeMidis,
+        debug: debug,
       );
     }
 
     final midis = _coerceMidiSet(event);
-    return _NativePitchFrame(detectedMidis: midis, activeMidis: midis);
+    return _NativePitchFrame(
+      detectedMidis: midis,
+      activeMidis: midis,
+      debug: null,
+    );
+  }
+
+  MicrophoneDebugSnapshot? _coerceDebugSnapshot(dynamic event) {
+    if (event is! Map) {
+      return null;
+    }
+
+    final rms = (event['rms'] as num?)?.toDouble() ?? 0.0;
+    final maxScore = (event['maxScore'] as num?)?.toDouble() ?? 0.0;
+    final expectedMidis = _coerceMidiSet(event['expectedMidis']);
+    final detectedMidis = _coerceMidiSet(event['detectedMidis']);
+    final scoresByMidi = <int, double>{};
+    final rawScores = event['scoresByMidi'];
+    if (rawScores is Map) {
+      for (final entry in rawScores.entries) {
+        final midi = int.tryParse(entry.key.toString());
+        final score = (entry.value as num?)?.toDouble();
+        if (midi != null && score != null) {
+          scoresByMidi[midi] = score;
+        }
+      }
+    }
+    return MicrophoneDebugSnapshot(
+      rms: rms,
+      maxScore: maxScore,
+      expectedMidis: expectedMidis,
+      detectedMidis: detectedMidis,
+      scoresByMidi: scoresByMidi,
+    );
   }
 
   Set<int> _coerceMidiSet(dynamic event) {
@@ -258,6 +295,7 @@ class TarsosMicrophoneGameInputAdapter implements GameInputAdapter {
     _heldActiveUntilMs.clear();
     _lastSnapshotDetectedMidis = const <int>{};
     _lastSnapshotActiveMidis = const <int>{};
+    _lastMicrophoneDebug = null;
   }
 
   void _refreshHeldMidis(
@@ -286,24 +324,29 @@ class TarsosMicrophoneGameInputAdapter implements GameInputAdapter {
     _emitSnapshotIfChanged(
       detectedMidis: _currentHeldMidis(_heldDetectedUntilMs, nowMs),
       activeMidis: _currentHeldMidis(_heldActiveUntilMs, nowMs),
+      microphoneDebug: _lastMicrophoneDebug,
     );
   }
 
   void _emitSnapshotIfChanged({
     required Set<int> detectedMidis,
     Set<int>? activeMidis,
+    MicrophoneDebugSnapshot? microphoneDebug,
   }) {
     final resolvedActiveMidis = activeMidis ?? detectedMidis;
     if (setEquals(detectedMidis, _lastSnapshotDetectedMidis) &&
-        setEquals(resolvedActiveMidis, _lastSnapshotActiveMidis)) {
+        setEquals(resolvedActiveMidis, _lastSnapshotActiveMidis) &&
+        microphoneDebug == _lastMicrophoneDebug) {
       return;
     }
     _lastSnapshotDetectedMidis = Set<int>.unmodifiable(detectedMidis);
     _lastSnapshotActiveMidis = Set<int>.unmodifiable(resolvedActiveMidis);
+    _lastMicrophoneDebug = microphoneDebug;
     _onSnapshot?.call(
       GameInputSnapshot(
         detectedMidis: detectedMidis,
         activeMidis: resolvedActiveMidis,
+        microphoneDebug: microphoneDebug,
       ),
     );
   }
@@ -317,8 +360,10 @@ class _NativePitchFrame {
   const _NativePitchFrame({
     required this.detectedMidis,
     required this.activeMidis,
+    required this.debug,
   });
 
   final Set<int> detectedMidis;
   final Set<int> activeMidis;
+  final MicrophoneDebugSnapshot? debug;
 }

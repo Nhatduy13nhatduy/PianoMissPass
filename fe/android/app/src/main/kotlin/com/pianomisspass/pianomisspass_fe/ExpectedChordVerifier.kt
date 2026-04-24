@@ -2,20 +2,26 @@ package com.pianomisspass.pianomisspass_fe
 
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 class ExpectedChordVerifier(
-    private val groupingWindowMs: Long = 120L,
-    private val minimumGroupedFrames: Int = 3,
-    private val rmsGate: Double = 0.012,
-    private val absoluteScoreThreshold: Double = 0.16,
-    private val relativeScoreThreshold: Double = 0.78,
-    private val peakRatioThreshold: Double = 1.55,
+    private val groupingWindowMs: Long = 130L,
+    private val minimumGroupedFrames: Int = 2,
+    private val rmsGate: Double = 0.007,
+    private val absoluteScoreThreshold: Double = 0.12,
+    private val relativeScoreThreshold: Double = 0.58,
+    private val peakRatioThreshold: Double = 1.16,
 ) {
+    data class DetectionResult(
+        val detectedMidis: Set<Int>,
+        val rms: Double,
+        val expectedMidis: Set<Int>,
+        val scoresByMidi: Map<Int, Double>,
+        val maxScore: Double,
+    )
+
     private data class FrameEvidence(
         val midis: Set<Int>,
         val timestampMs: Long,
@@ -35,56 +41,60 @@ class ExpectedChordVerifier(
         recentEvidence.clear()
     }
 
-    fun matchSinglePitch(pitchHz: Float): Set<Int> {
-        if (expectedMidis.isEmpty() || pitchHz <= 0f) {
-            return emptySet()
-        }
-
-        val detectedMidi = frequencyToMidi(pitchHz)
-        return if (detectedMidi in expectedMidis) {
-            setOf(detectedMidi)
-        } else {
-            emptySet()
-        }
-    }
-
     fun acceptFrame(
         floatBuffer: FloatArray,
         sampleRate: Int,
         timestampMs: Long,
-    ): Set<Int> {
+    ): DetectionResult {
         prune(timestampMs)
 
         if (expectedMidis.isEmpty() || floatBuffer.isEmpty()) {
-            return emptySet()
+            return DetectionResult(
+                detectedMidis = emptySet(),
+                rms = 0.0,
+                expectedMidis = expectedMidis,
+                scoresByMidi = emptyMap(),
+                maxScore = 0.0,
+            )
         }
 
         val isChord = expectedMidis.size > 1
-        val resolvedRmsGate = if (isChord) 0.008 else rmsGate
-        val resolvedAbsoluteThreshold = if (isChord) 0.11 else absoluteScoreThreshold
-        val resolvedRelativeThreshold = if (isChord) 0.60 else relativeScoreThreshold
-        val resolvedPeakRatioThreshold = if (isChord) 1.22 else peakRatioThreshold
-        val requiredFrames = if (isChord) 2 else minimumGroupedFrames
+        val resolvedRmsGate = if (isChord) 0.0085 else rmsGate
+        val resolvedAbsoluteThreshold = if (isChord) 0.135 else absoluteScoreThreshold
+        val resolvedRelativeThreshold = if (isChord) 0.68 else relativeScoreThreshold
+        val resolvedPeakRatioThreshold = if (isChord) 1.20 else peakRatioThreshold
+        val requiredFrames = if (isChord) 3 else minimumGroupedFrames
 
         val rms = calculateRms(floatBuffer)
         if (rms < resolvedRmsGate) {
-            return emptySet()
+            return DetectionResult(
+                detectedMidis = emptySet(),
+                rms = rms,
+                expectedMidis = expectedMidis,
+                scoresByMidi = emptyMap(),
+                maxScore = 0.0,
+            )
         }
 
         val scoredMidis = expectedMidis.associateWith { midi ->
-            scoreMidi(
+            scoreExpectedMidi(
                 floatBuffer = floatBuffer,
                 sampleRate = sampleRate,
-                midi = midi,
+                expectedMidi = midi,
                 rms = rms,
-                absoluteThreshold = resolvedAbsoluteThreshold,
                 peakRatioThreshold = resolvedPeakRatioThreshold,
                 isChord = isChord,
             )
         }
         val maxScore = scoredMidis.values.maxOrNull() ?: 0.0
         if (maxScore < resolvedAbsoluteThreshold) {
-            return groupedMidis(requiredFrames)
+            return DetectionResult(
+                detectedMidis = emptySet(),
+                rms = rms,
+                expectedMidis = expectedMidis,
+                scoresByMidi = scoredMidis,
+                maxScore = maxScore,
+            )
         }
 
         val frameMidis = scoredMidis
@@ -100,7 +110,13 @@ class ExpectedChordVerifier(
             prune(timestampMs)
         }
 
-        return groupedMidis(requiredFrames)
+        return DetectionResult(
+            detectedMidis = if (frameMidis.isEmpty()) emptySet() else groupedMidis(requiredFrames),
+            rms = rms,
+            expectedMidis = expectedMidis,
+            scoresByMidi = scoredMidis,
+            maxScore = maxScore,
+        )
     }
 
     private fun groupedMidis(requiredFrames: Int): Set<Int> {
@@ -121,80 +137,73 @@ class ExpectedChordVerifier(
             .toSet()
     }
 
-    private fun scoreMidi(
+    private fun scoreExpectedMidi(
         floatBuffer: FloatArray,
         sampleRate: Int,
-        midi: Int,
+        expectedMidi: Int,
         rms: Double,
-        absoluteThreshold: Double,
         peakRatioThreshold: Double,
         isChord: Boolean,
     ): Double {
-        val fundamental = midiToFrequency(midi)
-        if (fundamental <= 0.0 || fundamental >= sampleRate / 2.0) {
+        val octaveCandidates = buildPitchClassOctaveCandidates(expectedMidi)
+        var score = 0.0
+        var bestBaseScore = 0.0
+
+        for ((candidateMidi, weight) in octaveCandidates) {
+            val baseFrequency = midiToFrequency(candidateMidi)
+            if (baseFrequency >= sampleRate / 2.0) {
+                continue
+            }
+
+            val fundamentalScore = peakedScore(
+                floatBuffer = floatBuffer,
+                sampleRate = sampleRate,
+                frequencyHz = baseFrequency,
+                rms = rms,
+                peakRatioThreshold = peakRatioThreshold,
+            )
+            val harmonic2 = peakedScore(
+                floatBuffer = floatBuffer,
+                sampleRate = sampleRate,
+                frequencyHz = baseFrequency * 2.0,
+                rms = rms,
+                peakRatioThreshold = peakRatioThreshold * 0.96,
+            ) * if (isChord) 0.34 else 0.24
+            val harmonic3 = peakedScore(
+                floatBuffer = floatBuffer,
+                sampleRate = sampleRate,
+                frequencyHz = baseFrequency * 3.0,
+                rms = rms,
+                peakRatioThreshold = peakRatioThreshold * 0.93,
+            ) * if (isChord) 0.18 else 0.12
+
+            val candidateScore = max(
+                fundamentalScore,
+                fundamentalScore * if (isChord) 0.72 else 0.82 +
+                    harmonic2 +
+                    harmonic3,
+            )
+            bestBaseScore = max(bestBaseScore, fundamentalScore)
+            score += candidateScore * weight
+        }
+
+        if (bestBaseScore <= 0.0) {
             return 0.0
         }
 
-        val fundamentalScore = peakedScore(
-            floatBuffer = floatBuffer,
-            sampleRate = sampleRate,
-            frequencyHz = fundamental,
-            rms = rms,
-            peakRatioThreshold = peakRatioThreshold,
-        )
-        val minimumFundamental = if (isChord) absoluteThreshold * 0.65 else absoluteThreshold
-        if (fundamentalScore < minimumFundamental) {
-            return 0.0
-        }
-
-        val secondHarmonicScore = harmonicScore(
-            floatBuffer,
-            sampleRate,
-            fundamental * 2.0,
-            rms,
-            peakRatioThreshold = if (isChord) peakRatioThreshold * 0.92 else peakRatioThreshold,
-        ) * if (isChord) 0.28 else 0.18
-        val thirdHarmonicScore = harmonicScore(
-            floatBuffer,
-            sampleRate,
-            fundamental * 3.0,
-            rms,
-            peakRatioThreshold = if (isChord) peakRatioThreshold * 0.90 else peakRatioThreshold,
-        ) * if (isChord) 0.16 else 0.10
-        val fourthHarmonicScore = harmonicScore(
-            floatBuffer,
-            sampleRate,
-            fundamental * 4.0,
-            rms,
-            peakRatioThreshold = if (isChord) peakRatioThreshold * 0.88 else peakRatioThreshold,
-        ) * if (isChord) 0.09 else 0.06
-
-        return max(
-            fundamentalScore,
-            fundamentalScore * if (isChord) 0.82 else 0.90 +
-                secondHarmonicScore +
-                thirdHarmonicScore +
-                fourthHarmonicScore,
-        )
+        return score
     }
 
-    private fun harmonicScore(
-        floatBuffer: FloatArray,
-        sampleRate: Int,
-        frequencyHz: Double,
-        rms: Double,
-        peakRatioThreshold: Double,
-    ): Double {
-        if (frequencyHz >= sampleRate / 2.0) {
-            return 0.0
+    private fun buildPitchClassOctaveCandidates(expectedMidi: Int): List<Pair<Int, Double>> {
+        val candidates = mutableListOf<Pair<Int, Double>>()
+        val octaveOffsets = listOf(0 to 1.0, -12 to 0.32, 12 to 0.32, -24 to 0.10, 24 to 0.10)
+        for ((offset, weight) in octaveOffsets) {
+            val midi = expectedMidi + offset
+            if (midi in MIN_PIANO_MIDI..MAX_PIANO_MIDI) {
+                candidates += midi to weight
+            }
         }
-        return peakedScore(
-            floatBuffer = floatBuffer,
-            sampleRate = sampleRate,
-            frequencyHz = frequencyHz,
-            rms = rms,
-            peakRatioThreshold = peakRatioThreshold,
-        )
+        return candidates
     }
 
     private fun peakedScore(
@@ -204,6 +213,10 @@ class ExpectedChordVerifier(
         rms: Double,
         peakRatioThreshold: Double,
     ): Double {
+        if (frequencyHz <= 0.0 || frequencyHz >= sampleRate / 2.0) {
+            return 0.0
+        }
+
         val center = normalizedGoertzel(floatBuffer, sampleRate, frequencyHz, rms)
         val lowerSide = normalizedGoertzel(
             floatBuffer,
@@ -221,7 +234,7 @@ class ExpectedChordVerifier(
         if (center < sideAverage * peakRatioThreshold) {
             return 0.0
         }
-        return center - sideAverage * 0.65
+        return center - sideAverage * 0.45
     }
 
     private fun normalizedGoertzel(
@@ -269,12 +282,8 @@ class ExpectedChordVerifier(
     }
 
     private companion object {
+        const val MIN_PIANO_MIDI: Int = 21
+        const val MAX_PIANO_MIDI: Int = 108
         val SEMITONE_RATIO: Double = 2.0.pow(1.0 / 12.0)
-    }
-
-    @Suppress("unused")
-    private fun frequencyToMidi(frequencyHz: Float): Int {
-        val semitonesFromA4 = 12.0 * ln(frequencyHz / 440.0) / ln(2.0)
-        return (69.0 + semitonesFromA4).roundToInt()
     }
 }
