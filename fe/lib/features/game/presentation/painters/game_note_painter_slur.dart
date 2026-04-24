@@ -126,6 +126,10 @@ extension on GameNotePainter {
           event: startEvent,
           isAbove: slurAbove,
           isStart: true,
+          chordVisibleIndexes: startChordKey == null
+              ? null
+              : chordVisibleIndexesByKey[startChordKey],
+          visible: visible,
           metrics: metrics,
         );
         final endAnchor = _resolveProjectedSlurAnchor(
@@ -133,6 +137,10 @@ extension on GameNotePainter {
           event: endEvent,
           isAbove: slurAbove,
           isStart: false,
+          chordVisibleIndexes: endChordKey == null
+              ? null
+              : chordVisibleIndexesByKey[endChordKey],
+          visible: visible,
           metrics: metrics,
         );
 
@@ -444,17 +452,34 @@ extension on GameNotePainter {
     required SlurEvent event,
     required bool isAbove,
     required bool isStart,
+    required List<int>? chordVisibleIndexes,
+    required List<_RenderNote> visible,
     required NotationMetrics metrics,
   }) {
     final center = Offset(note.x + note.headDx, note.y);
+    var chordTopY = center.dy;
+    var chordBottomY = center.dy;
+    final isChordAnchor =
+        chordVisibleIndexes != null && chordVisibleIndexes.length > 1;
+    if (isChordAnchor) {
+      for (final visibleIndex in chordVisibleIndexes) {
+        final chordNoteY = visible[visibleIndex].y;
+        if (chordNoteY < chordTopY) {
+          chordTopY = chordNoteY;
+        }
+        if (chordNoteY > chordBottomY) {
+          chordBottomY = chordNoteY;
+        }
+      }
+    }
     final baseResolution = _resolveBaseSlurAnchorResolution(
       note: note,
       center: center,
       isAbove: isAbove,
       isStart: isStart,
-      isChordAnchor: false,
-      chordTopY: center.dy,
-      chordBottomY: center.dy,
+      isChordAnchor: isChordAnchor,
+      chordTopY: chordTopY,
+      chordBottomY: chordBottomY,
       hasNearbyAccidental: note.accidentalToRender != null,
       hasNearbyDot: note.note.dotCount > 0,
       hasNearbyStaccato: note.note.isStaccato,
@@ -712,6 +737,8 @@ extension on GameNotePainter {
         endAnchor + endNormal * (endThickness * outerThicknessRatio);
     final innerStart =
         startAnchor - startNormal * (endThickness * innerThicknessRatio);
+    final innerEnd =
+        endAnchor - endNormal * (endThickness * innerThicknessRatio);
 
     final outerControl1 =
         control1 + (startNormal * 0.62 + midNormal * 0.38) * middleThickness;
@@ -732,6 +759,7 @@ extension on GameNotePainter {
         outerEnd.dx,
         outerEnd.dy,
       )
+      ..lineTo(innerEnd.dx, innerEnd.dy)
       ..cubicTo(
         innerControl2.dx,
         innerControl2.dy,

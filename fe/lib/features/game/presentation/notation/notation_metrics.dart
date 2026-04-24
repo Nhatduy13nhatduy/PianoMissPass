@@ -138,7 +138,7 @@ class NotationMetrics {
   double get slurStackOverlapPadding =>
       _scaledClamp(staffSpace * 0.55, 4.0, 10.0);
   double get slurShoulderDropRatio => 0.1;
-  double get slurEndThickness => _scaledClamp(staffSpace * 0.12, 0.9, 1.7);
+  double get slurEndThickness => _scaledClamp(staffSpace * 0.08, 0.65, 1.25);
   double get slurMiddleThickness => _scaledClamp(staffSpace * 0.24, 1.8, 3.2);
   double get slurOuterThicknessRatio => 0.66;
   double get slurInnerThicknessRatio => 0.34;

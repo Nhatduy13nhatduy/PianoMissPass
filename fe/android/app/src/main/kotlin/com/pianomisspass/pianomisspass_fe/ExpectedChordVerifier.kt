@@ -9,7 +9,7 @@ import kotlin.math.sqrt
 class ExpectedChordVerifier(
     private val groupingWindowMs: Long = 130L,
     private val minimumGroupedFrames: Int = 2,
-    private val rmsGate: Double = 0.007,
+    private val rmsGate: Double = 0.02,
     private val absoluteScoreThreshold: Double = 0.12,
     private val relativeScoreThreshold: Double = 0.58,
     private val peakRatioThreshold: Double = 1.16,
@@ -59,7 +59,7 @@ class ExpectedChordVerifier(
         }
 
         val isChord = expectedMidis.size > 1
-        val resolvedRmsGate = if (isChord) 0.0085 else rmsGate
+        val resolvedRmsGate = max(rmsGate, if (isChord) 0.0085 else rmsGate)
         val resolvedAbsoluteThreshold = if (isChord) 0.135 else absoluteScoreThreshold
         val resolvedRelativeThreshold = if (isChord) 0.68 else relativeScoreThreshold
         val resolvedPeakRatioThreshold = if (isChord) 1.20 else peakRatioThreshold
@@ -76,7 +76,7 @@ class ExpectedChordVerifier(
             )
         }
 
-        val scoredMidis = expectedMidis.associateWith { midi ->
+        val rawScoredMidis = expectedMidis.associateWith { midi ->
             scoreExpectedMidi(
                 floatBuffer = floatBuffer,
                 sampleRate = sampleRate,
@@ -86,6 +86,7 @@ class ExpectedChordVerifier(
                 isChord = isChord,
             )
         }
+        val scoredMidis = suppressUpperOctaveShadows(rawScoredMidis)
         val maxScore = scoredMidis.values.maxOrNull() ?: 0.0
         if (maxScore < resolvedAbsoluteThreshold) {
             return DetectionResult(
@@ -145,65 +146,78 @@ class ExpectedChordVerifier(
         peakRatioThreshold: Double,
         isChord: Boolean,
     ): Double {
-        val octaveCandidates = buildPitchClassOctaveCandidates(expectedMidi)
-        var score = 0.0
-        var bestBaseScore = 0.0
-
-        for ((candidateMidi, weight) in octaveCandidates) {
-            val baseFrequency = midiToFrequency(candidateMidi)
-            if (baseFrequency >= sampleRate / 2.0) {
-                continue
-            }
-
-            val fundamentalScore = peakedScore(
-                floatBuffer = floatBuffer,
-                sampleRate = sampleRate,
-                frequencyHz = baseFrequency,
-                rms = rms,
-                peakRatioThreshold = peakRatioThreshold,
-            )
-            val harmonic2 = peakedScore(
-                floatBuffer = floatBuffer,
-                sampleRate = sampleRate,
-                frequencyHz = baseFrequency * 2.0,
-                rms = rms,
-                peakRatioThreshold = peakRatioThreshold * 0.96,
-            ) * if (isChord) 0.34 else 0.24
-            val harmonic3 = peakedScore(
-                floatBuffer = floatBuffer,
-                sampleRate = sampleRate,
-                frequencyHz = baseFrequency * 3.0,
-                rms = rms,
-                peakRatioThreshold = peakRatioThreshold * 0.93,
-            ) * if (isChord) 0.18 else 0.12
-
-            val candidateScore = max(
-                fundamentalScore,
-                fundamentalScore * if (isChord) 0.72 else 0.82 +
-                    harmonic2 +
-                    harmonic3,
-            )
-            bestBaseScore = max(bestBaseScore, fundamentalScore)
-            score += candidateScore * weight
-        }
-
-        if (bestBaseScore <= 0.0) {
+        val baseFrequency = midiToFrequency(expectedMidi)
+        if (baseFrequency >= sampleRate / 2.0) {
             return 0.0
         }
 
-        return score
+        val fundamentalScore = peakedScore(
+            floatBuffer = floatBuffer,
+            sampleRate = sampleRate,
+            frequencyHz = baseFrequency,
+            rms = rms,
+            peakRatioThreshold = peakRatioThreshold,
+        )
+        if (fundamentalScore <= 0.0) {
+            return 0.0
+        }
+
+        // Nếu đang kiểm tra C4/D4/E4..., nhưng trong buffer có C3/D3/E3 mạnh,
+        // thì năng lượng ở octave trên rất có thể chỉ là harmonic bậc 2 của octave dưới.
+        // Rule này chặn lỗi: C3 -> C3 + C4, D3 -> D3 + D4, E3 -> E3 + E4...
+        val lowerOctaveScore = if (baseFrequency / 2.0 > 20.0) {
+            peakedScore(
+                floatBuffer = floatBuffer,
+                sampleRate = sampleRate,
+                frequencyHz = baseFrequency / 2.0,
+                rms = rms,
+                peakRatioThreshold = peakRatioThreshold * 0.90,
+            )
+        } else {
+            0.0
+        }
+        if (lowerOctaveScore >= fundamentalScore * LOWER_OCTAVE_SUPPRESSION_RATIO) {
+            return 0.0
+        }
+
+        val harmonic2 = peakedScore(
+            floatBuffer = floatBuffer,
+            sampleRate = sampleRate,
+            frequencyHz = baseFrequency * 2.0,
+            rms = rms,
+            peakRatioThreshold = peakRatioThreshold * 0.96,
+        ) * if (isChord) 0.30 else 0.18
+        val harmonic3 = peakedScore(
+            floatBuffer = floatBuffer,
+            sampleRate = sampleRate,
+            frequencyHz = baseFrequency * 3.0,
+            rms = rms,
+            peakRatioThreshold = peakRatioThreshold * 0.93,
+        ) * if (isChord) 0.14 else 0.08
+
+        return max(
+            fundamentalScore,
+            fundamentalScore * if (isChord) 0.76 else 0.86 + harmonic2 + harmonic3,
+        )
     }
 
-    private fun buildPitchClassOctaveCandidates(expectedMidi: Int): List<Pair<Int, Double>> {
-        val candidates = mutableListOf<Pair<Int, Double>>()
-        val octaveOffsets = listOf(0 to 1.0, -12 to 0.32, 12 to 0.32, -24 to 0.10, 24 to 0.10)
-        for ((offset, weight) in octaveOffsets) {
-            val midi = expectedMidi + offset
-            if (midi in MIN_PIANO_MIDI..MAX_PIANO_MIDI) {
-                candidates += midi to weight
+    private fun suppressUpperOctaveShadows(scoresByMidi: Map<Int, Double>): Map<Int, Double> {
+        if (scoresByMidi.size < 2) {
+            return scoresByMidi
+        }
+
+        val mutableScores = scoresByMidi.toMutableMap()
+        for ((midi, score) in scoresByMidi) {
+            if (score <= 0.0) continue
+
+            val upperMidi = midi + 12
+            val upperScore = mutableScores[upperMidi] ?: continue
+
+            if (upperScore <= score * UPPER_OCTAVE_SHADOW_RATIO) {
+                mutableScores[upperMidi] = 0.0
             }
         }
-        return candidates
+        return mutableScores
     }
 
     private fun peakedScore(
@@ -282,8 +296,8 @@ class ExpectedChordVerifier(
     }
 
     private companion object {
-        const val MIN_PIANO_MIDI: Int = 21
-        const val MAX_PIANO_MIDI: Int = 108
         val SEMITONE_RATIO: Double = 2.0.pow(1.0 / 12.0)
+        const val LOWER_OCTAVE_SUPPRESSION_RATIO: Double = 0.58
+        const val UPPER_OCTAVE_SHADOW_RATIO: Double = 0.92
     }
 }

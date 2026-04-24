@@ -312,24 +312,6 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                       onPressed: cubit.pause,
                     ),
                   ),
-                if (state.isPlaying)
-                  Positioned(
-                    top: 68,
-                    left: 16,
-                    child: _ActiveInputNotesBadge(
-                      activeMidis: state.activeInputMidis,
-                    ),
-                  ),
-                if (state.isPlaying &&
-                    state.inputMode == GameInputMode.microphone &&
-                    state.microphoneDebug != null)
-                  Positioned(
-                    top: 116,
-                    left: 16,
-                    child: _MicrophoneDebugOverlay(
-                      debug: state.microphoneDebug!,
-                    ),
-                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1517,134 +1499,6 @@ class _PlaybackButton extends StatelessWidget {
   }
 }
 
-class _ActiveInputNotesBadge extends StatelessWidget {
-  const _ActiveInputNotesBadge({required this.activeMidis});
-
-  final Set<int> activeMidis;
-
-  @override
-  Widget build(BuildContext context) {
-    final labels = activeMidis.toList()..sort();
-    final text = labels.isEmpty
-        ? '-'
-        : labels.map(_midiToNoteLabel).join('  ');
-
-    return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xCC0E1620),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0x33FFFFFF)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MicrophoneDebugOverlay extends StatelessWidget {
-  const _MicrophoneDebugOverlay({required this.debug});
-
-  final GameMicrophoneDebugData debug;
-
-  @override
-  Widget build(BuildContext context) {
-    final scoreEntries = debug.scoresByMidi.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final visibleScores = scoreEntries.take(6).map((entry) {
-      return '${_midiToNoteLabel(entry.key)} ${entry.value.toStringAsFixed(2)}';
-    }).join('\n');
-    final expectedText = debug.expectedMidis.isEmpty
-        ? '-'
-        : (debug.expectedMidis.toList()..sort()).map(_midiToNoteLabel).join(' ');
-    final detectedText = debug.detectedMidis.isEmpty
-        ? '-'
-        : (debug.detectedMidis.toList()..sort()).map(_midiToNoteLabel).join(' ');
-
-    return IgnorePointer(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 220),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xD9101722),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0x33FFFFFF)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: DefaultTextStyle(
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                height: 1.25,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RMS ${debug.rms.toStringAsFixed(3)}  Max ${debug.maxScore.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('Exp: $expectedText'),
-                  Text('Det: $detectedText'),
-                  if (visibleScores.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      visibleScores,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        color: Color(0xFFDCE8FF),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _midiToNoteLabel(int midi) {
-  const pitchNames = <String>[
-    'C',
-    'C#',
-    'D',
-    'D#',
-    'E',
-    'F',
-    'F#',
-    'G',
-    'G#',
-    'A',
-    'A#',
-    'B',
-  ];
-  final pitchClass = midi % 12;
-  final octave = (midi ~/ 12) - 1;
-  return '${pitchNames[pitchClass]}$octave';
-}
-
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.error, required this.onRetry});
 
@@ -2421,9 +2275,9 @@ class _StaffScrollerPainter extends CustomPainter {
     return switch (restType) {
       'whole' => (lineSpacing * 1.38).clamp(12.0 * scale, 22.0 * scale),
       'half' => (lineSpacing * 1.38).clamp(12.0 * scale, 22.0 * scale),
-      'quarter' => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
-      '8th' => (lineSpacing * 2.55).clamp(20.0 * scale, 40.0 * scale),
-      '16th' => (lineSpacing * 2.8).clamp(22.0 * scale, 43.0 * scale),
+      'quarter' => (lineSpacing * 1.9).clamp(16.0 * scale, 30.0 * scale),
+      '8th' => (lineSpacing * 2.1).clamp(17.0 * scale, 33.0 * scale),
+      '16th' => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
       '32th' ||
       '32nd' => (lineSpacing * 3.05).clamp(24.0 * scale, 46.0 * scale),
       _ => (lineSpacing * 2.3).clamp(18.0 * scale, 36.0 * scale),
