@@ -413,13 +413,16 @@ class GameNotePainter {
         isActive,
         colors: score.colors,
       );
+      final fadeHoldDistanceMultiplier = _fadeHoldDistanceMultiplierForJudge(
+        item.status,
+      );
       final noteColor = _notePainterApplyOpacity(
         baseNoteColor,
         _notePainterLeftFadeOpacityAtX(
           center.dx,
           playheadX,
           metrics,
-          holdDistanceMultiplier: 1.8,
+          holdDistanceMultiplier: fadeHoldDistanceMultiplier,
         ),
       );
       final passPulseScale = _passPulseScaleForNote(
@@ -496,8 +499,6 @@ class GameNotePainter {
         staffTop: item.isUpperStaff ? trebleTop : bassTop,
         spacing: lineSpacing,
         color: ledgerColor,
-        playheadX: playheadX,
-        metrics: metrics,
       );
 
       if (shouldHideTail && shouldDrawStem) {
@@ -555,7 +556,7 @@ class GameNotePainter {
                   .dx,
               playheadX,
               metrics,
-              holdDistanceMultiplier: 1.8,
+              holdDistanceMultiplier: fadeHoldDistanceMultiplier,
             ),
           ),
         ));
@@ -573,7 +574,7 @@ class GameNotePainter {
             (dotAnchorByVisibleIndex[visibleIndex] ?? center).dx,
             playheadX,
             metrics,
-            holdDistanceMultiplier: 1.8,
+            holdDistanceMultiplier: fadeHoldDistanceMultiplier,
           ),
         ),
         anchor: dotAnchorByVisibleIndex[visibleIndex],
@@ -633,14 +634,14 @@ class GameNotePainter {
           isTreble: referenceItem.isTreble,
           color: _notePainterApplyOpacity(
             baseNoteColor,
-            _notePainterLeftFadeOpacityAtX(
-              referenceCenter.dx,
-              playheadX,
-              metrics,
-              holdDistanceMultiplier: 1.8,
-            ),
-          ),
-        ));
+             _notePainterLeftFadeOpacityAtX(
+               referenceCenter.dx,
+               playheadX,
+               metrics,
+               holdDistanceMultiplier: fadeHoldDistanceMultiplier,
+             ),
+           ),
+         ));
       }
 
       final fingering = item.note.fingering;
@@ -673,7 +674,7 @@ class GameNotePainter {
                   anchor.dx,
                   playheadX,
                   metrics,
-                  holdDistanceMultiplier: 1.8,
+                  holdDistanceMultiplier: fadeHoldDistanceMultiplier,
                 ),
               ),
             ));
@@ -1692,8 +1693,6 @@ class GameNotePainter {
     required double staffTop,
     required double spacing,
     required Color color,
-    required double playheadX,
-    required NotationMetrics metrics,
   }) {
     final bottomLine = isTreble ? _trebleBottomLineStep : _bassBottomLineStep;
     final topLine = bottomLine + 8;
@@ -1712,25 +1711,10 @@ class GameNotePainter {
         ledgerStep += 2
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
-        final fadedPaint = Paint()
-          ..color = color
-          ..strokeWidth = ledgerPaint.strokeWidth;
-        _notePainterApplyLeftFadeToPaint(
-          fadedPaint,
-          baseColor: color,
-          bounds: Rect.fromLTRB(
-            centerX - leftHalfLength,
-            y - 1.0,
-            centerX + halfLength,
-            y + 1.0,
-          ),
-          playheadX: playheadX,
-          metrics: metrics,
-        );
         canvas.drawLine(
           Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
-          fadedPaint,
+          ledgerPaint,
         );
       }
     }
@@ -1742,25 +1726,10 @@ class GameNotePainter {
         ledgerStep -= 2
       ) {
         final y = _yForStaffStep(ledgerStep, isTreble, staffTop, spacing);
-        final fadedPaint = Paint()
-          ..color = color
-          ..strokeWidth = ledgerPaint.strokeWidth;
-        _notePainterApplyLeftFadeToPaint(
-          fadedPaint,
-          baseColor: color,
-          bounds: Rect.fromLTRB(
-            centerX - leftHalfLength,
-            y - 1.0,
-            centerX + halfLength,
-            y + 1.0,
-          ),
-          playheadX: playheadX,
-          metrics: metrics,
-        );
         canvas.drawLine(
           Offset(centerX - leftHalfLength, y),
           Offset(centerX + halfLength, y),
-          fadedPaint,
+          ledgerPaint,
         );
       }
     }
@@ -2262,6 +2231,12 @@ class GameNotePainter {
       _NoteJudge.pass => colors.note.pass,
       _NoteJudge.miss => colors.note.miss,
       _NoteJudge.pending => isActive ? colors.note.active : colors.note.idle,
+    };
+  }
+
+  double _fadeHoldDistanceMultiplierForJudge(_NoteJudge judge) {
+    return switch (judge) {
+      _NoteJudge.pass || _NoteJudge.miss || _NoteJudge.pending => 3.6,
     };
   }
 

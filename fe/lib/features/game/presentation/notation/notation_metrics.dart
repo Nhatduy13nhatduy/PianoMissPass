@@ -196,18 +196,18 @@ class NotationMetrics {
 
   double get keyboardTopInset => (staffHeight * 0.82).clamp(44.0, 62.0);
   double get keyboardWhiteHeight {
-    var height = screenHeight * 0.135;
+    var height = screenHeight * 0.108;
     if (aspectRatio >= 2.1) {
       height *= 0.94;
     } else if (aspectRatio <= 1.45) {
       height *= 1.08;
     }
-    return height.clamp(54.0, 86.0).toDouble();
+    return height.clamp(43.0, 69.0).toDouble();
   }
 
   double get keyboardBlackHeightRatio {
-    final ratio = aspectRatio >= 2.1 ? 0.6 : 0.62;
-    return ratio.clamp(0.56, 0.66).toDouble();
+    final ratio = aspectRatio >= 2.1 ? 0.77 : 0.79;
+    return ratio.clamp(0.72, 0.84).toDouble();
   }
 
   double get keyboardBlackWidthRatio {

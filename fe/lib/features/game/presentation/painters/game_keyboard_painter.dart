@@ -149,6 +149,12 @@ class GameKeyboardPainter {
         final x = whiteIndex * whiteWidth - blackWidth / 2;
         final isActive = active.contains(midi);
         final pressDepth = isActive ? metrics.keyboardBlackPressDepth : 0.0;
+        final blackKeyBaseRect = Rect.fromLTWH(
+          x,
+          keyboardTop - 1.0,
+          blackWidth,
+          blackHeight,
+        );
         final keyRect = Rect.fromLTWH(
           x,
           keyboardTop - 1.0 + pressDepth,
@@ -156,6 +162,11 @@ class GameKeyboardPainter {
           blackHeight - pressDepth,
         );
         final blackRadius = _radiusFromRatio(keyRect.width, blackCornerRatio);
+        final blackKeyBaseRRect = RRect.fromRectAndCorners(
+          blackKeyBaseRect,
+          bottomLeft: blackRadius,
+          bottomRight: blackRadius,
+        );
         final keyRRect = RRect.fromRectAndCorners(
           keyRect,
           bottomLeft: blackRadius,
@@ -195,6 +206,10 @@ class GameKeyboardPainter {
               BlurStyle.normal,
               metrics.keyboardBlackShadowBlur,
             ),
+        );
+        canvas.drawRRect(
+          blackKeyBaseRRect,
+          Paint()..color = score.colors.keyboard.black,
         );
         canvas.drawRRect(keyRRect, fill);
         canvas.drawRRect(

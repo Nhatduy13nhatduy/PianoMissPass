@@ -68,6 +68,9 @@ extension on GameNotePainter {
         final startVisibleIndex =
             visibleIndexByScoreIndex[segment.startNoteIndex];
         final endVisibleIndex = visibleIndexByScoreIndex[segment.endNoteIndex];
+        if (endVisibleIndex == null) {
+          continue;
+        }
         final projectedStart = _projectSlurRenderNote(
           score: score,
           precomputedScore: precomputedScore,

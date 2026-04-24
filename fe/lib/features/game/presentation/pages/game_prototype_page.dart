@@ -42,6 +42,10 @@ class _GamePrototypeChromeScope extends StatefulWidget {
 }
 
 class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
+  static const MethodChannel _screenControlChannel = MethodChannel(
+    'pianomisspass/screen_control',
+  );
+
   bool _showKeyboard = true;
   double _staffHeightScale = 1.0;
   _SettingsTab _selectedSettingsTab = _SettingsTab.gameplay;
@@ -56,6 +60,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   Color _passAccentColor = _defaultColors.note.pass;
   Color _missAccentColor = _defaultColors.note.miss;
   Color _judgeLineColor = _defaultColors.staff.judgeLine;
+  bool _isKeepingScreenOn = false;
 
   static const GameColorScheme _defaultColors = GameColorScheme.classic;
   static const List<(String, GameStaffBackground)> _backgroundPresets = [
@@ -222,6 +227,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
 
   @override
   void dispose() {
+    _setKeepScreenOn(false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
@@ -235,13 +241,18 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<GamePrototypeCubit>();
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (_, _) {
-        cubit.pause();
+    return BlocListener<GamePrototypeCubit, GamePrototypeState>(
+      listenWhen: (previous, current) => previous.isPlaying != current.isPlaying,
+      listener: (_, state) {
+        _setKeepScreenOn(state.isPlaying);
       },
-      child: Scaffold(
-        body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
+      child: PopScope(
+        canPop: true,
+        onPopInvokedWithResult: (_, _) {
+          cubit.pause();
+        },
+        child: Scaffold(
+          body: BlocBuilder<GamePrototypeCubit, GamePrototypeState>(
           buildWhen: (previous, current) =>
               previous.isLoading != current.isLoading ||
               previous.errorMessage != current.errorMessage ||
@@ -489,9 +500,25 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
               ],
             );
           },
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _setKeepScreenOn(bool enabled) async {
+    if (_isKeepingScreenOn == enabled) {
+      return;
+    }
+    _isKeepingScreenOn = enabled;
+    try {
+      await _screenControlChannel.invokeMethod<void>(
+        'setKeepScreenOn',
+        <String, Object>{'enabled': enabled},
+      );
+    } catch (_) {
+      // Ignore platform errors and fall back to the system default behavior.
+    }
   }
 }
 
@@ -1642,18 +1669,40 @@ class _StaffScrollerPainter extends CustomPainter {
     final bassClefY = bassTop + metrics.clefBaselineOffsetY;
 
     final playheadX = metrics.fixedPlayheadX;
-    final activeKeyFifths = _activeKeyFifths(score, currentMs);
-    _paintKeySignature(
-      canvas,
-      fifths: activeKeyFifths,
-      colors: score.colors,
-      metrics: metrics,
-      trebleTop: trebleTop,
-      bassTop: bassTop,
-      drawTreble: showUpperStaff,
-      drawBass: showLowerStaff && !_debugHideLowerStaff,
+    final keySignatureTransition = _resolveKeySignatureTransition(
+      score,
+      visuals,
+      currentMs,
     );
-    if (!_shouldHideTimeSignatureForKeyFifths(activeKeyFifths)) {
+    if (keySignatureTransition.fromOpacity > 0.0 &&
+        _shouldUseKeySignature(keySignatureTransition.fromFifths)) {
+      _paintKeySignature(
+        canvas,
+        fifths: keySignatureTransition.fromFifths,
+        colors: score.colors,
+        metrics: metrics,
+        trebleTop: trebleTop,
+        bassTop: bassTop,
+        drawTreble: showUpperStaff,
+        drawBass: showLowerStaff && !_debugHideLowerStaff,
+        opacity: keySignatureTransition.fromOpacity,
+      );
+    }
+    if (keySignatureTransition.toOpacity > 0.0 &&
+        _shouldUseKeySignature(keySignatureTransition.toFifths)) {
+      _paintKeySignature(
+        canvas,
+        fifths: keySignatureTransition.toFifths,
+        colors: score.colors,
+        metrics: metrics,
+        trebleTop: trebleTop,
+        bassTop: bassTop,
+        drawTreble: showUpperStaff,
+        drawBass: showLowerStaff && !_debugHideLowerStaff,
+        opacity: keySignatureTransition.toOpacity,
+      );
+    }
+    if (keySignatureTransition.timeSignatureOpacity > 0.0) {
       _paintTimeSignature(
         canvas,
         top: score.beatsPerMeasure,
@@ -1665,6 +1714,7 @@ class _StaffScrollerPainter extends CustomPainter {
         bassTop: bassTop,
         drawTreble: showUpperStaff,
         drawBass: showLowerStaff && !_debugHideLowerStaff,
+        opacity: keySignatureTransition.timeSignatureOpacity,
       );
     }
 
@@ -1984,6 +2034,121 @@ class _StaffScrollerPainter extends CustomPainter {
 
   bool _shouldHideTimeSignatureForKeyFifths(int fifths) {
     return fifths.abs() >= 5;
+  }
+
+  _KeySignatureTransition _resolveKeySignatureTransition(
+    ScoreData score,
+    _PrecomputedScoreVisuals visuals,
+    int currentMs,
+  ) {
+    final activeFifths = _activeKeyFifths(score, currentMs);
+    if (score.keySignatures.isEmpty) {
+      return _KeySignatureTransition(
+        fromFifths: activeFifths,
+        toFifths: activeFifths,
+        fromOpacity: 0.0,
+        toOpacity: _shouldUseKeySignature(activeFifths) ? 1.0 : 0.0,
+        timeSignatureOpacity: _shouldHideTimeSignatureForKeyFifths(activeFifths)
+            ? 0.0
+            : 1.0,
+      );
+    }
+
+    KeySignatureChange? nextChange;
+    KeySignatureChange? previousChange;
+    for (final change in score.keySignatures) {
+      if (change.timeMs <= currentMs) {
+        previousChange = change;
+        continue;
+      }
+      nextChange = change;
+      break;
+    }
+
+    if (nextChange == null) {
+      return _KeySignatureTransition(
+        fromFifths: activeFifths,
+        toFifths: activeFifths,
+        fromOpacity: 0.0,
+        toOpacity: _shouldUseKeySignature(activeFifths) ? 1.0 : 0.0,
+        timeSignatureOpacity: _shouldHideTimeSignatureForKeyFifths(activeFifths)
+            ? 0.0
+            : 1.0,
+      );
+    }
+
+    final transitionStartMs = _transitionStartMsForKeyChange(
+      changeTimeMs: nextChange.timeMs,
+      measureStartTimes: visuals.measureStartTimes,
+      score: score,
+    );
+    if (transitionStartMs <= 0) {
+      return _KeySignatureTransition(
+        fromFifths: activeFifths,
+        toFifths: activeFifths,
+        fromOpacity: 0.0,
+        toOpacity: _shouldUseKeySignature(activeFifths) ? 1.0 : 0.0,
+        timeSignatureOpacity: _shouldHideTimeSignatureForKeyFifths(activeFifths)
+            ? 0.0
+            : 1.0,
+      );
+    }
+    if (currentMs < transitionStartMs) {
+      return _KeySignatureTransition(
+        fromFifths: activeFifths,
+        toFifths: activeFifths,
+        fromOpacity: 0.0,
+        toOpacity: _shouldUseKeySignature(activeFifths) ? 1.0 : 0.0,
+        timeSignatureOpacity: _shouldHideTimeSignatureForKeyFifths(activeFifths)
+            ? 0.0
+            : 1.0,
+      );
+    }
+
+    final fromFifths = previousChange?.fifths ?? 0;
+    final toFifths = nextChange.fifths;
+    final transitionDurationMs = (nextChange.timeMs - transitionStartMs).abs();
+    final progress = transitionDurationMs <= 0
+        ? 1.0
+        : ((currentMs - transitionStartMs) / transitionDurationMs)
+              .clamp(0.0, 1.0)
+              .toDouble();
+
+    final fromVisible = _shouldUseKeySignature(fromFifths);
+    final toVisible = _shouldUseKeySignature(toFifths);
+    final fromTimeSigVisible = !_shouldHideTimeSignatureForKeyFifths(fromFifths);
+    final toTimeSigVisible = !_shouldHideTimeSignatureForKeyFifths(toFifths);
+    return _KeySignatureTransition(
+      fromFifths: fromFifths,
+      toFifths: toFifths,
+      fromOpacity: fromVisible ? 1.0 - progress : 0.0,
+      toOpacity: toVisible ? progress : 0.0,
+      timeSignatureOpacity: _lerpDouble(
+        fromTimeSigVisible ? 1.0 : 0.0,
+        toTimeSigVisible ? 1.0 : 0.0,
+        progress,
+      ),
+    );
+  }
+
+  int _transitionStartMsForKeyChange({
+    required int changeTimeMs,
+    required List<int> measureStartTimes,
+    required ScoreData score,
+  }) {
+    for (var i = measureStartTimes.length - 1; i >= 0; i--) {
+      final measureStart = measureStartTimes[i];
+      if (measureStart < changeTimeMs) {
+        return measureStart;
+      }
+    }
+    final beatMs = 60000.0 / score.bpm;
+    final measureMs = (score.beatsPerMeasure * beatMs).round();
+    return changeTimeMs - measureMs;
+  }
+
+  double _lerpDouble(double from, double to, double t) {
+    return from + (to - from) * t;
   }
 
   _PrecomputedScoreVisuals _getPrecomputedScoreVisuals(ScoreData score) {
@@ -2427,6 +2592,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
+    double opacity = 1.0,
     bool drawTreble = true,
     bool drawBass = true,
   }) {
@@ -2472,7 +2638,7 @@ class _StaffScrollerPainter extends CustomPainter {
           canvas,
           Offset(x, trebleY - glyphFontSize * 0.55 + glyphBaselineNudge),
           glyph,
-          color: colors.notation.keySignature,
+          color: _withOpacity(colors.notation.keySignature, opacity),
           fontSize: glyphFontSize,
           fontWeight: FontWeight.w400,
           maxWidth: glyphFontSize * 1.4,
@@ -2485,7 +2651,7 @@ class _StaffScrollerPainter extends CustomPainter {
           canvas,
           Offset(x, bassY - glyphFontSize * 0.55 + glyphBaselineNudge),
           glyph,
-          color: colors.notation.keySignature,
+          color: _withOpacity(colors.notation.keySignature, opacity),
           fontSize: glyphFontSize,
           fontWeight: FontWeight.w400,
           maxWidth: glyphFontSize * 1.4,
@@ -2507,6 +2673,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required NotationMetrics metrics,
     required double trebleTop,
     required double bassTop,
+    double opacity = 1.0,
     bool drawTreble = true,
     bool drawBass = true,
   }) {
@@ -2580,7 +2747,7 @@ class _StaffScrollerPainter extends CustomPainter {
         canvas,
         Offset(topX, trebleTopY),
         topText,
-        color: colors.notation.timeSignature,
+        color: _withOpacity(colors.notation.timeSignature, opacity),
         fontSize: effectiveFontSize,
         fontWeight: FontWeight.w400,
         maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -2591,7 +2758,7 @@ class _StaffScrollerPainter extends CustomPainter {
         canvas,
         Offset(bottomX, trebleBottomY),
         bottomText,
-        color: colors.notation.timeSignature,
+        color: _withOpacity(colors.notation.timeSignature, opacity),
         fontSize: effectiveFontSize,
         fontWeight: FontWeight.w400,
         maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -2622,7 +2789,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(topX, bassTopY),
       topText,
-      color: colors.notation.timeSignature,
+      color: _withOpacity(colors.notation.timeSignature, opacity),
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -2633,7 +2800,7 @@ class _StaffScrollerPainter extends CustomPainter {
       canvas,
       Offset(bottomX, bassBottomY),
       bottomText,
-      color: colors.notation.timeSignature,
+      color: _withOpacity(colors.notation.timeSignature, opacity),
       fontSize: effectiveFontSize,
       fontWeight: FontWeight.w400,
       maxWidth: blockWidth + metrics.timeSignatureMaxWidthPadding,
@@ -2705,6 +2872,22 @@ class _PrecomputedScoreVisuals {
   final List<int> measureStartTimes;
   final List<_PreparedTimedSymbol> timedSymbols;
   final Map<int, List<_ClefSymbolEvent>> clefEventsByStaff;
+}
+
+class _KeySignatureTransition {
+  const _KeySignatureTransition({
+    required this.fromFifths,
+    required this.toFifths,
+    required this.fromOpacity,
+    required this.toOpacity,
+    required this.timeSignatureOpacity,
+  });
+
+  final int fromFifths;
+  final int toFifths;
+  final double fromOpacity;
+  final double toOpacity;
+  final double timeSignatureOpacity;
 }
 
 enum _PreparedSymbolKind { barline, keySignature, rest, clef, other }
