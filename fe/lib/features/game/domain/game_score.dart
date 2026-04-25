@@ -64,6 +64,9 @@ class ScoreMeasureSpan {
     required this.endTimeMs,
     required this.beatsPerMeasure,
     required this.beatUnit,
+    required this.actualQuarterCount,
+    required this.lastOnsetQuarterCount,
+    required this.isImplicit,
   });
 
   final int measureIndex;
@@ -71,6 +74,9 @@ class ScoreMeasureSpan {
   final int endTimeMs;
   final int beatsPerMeasure;
   final int beatUnit;
+  final double actualQuarterCount;
+  final double lastOnsetQuarterCount;
+  final bool isImplicit;
 }
 
 class GameColorScheme {
@@ -486,6 +492,7 @@ class MxlPartNode {
 class MxlMeasureNode {
   const MxlMeasureNode({
     required this.number,
+    required this.isImplicit,
     required this.width,
     required this.notes,
     required this.elements,
@@ -493,6 +500,7 @@ class MxlMeasureNode {
   });
 
   final int? number;
+  final bool isImplicit;
   final double? width;
   final List<MxlNoteNode> notes;
   final List<MxlElementNode> elements;
@@ -645,6 +653,9 @@ MxlDocumentData parseMxlDocument(Uint8List bytes) {
       measures.add(
         MxlMeasureNode(
           number: int.tryParse(measureElement.getAttribute('number') ?? ''),
+          isImplicit:
+              measureElement.getAttribute('implicit')?.trim().toLowerCase() ==
+              'yes',
           width: double.tryParse(measureElement.getAttribute('width') ?? ''),
           notes: noteNodes,
           elements: elements,

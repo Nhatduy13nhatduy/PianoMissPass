@@ -442,6 +442,13 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         endTimeMs: measureEndMs,
         beatsPerMeasure: beats,
         beatUnit: beatType,
+        actualQuarterCount: measureDivisions <= 0
+            ? 0.0
+            : (measureMaxDiv / measureDivisions),
+        lastOnsetQuarterCount: measureDivisions <= 0
+            ? 0.0
+            : (measureLastOnsetDiv / measureDivisions),
+        isImplicit: measure.isImplicit,
         hasForwardRepeat: _hasForwardRepeatBarline(measure),
         hasBackwardRepeat: _hasBackwardRepeatBarline(measure),
       ),
@@ -577,7 +584,20 @@ _ExpandedScoreData _expandScoreForRepeats({
 }) {
   if (measureSpans.isEmpty) {
     return _ExpandedScoreData(
-      measureSpans: const <ScoreMeasureSpan>[],
+      measureSpans: List<ScoreMeasureSpan>.unmodifiable(
+        measureSpans.map(
+          (span) => ScoreMeasureSpan(
+            measureIndex: span.measureIndex,
+            startTimeMs: span.startTimeMs,
+            endTimeMs: span.endTimeMs,
+            beatsPerMeasure: span.beatsPerMeasure,
+            beatUnit: span.beatUnit,
+            actualQuarterCount: span.actualQuarterCount,
+            lastOnsetQuarterCount: span.lastOnsetQuarterCount,
+            isImplicit: span.isImplicit,
+          ),
+        ),
+      ),
       notes: List<MusicNote>.unmodifiable(notes),
       playbackNotes: List<MusicNote>.unmodifiable(playbackNotes),
       slurs: List<SlurSpan>.unmodifiable(slurs),
@@ -757,6 +777,9 @@ _ExpandedScoreData _expandScoreForRepeats({
         endTimeMs: futureSpan.endTimeMs + timeShiftMs,
         beatsPerMeasure: futureSpan.beatsPerMeasure,
         beatUnit: futureSpan.beatUnit,
+        actualQuarterCount: futureSpan.actualQuarterCount,
+        lastOnsetQuarterCount: futureSpan.lastOnsetQuarterCount,
+        isImplicit: futureSpan.isImplicit,
         hasForwardRepeat: futureSpan.hasForwardRepeat,
         hasBackwardRepeat: futureSpan.hasBackwardRepeat,
       );
@@ -797,6 +820,9 @@ _ExpandedScoreData _expandScoreForRepeats({
           endTimeMs: span.endTimeMs,
           beatsPerMeasure: span.beatsPerMeasure,
           beatUnit: span.beatUnit,
+          actualQuarterCount: span.actualQuarterCount,
+          lastOnsetQuarterCount: span.lastOnsetQuarterCount,
+          isImplicit: span.isImplicit,
         ),
       ),
     ),
@@ -1382,6 +1408,9 @@ class _RepeatMeasureSpan {
     required this.endTimeMs,
     required this.beatsPerMeasure,
     required this.beatUnit,
+    required this.actualQuarterCount,
+    required this.lastOnsetQuarterCount,
+    required this.isImplicit,
     required this.hasForwardRepeat,
     required this.hasBackwardRepeat,
   });
@@ -1391,6 +1420,9 @@ class _RepeatMeasureSpan {
   final int endTimeMs;
   final int beatsPerMeasure;
   final int beatUnit;
+  final double actualQuarterCount;
+  final double lastOnsetQuarterCount;
+  final bool isImplicit;
   final bool hasForwardRepeat;
   final bool hasBackwardRepeat;
 }

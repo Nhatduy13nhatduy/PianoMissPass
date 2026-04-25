@@ -104,10 +104,7 @@ class ScoreVisualTimelineMapper {
   }
 
   double visualMeasureDurationMs(ScoreMeasureSpan span) {
-    final beatUnit = span.beatUnit <= 0 ? 4 : span.beatUnit;
-    return span.beatsPerMeasure *
-        (4.0 / beatUnit) *
-        NoteTiming.defaultTimelineMsPerDurationDivision;
+    return _visualMeasureDurationMsForSpan(span);
   }
 
   int _spanIndexForRealMs(double realMs) {
@@ -145,12 +142,18 @@ class ScoreVisualTimelineMapper {
     var current = 0.0;
     for (final span in spans) {
       starts.add(current);
-      final beatUnit = span.beatUnit <= 0 ? 4 : span.beatUnit;
-      current +=
-          span.beatsPerMeasure *
-          (4.0 / beatUnit) *
-          NoteTiming.defaultTimelineMsPerDurationDivision;
+      current += _visualMeasureDurationMsForSpan(span);
     }
     return List<double>.unmodifiable(starts);
+  }
+
+  static double _visualMeasureDurationMsForSpan(ScoreMeasureSpan span) {
+    final effectiveQuarterCount =
+        span.actualQuarterCount > 0
+            ? span.actualQuarterCount
+            : (span.beatsPerMeasure *
+                  (4.0 / (span.beatUnit <= 0 ? 4 : span.beatUnit)));
+    return effectiveQuarterCount *
+        NoteTiming.defaultTimelineMsPerDurationDivision;
   }
 }
