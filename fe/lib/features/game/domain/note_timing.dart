@@ -15,6 +15,8 @@ class NoteTiming {
   static const int minTimelineMsPerDurationDivision = 80;
   static const int maxTimelineMsPerDurationDivision = 1600;
   static const int timelineMsPerDurationDivisionStep = 80;
+  static final Expando<ScoreVisualTimelineMapper> _timelineMapperCache =
+      Expando<ScoreVisualTimelineMapper>('score-visual-timeline-mapper');
 
   static double timelineMultiplierFromMsPerDurationDivision(
     int timelineMsPerDurationDivision,
@@ -35,19 +37,120 @@ class NoteTiming {
     ScoreData score, {
     required int timelineMsPerDurationDivision,
   }) {
-    if (score.bpm <= 0) {
-      return baseNotePxPerMs;
-    }
+    return notePxPerMsForTimeline(
+      timelineMsPerDurationDivision: timelineMsPerDurationDivision,
+    );
+  }
 
-    final realQuarterMs = 60000.0 / score.bpm;
-    if (realQuarterMs <= 0) {
-      return baseNotePxPerMs;
-    }
+  static double notePxPerMsForTimeline({
+    required int timelineMsPerDurationDivision,
+  }) {
+    return baseNotePxPerMs *
+        (timelineMsPerDurationDivision / defaultTimelineMsPerDurationDivision);
+  }
 
-    return baseNotePxPerMs * (timelineMsPerDurationDivision / realQuarterMs);
+  static ScoreVisualTimelineMapper visualTimelineForScore(ScoreData score) {
+    final cached = _timelineMapperCache[score];
+    if (cached != null) {
+      return cached;
+    }
+    final mapper = ScoreVisualTimelineMapper._(score.measureSpans);
+    _timelineMapperCache[score] = mapper;
+    return mapper;
   }
 
   static int adjustedHitTimeMs(MusicNote note) {
     return note.hitTimeMs;
+  }
+}
+
+class ScoreVisualTimelineMapper {
+  ScoreVisualTimelineMapper._(List<ScoreMeasureSpan> measureSpans)
+    : _measureSpans = List<ScoreMeasureSpan>.unmodifiable(
+        List<ScoreMeasureSpan>.from(measureSpans)
+          ..sort((a, b) => a.startTimeMs.compareTo(b.startTimeMs)),
+      ),
+      _visualMeasureStartMs = _buildVisualMeasureStartMs(measureSpans);
+
+  final List<ScoreMeasureSpan> _measureSpans;
+  final List<double> _visualMeasureStartMs;
+
+  double visualTimeForRealMs(num realMs) {
+    if (_measureSpans.isEmpty) {
+      return realMs.toDouble();
+    }
+
+    final spanIndex = _spanIndexForRealMs(realMs.toDouble());
+    final span = _measureSpans[spanIndex];
+    final visualStartMs = _visualMeasureStartMs[spanIndex];
+    final visualDurationMs = visualMeasureDurationMs(span);
+    final realDurationMs = (span.endTimeMs - span.startTimeMs).toDouble();
+    if (realDurationMs <= 0 || visualDurationMs <= 0) {
+      return visualStartMs;
+    }
+
+    final progress =
+        ((realMs.toDouble() - span.startTimeMs) / realDurationMs).toDouble();
+    return visualStartMs + (progress * visualDurationMs);
+  }
+
+  double visualMeasureDurationAtRealMs(num realMs) {
+    if (_measureSpans.isEmpty) {
+      return NoteTiming.defaultTimelineMsPerDurationDivision.toDouble();
+    }
+    return visualMeasureDurationMs(
+      _measureSpans[_spanIndexForRealMs(realMs.toDouble())],
+    );
+  }
+
+  double visualMeasureDurationMs(ScoreMeasureSpan span) {
+    final beatUnit = span.beatUnit <= 0 ? 4 : span.beatUnit;
+    return span.beatsPerMeasure *
+        (4.0 / beatUnit) *
+        NoteTiming.defaultTimelineMsPerDurationDivision;
+  }
+
+  int _spanIndexForRealMs(double realMs) {
+    if (_measureSpans.length == 1) {
+      return 0;
+    }
+
+    var low = 0;
+    var high = _measureSpans.length;
+    while (low < high) {
+      final mid = low + ((high - low) >> 1);
+      if (_measureSpans[mid].endTimeMs <= realMs) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    if (low >= _measureSpans.length) {
+      return _measureSpans.length - 1;
+    }
+    return low;
+  }
+
+  static List<double> _buildVisualMeasureStartMs(
+    List<ScoreMeasureSpan> measureSpans,
+  ) {
+    if (measureSpans.isEmpty) {
+      return const <double>[];
+    }
+
+    final spans = List<ScoreMeasureSpan>.from(measureSpans)
+      ..sort((a, b) => a.startTimeMs.compareTo(b.startTimeMs));
+    final starts = <double>[];
+    var current = 0.0;
+    for (final span in spans) {
+      starts.add(current);
+      final beatUnit = span.beatUnit <= 0 ? 4 : span.beatUnit;
+      current +=
+          span.beatsPerMeasure *
+          (4.0 / beatUnit) *
+          NoteTiming.defaultTimelineMsPerDurationDivision;
+    }
+    return List<double>.unmodifiable(starts);
   }
 }

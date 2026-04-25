@@ -1586,11 +1586,12 @@ class _StaffScrollerPainter extends CustomPainter {
     final passAnimationStartMsByNoteIndex =
         passAnimationStartMsByNoteIndexListenable.value;
     final visuals = _getPrecomputedScoreVisuals(score);
+    final timelineMapper = NoteTiming.visualTimelineForScore(score);
     final baseMetrics = NotationMetrics.fromCanvasSize(size);
-    final notePxPerMs = NoteTiming.notePxPerMsForScore(
-      score,
+    final notePxPerMs = NoteTiming.notePxPerMsForTimeline(
       timelineMsPerDurationDivision: timelineMsPerDurationDivision,
     );
+    final currentVisualMs = timelineMapper.visualTimeForRealMs(currentMs).round();
     final keyboardHeight = showKeyboard ? baseMetrics.keyboardTotalHeight : 0.0;
     final staffRegionHeight = (size.height - keyboardHeight).clamp(
       0.0,
@@ -1601,8 +1602,7 @@ class _StaffScrollerPainter extends CustomPainter {
       staffRegionHeight: staffRegionHeight,
       staffHeightScale: staffHeightScale,
     );
-    final beatMs = 60000.0 / score.bpm;
-    final measureMs = score.beatsPerMeasure * beatMs;
+    final measureMs = timelineMapper.visualMeasureDurationAtRealMs(currentMs);
     final leftInvisibleMeasurePx = measureMs * notePxPerMs;
     final staffHeight = metrics.staffHeight;
     final keyboardTop = size.height - keyboardHeight;
@@ -1675,7 +1675,8 @@ class _StaffScrollerPainter extends CustomPainter {
     final keySignatureTransition = _resolveKeySignatureTransition(
       score,
       visuals,
-      currentMs,
+      currentVisualMs,
+      timelineMapper,
     );
     if (keySignatureTransition.fromOpacity > 0.0 &&
         _shouldUseKeySignature(keySignatureTransition.fromFifths)) {
@@ -1733,7 +1734,7 @@ class _StaffScrollerPainter extends CustomPainter {
 
     final trebleActiveClef = _mainClefSignForStaffAtAnchor(
       visuals.clefEventsByStaff[1] ?? const <_ClefSymbolEvent>[],
-      currentMs: currentMs,
+      currentMs: currentVisualMs,
       fallback: 'G',
       playheadX: playheadX,
       metrics: metrics,
@@ -1742,7 +1743,7 @@ class _StaffScrollerPainter extends CustomPainter {
     );
     final trebleMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
       visuals.clefEventsByStaff[1] ?? const <_ClefSymbolEvent>[],
-      currentMs: currentMs,
+      currentMs: currentVisualMs,
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: trebleMainClefX,
@@ -1750,7 +1751,7 @@ class _StaffScrollerPainter extends CustomPainter {
     );
     final bassActiveClef = _mainClefSignForStaffAtAnchor(
       visuals.clefEventsByStaff[2] ?? const <_ClefSymbolEvent>[],
-      currentMs: currentMs,
+      currentMs: currentVisualMs,
       fallback: 'F',
       playheadX: playheadX,
       metrics: metrics,
@@ -1759,7 +1760,7 @@ class _StaffScrollerPainter extends CustomPainter {
     );
     final bassMainClefOpacity = _mainClefOpacityForStaffAtAnchor(
       visuals.clefEventsByStaff[2] ?? const <_ClefSymbolEvent>[],
-      currentMs: currentMs,
+      currentMs: currentVisualMs,
       playheadX: playheadX,
       metrics: metrics,
       mainClefX: bassMainClefX,
@@ -1784,9 +1785,10 @@ class _StaffScrollerPainter extends CustomPainter {
       );
     }
 
-    final visibleStartTime = (currentMs - GameNotePainter.cleanupWindowMs)
+    final visibleStartTime = (currentVisualMs - GameNotePainter.cleanupWindowMs)
         .floor();
-    final visibleEndTime = (currentMs + GameNotePainter.previewWindowMs).ceil();
+    final visibleEndTime =
+        (currentVisualMs + GameNotePainter.previewWindowMs).ceil();
     final visibleStartIndex = _lowerBoundPreparedSymbols(
       visuals.timedSymbols,
       visibleStartTime,
@@ -1802,7 +1804,7 @@ class _StaffScrollerPainter extends CustomPainter {
       symbolIndex++
     ) {
       final symbol = visuals.timedSymbols[symbolIndex];
-      final x = playheadX + (symbol.timeMs - currentMs) * notePxPerMs;
+      final x = playheadX + (symbol.timeMs - currentVisualMs) * notePxPerMs;
 
       if (symbol.kind == _PreparedSymbolKind.barline) {
         if (symbol.timeMs <= 0) {
@@ -1852,7 +1854,7 @@ class _StaffScrollerPainter extends CustomPainter {
                 restTimeMs: symbol.timeMs,
                 measureStartTimes: visuals.measureStartTimes,
                 playheadX: playheadX,
-                currentMs: currentMs,
+                currentMs: currentVisualMs,
                 barlineOffsetX: measureLineOffsetX,
                 notePxPerMs: notePxPerMs,
               )
@@ -1930,7 +1932,7 @@ class _StaffScrollerPainter extends CustomPainter {
         if (clefX <= mainClefX) {
           continue;
         }
-        final passedPlayheadMs = currentMs - symbol.timeMs;
+        final passedPlayheadMs = currentVisualMs - symbol.timeMs;
         final fadeInProgress = (passedPlayheadMs / _clefTransitionMs)
             .clamp(0.0, 1.0)
             .toDouble();
@@ -2050,18 +2052,26 @@ class _StaffScrollerPainter extends CustomPainter {
             timelineMsPerDurationDivision;
   }
 
-  int _activeKeyFifths(ScoreData score, int timeMs) {
+  int _activeKeyFifths(
+    ScoreData score,
+    int timeMs,
+    ScoreVisualTimelineMapper timelineMapper,
+  ) {
     if (score.keySignatures.isEmpty) {
       return 0;
     }
 
-    if (timeMs < score.keySignatures.first.timeMs) {
+    final firstChangeVisualMs = timelineMapper.visualTimeForRealMs(
+      score.keySignatures.first.timeMs,
+    );
+    if (timeMs < firstChangeVisualMs) {
       return score.keySignatures.first.fifths;
     }
 
     var result = 0;
     for (final change in score.keySignatures) {
-      if (change.timeMs <= timeMs) {
+      final changeVisualMs = timelineMapper.visualTimeForRealMs(change.timeMs);
+      if (changeVisualMs <= timeMs) {
         result = change.fifths;
       } else {
         break;
@@ -2102,8 +2112,9 @@ class _StaffScrollerPainter extends CustomPainter {
     ScoreData score,
     _PrecomputedScoreVisuals visuals,
     int currentMs,
+    ScoreVisualTimelineMapper timelineMapper,
   ) {
-    final activeFifths = _activeKeyFifths(score, currentMs);
+    final activeFifths = _activeKeyFifths(score, currentMs, timelineMapper);
     if (score.keySignatures.isEmpty) {
       return _KeySignatureTransition(
         fromFifths: activeFifths,
@@ -2119,7 +2130,8 @@ class _StaffScrollerPainter extends CustomPainter {
     KeySignatureChange? nextChange;
     KeySignatureChange? previousChange;
     for (final change in score.keySignatures) {
-      if (change.timeMs <= currentMs) {
+      final changeVisualMs = timelineMapper.visualTimeForRealMs(change.timeMs);
+      if (changeVisualMs <= currentMs) {
         previousChange = change;
         continue;
       }
@@ -2140,9 +2152,10 @@ class _StaffScrollerPainter extends CustomPainter {
     }
 
     final transitionStartMs = _transitionStartMsForKeyChange(
-      changeTimeMs: nextChange.timeMs,
+      changeTimeMs: timelineMapper.visualTimeForRealMs(nextChange.timeMs).round(),
       measureStartTimes: visuals.measureStartTimes,
       score: score,
+      timelineMapper: timelineMapper,
     );
     if (transitionStartMs <= 0) {
       return _KeySignatureTransition(
@@ -2169,7 +2182,11 @@ class _StaffScrollerPainter extends CustomPainter {
 
     final fromFifths = previousChange?.fifths ?? 0;
     final toFifths = nextChange.fifths;
-    final transitionDurationMs = (nextChange.timeMs - transitionStartMs).abs();
+    final nextChangeVisualMs = timelineMapper.visualTimeForRealMs(
+      nextChange.timeMs,
+    );
+    final transitionDurationMs =
+        (nextChangeVisualMs - transitionStartMs).abs();
     final progress = transitionDurationMs <= 0
         ? 1.0
         : ((currentMs - transitionStartMs) / transitionDurationMs)
@@ -2199,6 +2216,7 @@ class _StaffScrollerPainter extends CustomPainter {
     required int changeTimeMs,
     required List<int> measureStartTimes,
     required ScoreData score,
+    required ScoreVisualTimelineMapper timelineMapper,
   }) {
     for (var i = measureStartTimes.length - 1; i >= 0; i--) {
       final measureStart = measureStartTimes[i];
@@ -2206,9 +2224,11 @@ class _StaffScrollerPainter extends CustomPainter {
         return measureStart;
       }
     }
-    final beatMs = 60000.0 / score.bpm;
-    final measureMs = (score.beatsPerMeasure * beatMs).round();
-    return changeTimeMs - measureMs;
+    final measureMs =
+        score.measureSpans.isEmpty
+            ? NoteTiming.defaultTimelineMsPerDurationDivision.toDouble()
+            : timelineMapper.visualMeasureDurationMs(score.measureSpans.first);
+    return changeTimeMs - measureMs.round();
   }
 
   double _lerpDouble(double from, double to, double t) {
@@ -2224,20 +2244,23 @@ class _StaffScrollerPainter extends CustomPainter {
     final measureStartTimes = <int>[];
     final timedSymbols = <_PreparedTimedSymbol>[];
     final clefEventsByStaff = <int, List<_ClefSymbolEvent>>{};
+    final timelineMapper = NoteTiming.visualTimelineForScore(score);
     int? lastBarlineMeasureIndex;
 
     for (final symbol in score.symbols) {
       final label = symbol.label;
+      final visualTimeMs = timelineMapper.visualTimeForRealMs(symbol.timeMs)
+          .round();
       if (label == '|') {
         if (symbol.measureIndex != null &&
             symbol.measureIndex == lastBarlineMeasureIndex) {
           continue;
         }
         lastBarlineMeasureIndex = symbol.measureIndex;
-        measureStartTimes.add(symbol.timeMs);
+        measureStartTimes.add(visualTimeMs);
         timedSymbols.add(
           _PreparedTimedSymbol(
-            timeMs: symbol.timeMs,
+            timeMs: visualTimeMs,
             label: label,
             kind: _PreparedSymbolKind.barline,
           ),
@@ -2248,7 +2271,7 @@ class _StaffScrollerPainter extends CustomPainter {
       if (label.startsWith('Key ')) {
         timedSymbols.add(
           _PreparedTimedSymbol(
-            timeMs: symbol.timeMs,
+            timeMs: visualTimeMs,
             label: label,
             kind: _PreparedSymbolKind.keySignature,
           ),
@@ -2260,7 +2283,7 @@ class _StaffScrollerPainter extends CustomPainter {
       if (rest != null) {
         timedSymbols.add(
           _PreparedTimedSymbol(
-            timeMs: symbol.timeMs,
+            timeMs: visualTimeMs,
             label: label,
             kind: _PreparedSymbolKind.rest,
             restSymbol: rest,
@@ -2273,10 +2296,10 @@ class _StaffScrollerPainter extends CustomPainter {
       if (clef != null) {
         clefEventsByStaff
             .putIfAbsent(clef.staffNumber, () => <_ClefSymbolEvent>[])
-            .add(_ClefSymbolEvent(timeMs: symbol.timeMs, sign: clef.sign));
+            .add(_ClefSymbolEvent(timeMs: visualTimeMs, sign: clef.sign));
         timedSymbols.add(
           _PreparedTimedSymbol(
-            timeMs: symbol.timeMs,
+            timeMs: visualTimeMs,
             label: label,
             kind: _PreparedSymbolKind.clef,
             clefSymbol: clef,
@@ -2287,7 +2310,7 @@ class _StaffScrollerPainter extends CustomPainter {
 
       timedSymbols.add(
         _PreparedTimedSymbol(
-          timeMs: symbol.timeMs,
+          timeMs: visualTimeMs,
           label: label,
           kind: _PreparedSymbolKind.other,
         ),

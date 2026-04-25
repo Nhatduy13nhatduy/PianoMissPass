@@ -15,6 +15,7 @@ class ScoreData {
     required this.bpm,
     required this.beatsPerMeasure,
     required this.beatUnit,
+    required this.measureSpans,
     required this.notes,
     required this.playbackNotes,
     required this.slurs,
@@ -28,6 +29,7 @@ class ScoreData {
   final double bpm;
   final int beatsPerMeasure;
   final int beatUnit;
+  final List<ScoreMeasureSpan> measureSpans;
   final List<MusicNote> notes;
   final List<MusicNote> playbackNotes;
   final List<SlurSpan> slurs;
@@ -42,6 +44,7 @@ class ScoreData {
       bpm: bpm,
       beatsPerMeasure: beatsPerMeasure,
       beatUnit: beatUnit,
+      measureSpans: measureSpans,
       notes: notes,
       playbackNotes: playbackNotes,
       slurs: slurs,
@@ -52,6 +55,22 @@ class ScoreData {
       maxMidi: maxMidi,
     );
   }
+}
+
+class ScoreMeasureSpan {
+  const ScoreMeasureSpan({
+    required this.measureIndex,
+    required this.startTimeMs,
+    required this.endTimeMs,
+    required this.beatsPerMeasure,
+    required this.beatUnit,
+  });
+
+  final int measureIndex;
+  final int startTimeMs;
+  final int endTimeMs;
+  final int beatsPerMeasure;
+  final int beatUnit;
 }
 
 class GameColorScheme {

@@ -6,6 +6,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       bpm: 100,
       beatsPerMeasure: 4,
       beatUnit: 4,
+      measureSpans: <ScoreMeasureSpan>[],
       notes: <MusicNote>[],
       playbackNotes: <MusicNote>[],
       slurs: <SlurSpan>[],
@@ -439,6 +440,8 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
         measureIndex: logicalMeasureIndex,
         startTimeMs: measureStartMs,
         endTimeMs: measureEndMs,
+        beatsPerMeasure: beats,
+        beatUnit: beatType,
         hasForwardRepeat: _hasForwardRepeatBarline(measure),
         hasBackwardRepeat: _hasBackwardRepeatBarline(measure),
       ),
@@ -497,6 +500,7 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     bpm: bpm,
     beatsPerMeasure: beats,
     beatUnit: beatType,
+    measureSpans: unfolded.measureSpans,
     notes: unfolded.notes,
     playbackNotes: unfolded.playbackNotes,
     slurs: unfolded.slurs,
@@ -573,6 +577,7 @@ _ExpandedScoreData _expandScoreForRepeats({
 }) {
   if (measureSpans.isEmpty) {
     return _ExpandedScoreData(
+      measureSpans: const <ScoreMeasureSpan>[],
       notes: List<MusicNote>.unmodifiable(notes),
       playbackNotes: List<MusicNote>.unmodifiable(playbackNotes),
       slurs: List<SlurSpan>.unmodifiable(slurs),
@@ -750,6 +755,8 @@ _ExpandedScoreData _expandScoreForRepeats({
         measureIndex: futureSpan.measureIndex,
         startTimeMs: futureSpan.startTimeMs + timeShiftMs,
         endTimeMs: futureSpan.endTimeMs + timeShiftMs,
+        beatsPerMeasure: futureSpan.beatsPerMeasure,
+        beatUnit: futureSpan.beatUnit,
         hasForwardRepeat: futureSpan.hasForwardRepeat,
         hasBackwardRepeat: futureSpan.hasBackwardRepeat,
       );
@@ -782,6 +789,17 @@ _ExpandedScoreData _expandScoreForRepeats({
   });
 
   return _ExpandedScoreData(
+    measureSpans: List<ScoreMeasureSpan>.unmodifiable(
+      expandedMeasureSpans.map(
+        (span) => ScoreMeasureSpan(
+          measureIndex: span.measureIndex,
+          startTimeMs: span.startTimeMs,
+          endTimeMs: span.endTimeMs,
+          beatsPerMeasure: span.beatsPerMeasure,
+          beatUnit: span.beatUnit,
+        ),
+      ),
+    ),
     notes: List<MusicNote>.unmodifiable(expandedNotes),
     playbackNotes: List<MusicNote>.unmodifiable(expandedPlaybackNotes),
     slurs: List<SlurSpan>.unmodifiable(remappedSlurs),
@@ -1362,6 +1380,8 @@ class _RepeatMeasureSpan {
     required this.measureIndex,
     required this.startTimeMs,
     required this.endTimeMs,
+    required this.beatsPerMeasure,
+    required this.beatUnit,
     required this.hasForwardRepeat,
     required this.hasBackwardRepeat,
   });
@@ -1369,12 +1389,15 @@ class _RepeatMeasureSpan {
   final int measureIndex;
   final int startTimeMs;
   final int endTimeMs;
+  final int beatsPerMeasure;
+  final int beatUnit;
   final bool hasForwardRepeat;
   final bool hasBackwardRepeat;
 }
 
 class _ExpandedScoreData {
   const _ExpandedScoreData({
+    required this.measureSpans,
     required this.notes,
     required this.playbackNotes,
     required this.slurs,
@@ -1382,6 +1405,7 @@ class _ExpandedScoreData {
     required this.keySignatures,
   });
 
+  final List<ScoreMeasureSpan> measureSpans;
   final List<MusicNote> notes;
   final List<MusicNote> playbackNotes;
   final List<SlurSpan> slurs;

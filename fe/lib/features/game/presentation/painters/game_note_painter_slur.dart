@@ -29,8 +29,13 @@ extension on GameNotePainter {
     }
 
     final spacing = metrics.staffSpace;
-    final beatMs = 60000.0 / score.bpm;
-    final measureMs = score.beatsPerMeasure * beatMs;
+    final timelineMapper = NoteTiming.visualTimelineForScore(score);
+    final measureMs =
+        score.measureSpans.isEmpty
+            ? NoteTiming.defaultTimelineMsPerDurationDivision.toDouble()
+            : score.measureSpans
+                .map(timelineMapper.visualMeasureDurationMs)
+                .reduce(math.max);
     final leftInvisibleMeasurePx = measureMs * notePxPerMs;
     final slurLaneCache =
         GameNotePainter._slurLaneCacheByScore[score] ?? <String, int>{};

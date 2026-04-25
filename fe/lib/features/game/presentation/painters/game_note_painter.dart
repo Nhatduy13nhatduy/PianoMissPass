@@ -82,6 +82,8 @@ class GameNotePainter {
     required double notePxPerMs,
   }) {
     final lineSpacing = metrics.staffSpace;
+    final timelineMapper = NoteTiming.visualTimelineForScore(score);
+    final currentVisualMs = timelineMapper.visualTimeForRealMs(currentMs).round();
     final precomputedScore = _getPrecomputedScoreRenderData(score);
     final precomputedNotes = precomputedScore.notes;
     final maxBeamLookbackMs = precomputedScore
@@ -107,8 +109,7 @@ class GameNotePainter {
         beamLastAdjustedHitMsByScoreIndex[scoreIndex] = lastAdjustedHitMs;
       }
     }
-    final beatMs = 60000.0 / score.bpm;
-    final measureMs = score.beatsPerMeasure * beatMs;
+    final measureMs = timelineMapper.visualMeasureDurationAtRealMs(currentMs);
     final leftInvisibleMeasureMs = measureMs;
     final leftInvisibleMeasurePx = leftInvisibleMeasureMs * notePxPerMs;
     final preRenderRightMs = measureMs * _preRenderMeasuresRight;
@@ -119,13 +120,14 @@ class GameNotePainter {
     );
     final effectiveLeftCleanupMs = cleanupWindowMs + leftInvisibleMeasureMs;
     final windowStartMs =
-        (currentMs -
+        (currentVisualMs -
                 effectiveLeftCleanupMs -
                 _renderWindowPaddingMs -
                 maxBeamLookbackMs)
             .floor();
     final windowEndMs =
-        (currentMs + effectivePreviewWindowMs + _renderWindowPaddingMs).ceil();
+        (currentVisualMs + effectivePreviewWindowMs + _renderWindowPaddingMs)
+            .ceil();
     final startIndex = _lowerBoundAdjustedHitMs(
       precomputedNotes,
       windowStartMs,
@@ -140,7 +142,7 @@ class GameNotePainter {
       final anchorTime =
           precomputedScore.beamAnchorAdjustedHitMsByScoreIndex[i] ??
           adjustedHitMs;
-      final anchorDelta = anchorTime - currentMs;
+      final anchorDelta = anchorTime - currentVisualMs;
       if (anchorDelta > effectivePreviewWindowMs ||
           anchorDelta < -effectiveLeftCleanupMs) {
         continue;
@@ -151,12 +153,13 @@ class GameNotePainter {
           : missedNoteIndexes.contains(i)
           ? _NoteJudge.miss
           : _NoteJudge.pending;
-      final x = playheadX + (adjustedHitMs - currentMs) * notePxPerMs;
+      final x = playheadX + (adjustedHitMs - currentVisualMs) * notePxPerMs;
       final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
       final beamLastAdjustedHitMs = beamLastAdjustedHitMsByScoreIndex[i];
       final beamLastX = beamLastAdjustedHitMs == null
           ? null
-          : playheadX + (beamLastAdjustedHitMs - currentMs) * notePxPerMs;
+          : playheadX +
+                (beamLastAdjustedHitMs - currentVisualMs) * notePxPerMs;
       final keepForBeam = beamLastX != null && beamLastX >= leftCullX;
       if (((x < leftCullX) && !keepForBeam) ||
           x > size.width + preRenderRightPx) {
@@ -407,7 +410,7 @@ class GameNotePainter {
       final accidentalToRender = item.accidentalToRender;
       final headDx = item.headDx;
       final center = Offset(item.x + headDx, item.y);
-      final isActive = (item.adjustedHitMs - currentMs).abs() <= 45;
+      final isActive = (item.adjustedHitMs - currentVisualMs).abs() <= 45;
       final baseNoteColor = _noteInkColor(
         item.status,
         isActive,
@@ -761,7 +764,7 @@ class GameNotePainter {
       fingeringAnchorByVisibleIndex: fingeringAnchorByVisibleIndex,
       beamEdgeYByVisibleIndex: beamEdgeYByVisibleIndex,
       size: size,
-      currentMs: currentMs,
+      currentMs: currentVisualMs,
       playheadX: playheadX,
       trebleTop: trebleTop,
       bassTop: bassTop,
@@ -778,6 +781,7 @@ class GameNotePainter {
 
     final clefChangesByStaff = _buildClefChangeTimelineByStaff(score);
     final keyChanges = score.keySignatures;
+    final timelineMapper = NoteTiming.visualTimelineForScore(score);
     bool? previousIsUpperStaff;
     final precomputedNotes = <_PrecomputedRenderNote>[];
     var keyChangeIndex = 0;
@@ -806,7 +810,9 @@ class GameNotePainter {
 
       precomputedNotes.add(
         _PrecomputedRenderNote(
-          adjustedHitMs: NoteTiming.adjustedHitTimeMs(note),
+          adjustedHitMs: timelineMapper
+              .visualTimeForRealMs(NoteTiming.adjustedHitTimeMs(note))
+              .round(),
           isUpperStaff: isUpperStaff,
           isTreble: isTreble,
           durationType: _durationTypeFromNote(note, score.bpm),
