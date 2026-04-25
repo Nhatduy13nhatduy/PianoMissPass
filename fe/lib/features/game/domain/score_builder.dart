@@ -638,6 +638,8 @@ _ExpandedScoreData _expandScoreForRepeats({
     final segmentStartMs = repeatedMeasureSpans.first.startTimeMs;
     final segmentEndMs = repeatedMeasureSpans.last.endTimeMs;
     final timeShiftMs = segmentEndMs - segmentStartMs;
+    final measureIndexShift = repeatedMeasureSpans.length;
+    final repeatedSegmentEndMeasureIndex = repeatedMeasureSpans.last.measureIndex;
     if (timeShiftMs <= 0) {
       continue;
     }
@@ -650,7 +652,11 @@ _ExpandedScoreData _expandScoreForRepeats({
       if (note.hitTimeMs < segmentStartMs || note.hitTimeMs >= segmentEndMs) {
         continue;
       }
-      final duplicated = _shiftMusicNote(note, timeShiftMs);
+      final duplicated = _shiftMusicNote(
+        note,
+        timeShiftMs,
+        measureIndexShift: measureIndexShift,
+      );
       noteIndexMap[noteIndex] = expandedNotes.length;
       expandedNotes.add(duplicated);
     }
@@ -658,7 +664,13 @@ _ExpandedScoreData _expandScoreForRepeats({
     for (var noteIndex = 0; noteIndex < originalNoteCount; noteIndex++) {
       final note = expandedNotes[noteIndex];
       if (note.hitTimeMs >= insertionTimeMs) {
-        expandedNotes[noteIndex] = _shiftMusicNote(note, timeShiftMs);
+        expandedNotes[noteIndex] = _shiftMusicNote(
+          note,
+          timeShiftMs,
+          measureIndexShift: note.measureIndex > repeatedSegmentEndMeasureIndex
+              ? measureIndexShift
+              : 0,
+        );
       }
     }
 
@@ -667,11 +679,24 @@ _ExpandedScoreData _expandScoreForRepeats({
       final note = expandedPlaybackNotes[iPlayback];
       if (note.hitTimeMs < segmentStartMs || note.hitTimeMs >= segmentEndMs) {
         if (note.hitTimeMs >= insertionTimeMs) {
-          expandedPlaybackNotes[iPlayback] = _shiftMusicNote(note, timeShiftMs);
+          expandedPlaybackNotes[iPlayback] = _shiftMusicNote(
+            note,
+            timeShiftMs,
+            measureIndexShift:
+                note.measureIndex > repeatedSegmentEndMeasureIndex
+                ? measureIndexShift
+                : 0,
+          );
         }
         continue;
       }
-      expandedPlaybackNotes.add(_shiftMusicNote(note, timeShiftMs));
+      expandedPlaybackNotes.add(
+        _shiftMusicNote(
+          note,
+          timeShiftMs,
+          measureIndexShift: measureIndexShift,
+        ),
+      );
     }
 
     final originalSymbolCount = expandedSymbols.length;
@@ -687,7 +712,11 @@ _ExpandedScoreData _expandScoreForRepeats({
         expandedSymbols[symbolIndex] = MusicSymbol(
           label: symbol.label,
           timeMs: symbol.timeMs + timeShiftMs,
-          measureIndex: symbol.measureIndex,
+          measureIndex:
+              symbol.measureIndex != null &&
+                  symbol.measureIndex! > repeatedSegmentEndMeasureIndex
+              ? symbol.measureIndex! + measureIndexShift
+              : symbol.measureIndex,
         );
       }
     }
@@ -696,7 +725,9 @@ _ExpandedScoreData _expandScoreForRepeats({
         MusicSymbol(
           label: symbol.label,
           timeMs: symbol.timeMs + timeShiftMs,
-          measureIndex: symbol.measureIndex,
+          measureIndex: symbol.measureIndex == null
+              ? null
+              : symbol.measureIndex! + measureIndexShift,
         ),
       );
     }
@@ -746,6 +777,8 @@ _ExpandedScoreData _expandScoreForRepeats({
         expandedSlurs[slurIndex],
         insertionTimeMs: insertionTimeMs,
         timeShiftMs: timeShiftMs,
+        repeatedSegmentEndMeasureIndex: repeatedSegmentEndMeasureIndex,
+        measureIndexShift: measureIndexShift,
       );
     }
 
@@ -763,16 +796,40 @@ _ExpandedScoreData _expandScoreForRepeats({
         slur,
         noteIndexMap: noteIndexMap,
         timeShiftMs: timeShiftMs,
+        measureIndexShift: measureIndexShift,
       );
       if (duplicated != null) {
         expandedSlurs.add(duplicated);
       }
     }
 
+    final duplicatedMeasureSpans = repeatedMeasureSpans
+        .map(
+          (repeatedSpan) => _RepeatMeasureSpan(
+            measureIndex: repeatedSpan.measureIndex + measureIndexShift,
+            startTimeMs: repeatedSpan.startTimeMs + timeShiftMs,
+            endTimeMs: repeatedSpan.endTimeMs + timeShiftMs,
+            beatsPerMeasure: repeatedSpan.beatsPerMeasure,
+            beatUnit: repeatedSpan.beatUnit,
+            actualQuarterCount: repeatedSpan.actualQuarterCount,
+            lastOnsetQuarterCount: repeatedSpan.lastOnsetQuarterCount,
+            isImplicit: repeatedSpan.isImplicit,
+            hasForwardRepeat: false,
+            hasBackwardRepeat: false,
+          ),
+        )
+        .toList(growable: false);
+
     for (var spanIndex = i + 1; spanIndex < expandedMeasureSpans.length; spanIndex++) {
       final futureSpan = expandedMeasureSpans[spanIndex];
+      if (futureSpan.startTimeMs < insertionTimeMs) {
+        continue;
+      }
       expandedMeasureSpans[spanIndex] = _RepeatMeasureSpan(
-        measureIndex: futureSpan.measureIndex,
+        measureIndex:
+            futureSpan.measureIndex > repeatedSegmentEndMeasureIndex
+            ? futureSpan.measureIndex + measureIndexShift
+            : futureSpan.measureIndex,
         startTimeMs: futureSpan.startTimeMs + timeShiftMs,
         endTimeMs: futureSpan.endTimeMs + timeShiftMs,
         beatsPerMeasure: futureSpan.beatsPerMeasure,
@@ -784,6 +841,8 @@ _ExpandedScoreData _expandScoreForRepeats({
         hasBackwardRepeat: futureSpan.hasBackwardRepeat,
       );
     }
+
+    expandedMeasureSpans.addAll(duplicatedMeasureSpans);
   }
 
   final indexedExpandedNotes = expandedNotes.indexed
@@ -858,7 +917,11 @@ int _compareMusicNotes(MusicNote a, MusicNote b) {
   return a.staffStep.compareTo(b.staffStep);
 }
 
-MusicNote _shiftMusicNote(MusicNote note, int timeShiftMs) {
+MusicNote _shiftMusicNote(
+  MusicNote note,
+  int timeShiftMs, {
+  int measureIndexShift = 0,
+}) {
   return MusicNote(
     midi: note.midi,
     staffStep: note.staffStep,
@@ -868,7 +931,7 @@ MusicNote _shiftMusicNote(MusicNote note, int timeShiftMs) {
     accidental: note.accidental,
     isTrebleFromMxl: note.isTrebleFromMxl,
     staffNumber: note.staffNumber,
-    measureIndex: note.measureIndex,
+    measureIndex: note.measureIndex + measureIndexShift,
     notatedBeats: note.notatedBeats,
     primaryBeam: note.primaryBeam,
     secondaryBeam: note.secondaryBeam,
@@ -921,6 +984,7 @@ SlurSpan? _duplicateSlurSpan(
   SlurSpan slur, {
   required Map<int, int> noteIndexMap,
   required int timeShiftMs,
+  required int measureIndexShift,
 }) {
   final duplicatedEvents = <SlurEvent>[];
   for (final event in slur.events) {
@@ -935,7 +999,7 @@ SlurSpan? _duplicateSlurSpan(
         eventType: event.eventType,
         noteIndex: remappedNoteIndex,
         timeMs: event.timeMs + timeShiftMs,
-        measureIndex: event.measureIndex,
+        measureIndex: event.measureIndex + measureIndexShift,
         voice: event.voice,
         staffNumber: event.staffNumber,
         staffStep: event.staffStep,
@@ -992,6 +1056,8 @@ SlurSpan _shiftSlurSpanTimesAfter(
   SlurSpan slur, {
   required int insertionTimeMs,
   required int timeShiftMs,
+  required int repeatedSegmentEndMeasureIndex,
+  required int measureIndexShift,
 }) {
   final shiftedEvents = slur.events
       .map(
@@ -1003,7 +1069,11 @@ SlurSpan _shiftSlurSpanTimesAfter(
           timeMs: event.timeMs >= insertionTimeMs
               ? event.timeMs + timeShiftMs
               : event.timeMs,
-          measureIndex: event.measureIndex,
+          measureIndex:
+              event.timeMs >= insertionTimeMs &&
+                  event.measureIndex > repeatedSegmentEndMeasureIndex
+              ? event.measureIndex + measureIndexShift
+              : event.measureIndex,
           voice: event.voice,
           staffNumber: event.staffNumber,
           staffStep: event.staffStep,
