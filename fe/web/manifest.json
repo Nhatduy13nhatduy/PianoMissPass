@@ -1,11 +1,11 @@
 {
-    "name": "pianomisspass_fe",
-    "short_name": "pianomisspass_fe",
+    "name": "Piano Practice",
+    "short_name": "Piano Practice",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#212739",
+    "theme_color": "#212739",
+    "description": "Piano Practice - Practice piano with sheets and MIDI.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

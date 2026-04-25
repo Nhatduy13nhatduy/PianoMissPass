@@ -1,6 +1,6 @@
-# pianomisspass_fe
+# Piano Practice
 
-A new Flutter project.
+Practice piano with interactive sheets and MIDI support.
 
 ## Getting Started
 
