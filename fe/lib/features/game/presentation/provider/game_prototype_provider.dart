@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/staff_background.dart';
@@ -6,42 +9,19 @@ import '../../domain/staff_background.dart';
 enum GamePrototypeSettingsTab { gameplay, color }
 
 class GamePrototypeSettingsProvider extends ChangeNotifier {
-  GamePrototypeSettingsProvider();
+  GamePrototypeSettingsProvider() {
+    unawaited(_loadBackgroundPresets());
+  }
 
   static const GameColorScheme defaultColors = GameColorScheme.classic;
+  static const Color defaultBackgroundFallbackColor = Color(0xFFE5EFE5);
+  static const String _backgroundAssetDirectory = 'assets/backgrounds/';
 
-  static const List<(String, GameStaffBackground)> backgroundPresets = [
-    ('White', GameStaffBackground.color(Color(0xE6F4F4F4))),
-    (
-      'Forest',
-      GameStaffBackground.image(
-        assetPath:
-            'assets/backgrounds/luxury-plain-green-gradient-abstract-studio-background-empty-room-with-space-your-text-picture.jpg',
-        fallbackColor: Color(0xFFE5EFE5),
-      ),
-    ),
-    (
-      'Paper',
-      GameStaffBackground.image(
-        assetPath: 'assets/backgrounds/pexels-fwstudio-33348-172295.jpg',
-        fallbackColor: Color(0xFFF1E6D6),
-      ),
-    ),
-    (
-      'Stone',
-      GameStaffBackground.image(
-        assetPath: 'assets/backgrounds/pexels-pixabay-235985.jpg',
-        fallbackColor: Color(0xFFE8E8E4),
-      ),
-    ),
-    (
-      'Soft',
-      GameStaffBackground.image(
-        assetPath:
-            'assets/backgrounds/f8cd0a0d-0f8a-447f-b73c-37e87c224e31.jpg',
-        fallbackColor: Color(0xFFE7DFD7),
-      ),
-    ),
+  static const List<GameStaffBackground> _solidBackgroundPresets = [
+    GameStaffBackground.color(Color(0xE6F4F4F4)),
+    GameStaffBackground.color(Color(0xFFE5EFE5)),
+    GameStaffBackground.color(Color(0xFFF1E6D6)),
+    GameStaffBackground.color(Color(0xFFE8E8E4)),
   ];
 
   static const List<(String, Color?)> staffBackgroundColorOptions = [
@@ -49,7 +29,7 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
     ('Mist', Color(0x66EDF3F8)),
     ('Warm Paper', Color(0x73F5E8D7)),
     ('Sage', Color(0x666C8268)),
-    ('White', Color(0xE6F4F4F4)),
+    ('White', defaultBackgroundFallbackColor),
   ];
 
   static const List<Color> noteColorOptions = [
@@ -128,8 +108,9 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
   double _staffHeightScale = 1.0;
   GamePrototypeSettingsTab _selectedSettingsTab =
       GamePrototypeSettingsTab.gameplay;
+  List<GameStaffBackground> _backgroundPresets = _defaultBackgroundPresets();
 
-  GameStaffBackground _staffBackground = backgroundPresets.first.$2;
+  GameStaffBackground _staffBackground = _solidBackgroundPresets.first;
   Color? _staffBackgroundColor;
 
   Color _noteColor = defaultColors.note.idle;
@@ -145,6 +126,8 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
   bool get showKeyboard => _showKeyboard;
   double get staffHeightScale => _staffHeightScale;
   GamePrototypeSettingsTab get selectedSettingsTab => _selectedSettingsTab;
+  List<GameStaffBackground> get backgroundPresets =>
+      List.unmodifiable(_backgroundPresets);
 
   GameStaffBackground get staffBackground => _staffBackground;
   Color? get staffBackgroundColor => _staffBackgroundColor;
@@ -299,7 +282,7 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
     _showKeyboard = true;
     _staffHeightScale = 1.0;
     _selectedSettingsTab = GamePrototypeSettingsTab.gameplay;
-    _staffBackground = backgroundPresets.first.$2;
+    _staffBackground = _solidBackgroundPresets.first;
     _staffBackgroundColor = null;
     _noteColor = defaultColors.note.idle;
     _staffStrokeColor = defaultColors.staff.border;
@@ -318,6 +301,64 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
 
   bool _sameOptionalColor(Color? a, Color? b) {
     return a?.value == b?.value && ((a == null) == (b == null));
+  }
+
+  static List<GameStaffBackground> _defaultBackgroundPresets() {
+    return List<GameStaffBackground>.of(_solidBackgroundPresets, growable: false);
+  }
+
+  Future<void> _loadBackgroundPresets() async {
+    try {
+      final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final imagePaths =
+          assetManifest
+              .listAssets()
+              .where(_isSupportedBackgroundAsset)
+              .toList()
+            ..sort();
+      final nextBackgroundPresets = [
+        ..._defaultBackgroundPresets(),
+        ...imagePaths.map<GameStaffBackground>(
+          (assetPath) => GameStaffBackground.image(
+            assetPath: assetPath,
+            fallbackColor: defaultBackgroundFallbackColor,
+          ),
+        ),
+      ];
+      final hasChanged =
+          nextBackgroundPresets.length != _backgroundPresets.length ||
+          !_backgroundPresetListsMatch(nextBackgroundPresets, _backgroundPresets);
+      if (!hasChanged) {
+        return;
+      }
+      _backgroundPresets = nextBackgroundPresets;
+      notifyListeners();
+    } catch (_) {
+      // Keep the built-in solid presets if the asset manifest cannot be read.
+    }
+  }
+
+  static bool _isSupportedBackgroundAsset(String path) {
+    if (!path.startsWith(_backgroundAssetDirectory)) {
+      return false;
+    }
+    final normalizedPath = path.toLowerCase();
+    return normalizedPath.endsWith('.png') ||
+        normalizedPath.endsWith('.jpg') ||
+        normalizedPath.endsWith('.jpeg') ||
+        normalizedPath.endsWith('.webp');
+  }
+
+  bool _backgroundPresetListsMatch(
+    List<GameStaffBackground> a,
+    List<GameStaffBackground> b,
+  ) {
+    for (var i = 0; i < a.length; i++) {
+      if (!_sameBackground(a[i], b[i])) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _sameBackground(GameStaffBackground a, GameStaffBackground b) {

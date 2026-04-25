@@ -322,8 +322,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                                   .passAccentOptions,
                               missAccentOptions: GamePrototypeSettingsProvider
                                   .missAccentOptions,
-                              backgroundOptions: GamePrototypeSettingsProvider
-                                  .backgroundPresets,
+                              backgroundOptions: settings.backgroundPresets,
                               staffBackgroundColorOptions:
                                   GamePrototypeSettingsProvider
                                       .staffBackgroundColorOptions,
@@ -682,11 +681,14 @@ class _GameSettingsOverlay extends StatelessWidget {
     return Material(
       color: const Color(0xFF0B1118),
       child: SafeArea(
-        child: SizedBox.expand(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 0),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final settingsPanelHeight = math.max(
+              260.0,
+              constraints.maxHeight - (hasCompletedSong ? 290.0 : 250.0),
+            );
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -723,27 +725,35 @@ class _GameSettingsOverlay extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF101923),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: const Color(0x1FFFFFFF)),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          GamePrototypeSettingsTabBar(
-                            selectedTab: selectedTab,
-                            onSelectTab: onSelectTab,
-                          ),
-                          const SizedBox(height: 18),
-                          if (selectedTab == GamePrototypeSettingsTab.gameplay)
-                            gameplayControls
-                          else
-                            colorControls,
-                        ],
+                  SizedBox(
+                    height: settingsPanelHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF101923),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0x1FFFFFFF)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            GamePrototypeSettingsTabBar(
+                              selectedTab: selectedTab,
+                              onSelectTab: onSelectTab,
+                            ),
+                            const SizedBox(height: 18),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                key: ValueKey(selectedTab),
+                                child: selectedTab ==
+                                        GamePrototypeSettingsTab.gameplay
+                                    ? gameplayControls
+                                    : colorControls,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -806,8 +816,8 @@ class _GameSettingsOverlay extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -943,7 +953,7 @@ class _GameColorControls extends StatelessWidget {
   final List<Color> neutralGlyphOptions;
   final List<Color> passAccentOptions;
   final List<Color> missAccentOptions;
-  final List<(String, GameStaffBackground)> backgroundOptions;
+  final List<GameStaffBackground> backgroundOptions;
   final List<(String, Color?)> staffBackgroundColorOptions;
   final ValueChanged<Color> onNoteColorChanged;
   final ValueChanged<Color> onStaffStrokeColorChanged;
@@ -1242,7 +1252,7 @@ class _BackgroundPicker extends StatelessWidget {
   });
 
   final GameStaffBackground selected;
-  final List<(String, GameStaffBackground)> options;
+  final List<GameStaffBackground> options;
   final ValueChanged<GameStaffBackground> onSelected;
 
   @override
@@ -1267,12 +1277,11 @@ class _BackgroundPicker extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final option = options[index];
-              final isSelected = _sameBackground(selected, option.$2);
+              final isSelected = _sameBackground(selected, option);
               return _BackgroundOptionCard(
-                label: option.$1,
-                background: option.$2,
+                background: option,
                 selected: isSelected,
-                onTap: () => onSelected(option.$2),
+                onTap: () => onSelected(option),
               );
             },
           ),
@@ -1290,13 +1299,11 @@ class _BackgroundPicker extends StatelessWidget {
 
 class _BackgroundOptionCard extends StatelessWidget {
   const _BackgroundOptionCard({
-    required this.label,
     required this.background,
     required this.selected,
     required this.onTap,
   });
 
-  final String label;
   final GameStaffBackground background;
   final bool selected;
   final VoidCallback onTap;
@@ -1325,25 +1332,7 @@ class _BackgroundOptionCard extends StatelessWidget {
       child: Ink(
         width: 116,
         decoration: decoration,
-        child: Align(
-          alignment: Alignment.bottomLeft,
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0x99000000),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
+        child: null,
       ),
     );
   }
