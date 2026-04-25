@@ -195,6 +195,43 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                           },
                         ),
                       ),
+                      if (state.isPlaying)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: cubit.elapsedMsListenable,
+                              builder: (context, elapsedMs, _) {
+                                if (elapsedMs >= 0) {
+                                  return const SizedBox.shrink();
+                                }
+                                final countdown =
+                                    ((-elapsedMs) / 1000).ceil().clamp(1, 3);
+                                return Center(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withAlpha(84),
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 28,
+                                        vertical: 14,
+                                      ),
+                                      child: Text(
+                                        '$countdown',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 56,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       if (!state.isPlaying)
                         Positioned.fill(
                           child: _GameSettingsOverlay(

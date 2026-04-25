@@ -27,7 +27,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   static const String _soundfontAssetPath =
       'assets/soundfonts/GeneralUser-GS.sf2';
 
-  static const int initialLeadInMs = 5200;
+  static const int initialLeadInMs = 3000;
   static const int lateHitWindowMs = 160;
   static const int earlyHitWindowMs = 240;
   static const int missWindowMs = 240;
@@ -855,6 +855,20 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   int get maxDurationMs => _maxDurationMs;
 
   int _computeMaxDurationMs(ScoreData score) {
+    if (score.measureSpans.isNotEmpty) {
+      final lastMeasure = score.measureSpans.last;
+      final timeSignatureMeasureMs = _timeSignatureMeasureDurationMs(
+        beatsPerMeasure: lastMeasure.beatsPerMeasure,
+        beatUnit: lastMeasure.beatUnit,
+        bpm: score.bpm,
+      );
+      final anchoredEndMs = lastMeasure.endTimeMs > 0
+          ? lastMeasure.endTimeMs
+          : lastMeasure.startTimeMs + timeSignatureMeasureMs.round();
+      return anchoredEndMs +
+          (timeSignatureMeasureMs > 0 ? (timeSignatureMeasureMs).round() : 0);
+    }
+
     final timedNotes = score.playbackNotes.isEmpty
         ? score.notes
         : score.playbackNotes;
@@ -865,7 +879,20 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final last = timedNotes
         .map((note) => note.hitTimeMs + (note.holdMs < 180 ? 180 : note.holdMs))
         .reduce((a, b) => a > b ? a : b);
-    return last + 2400;
+    return last;
+  }
+
+  double _timeSignatureMeasureDurationMs({
+    required int beatsPerMeasure,
+    required int beatUnit,
+    required double bpm,
+  }) {
+    if (bpm <= 0) {
+      return 0.0;
+    }
+    final normalizedBeatUnit = beatUnit <= 0 ? 4 : beatUnit;
+    final quarterMs = 60000.0 / bpm;
+    return beatsPerMeasure * (4.0 / normalizedBeatUnit) * quarterMs;
   }
 
   void _rebuildSongPlaybackEvents(ScoreData score) {
