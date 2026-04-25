@@ -200,11 +200,11 @@ class NotationMetrics {
 
   double get noteInkColorFontScale => staffSpace;
   double get restWholeHalfScaleFactor => 3.55;
-  double get restOtherScaleFactor => 2.8;
+  double get restOtherScaleFactor => 2.35;
   double get restWholeHalfMinFontSize => 41.0 * visualScale;
   double get restWholeHalfMaxFontSize => 98.0 * visualScale;
-  double get restOtherMinFontSize => 32.0 * visualScale;
-  double get restOtherMaxFontSize => 84.0 * visualScale;
+  double get restOtherMinFontSize => 28.0 * visualScale;
+  double get restOtherMaxFontSize => 72.0 * visualScale;
 
   double get keyboardTotalHeight =>
       keyboardWhiteHeight + keyboardBedBottomInset;

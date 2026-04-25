@@ -67,7 +67,6 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
     }
 
     final measureDivisions = divisions;
-    final measureBpm = bpm;
     final measureStartMs = elapsedMs;
     symbols.add(
       MusicSymbol(
@@ -117,16 +116,18 @@ ScoreData buildScoreDataFromMxlDocument(MxlDocumentData document) {
       }
     }
 
+    var measureBpm = bpm;
     for (final direction in _childrenByName(measure.elements, 'direction')) {
       final tempoText = _firstDescendantByName(
         direction,
         'sound',
       )?.attributes['tempo'];
       if (tempoText != null) {
-        bpm = double.tryParse(tempoText) ?? bpm;
+        measureBpm = double.tryParse(tempoText) ?? measureBpm;
+        bpm = measureBpm;
         symbols.add(
           MusicSymbol(
-            label: 'Tempo ${bpm.toStringAsFixed(0)}',
+            label: 'Tempo ${measureBpm.toStringAsFixed(0)}',
             timeMs: measureStartMs,
             measureIndex: logicalMeasureIndex,
           ),

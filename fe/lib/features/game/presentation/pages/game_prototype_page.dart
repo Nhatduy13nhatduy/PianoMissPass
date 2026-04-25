@@ -109,6 +109,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                     previous.isMicrophoneActive != current.isMicrophoneActive ||
                     previous.inputDeviceName != current.inputDeviceName ||
                     previous.activeInputMidis != current.activeInputMidis ||
+                    previous.microphoneDebug != current.microphoneDebug ||
                     previous.playbackSpeed != current.playbackSpeed ||
                     previous.timelineMsPerDurationDivision !=
                         current.timelineMsPerDurationDivision,
@@ -2533,7 +2534,7 @@ class _StaffScrollerPainter extends CustomPainter {
     return switch (restType) {
       // Whole rest hangs from the 4th line; half rest sits on the middle line.
       'whole' => lineSpacing * 0.28,
-      'half' => lineSpacing * 0.22,
+      'half' => lineSpacing * 0.28,
       'quarter' => lineSpacing * 0.05,
       '8th' => lineSpacing * 0.0,
       '16th' => -lineSpacing * 0.05,

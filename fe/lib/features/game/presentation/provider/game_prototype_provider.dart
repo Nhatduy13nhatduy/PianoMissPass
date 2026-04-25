@@ -142,10 +142,6 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
   Color _passAccentColor = defaultColors.note.pass;
   Color _missAccentColor = defaultColors.note.miss;
 
-  ScoreData? _cachedEffectiveScoreSource;
-  int? _cachedEffectiveScoreSignature;
-  ScoreData? _cachedEffectiveScore;
-
   bool get showKeyboard => _showKeyboard;
   double get staffHeightScale => _staffHeightScale;
   GamePrototypeSettingsTab get selectedSettingsTab => _selectedSettingsTab;
@@ -203,34 +199,7 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
   }
 
   ScoreData resolveEffectiveScore(ScoreData score) {
-    final signature = Object.hashAll(<Object?>[
-      _staffBackground.color?.value,
-      _staffBackground.gradient,
-      _staffBackground.imageAssetPath,
-      _staffBackground.fallbackColor?.value,
-      _staffBackgroundColor?.value,
-      _noteColor.value,
-      _staffStrokeColor.value,
-      _notationGlyphColor.value,
-      _keyboardBlackColor.value,
-      _keyboardWhiteColor.value,
-      _keyboardActiveColor.value,
-      _neutralGlyphColor.value,
-      _passAccentColor.value,
-      _missAccentColor.value,
-    ]);
-
-    if (identical(_cachedEffectiveScoreSource, score) &&
-        _cachedEffectiveScoreSignature == signature &&
-        _cachedEffectiveScore != null) {
-      return _cachedEffectiveScore!;
-    }
-
-    final resolved = score.copyWith(colors: effectiveColors);
-    _cachedEffectiveScoreSource = score;
-    _cachedEffectiveScoreSignature = signature;
-    _cachedEffectiveScore = resolved;
-    return resolved;
+    return score.copyWith(colors: effectiveColors);
   }
 
   void selectSettingsTab(GamePrototypeSettingsTab tab) {
@@ -263,77 +232,66 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
   void setStaffBackground(GameStaffBackground value) {
     if (_sameBackground(_staffBackground, value)) return;
     _staffBackground = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setStaffBackgroundColor(Color? value) {
     if (_sameOptionalColor(_staffBackgroundColor, value)) return;
     _staffBackgroundColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setNoteColor(Color value) {
     if (_sameColor(_noteColor, value)) return;
     _noteColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setStaffStrokeColor(Color value) {
     if (_sameColor(_staffStrokeColor, value)) return;
     _staffStrokeColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setNotationGlyphColor(Color value) {
     if (_sameColor(_notationGlyphColor, value)) return;
     _notationGlyphColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setKeyboardBlackColor(Color value) {
     if (_sameColor(_keyboardBlackColor, value)) return;
     _keyboardBlackColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setKeyboardWhiteColor(Color value) {
     if (_sameColor(_keyboardWhiteColor, value)) return;
     _keyboardWhiteColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setKeyboardActiveColor(Color value) {
     if (_sameColor(_keyboardActiveColor, value)) return;
     _keyboardActiveColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setNeutralGlyphColor(Color value) {
     if (_sameColor(_neutralGlyphColor, value)) return;
     _neutralGlyphColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setPassAccentColor(Color value) {
     if (_sameColor(_passAccentColor, value)) return;
     _passAccentColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
   void setMissAccentColor(Color value) {
     if (_sameColor(_missAccentColor, value)) return;
     _missAccentColor = value;
-    _clearScoreCache();
     notifyListeners();
   }
 
@@ -352,15 +310,9 @@ class GamePrototypeSettingsProvider extends ChangeNotifier {
     _neutralGlyphColor = defaultColors.rest.glyph;
     _passAccentColor = defaultColors.note.pass;
     _missAccentColor = defaultColors.note.miss;
-    _clearScoreCache();
     notifyListeners();
   }
 
-  void _clearScoreCache() {
-    _cachedEffectiveScoreSource = null;
-    _cachedEffectiveScoreSignature = null;
-    _cachedEffectiveScore = null;
-  }
 
   bool _sameColor(Color a, Color b) => a.value == b.value;
 

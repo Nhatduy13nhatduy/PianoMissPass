@@ -381,6 +381,13 @@ extension on GameNotePainter {
         ..color = score.colors.accidentalAndSlur.slurIdle
         ..style = PaintingStyle.fill
         ..isAntiAlias = true;
+      _notePainterApplyLeftFadeToPaint(
+        baseSlurPaint,
+        baseColor: score.colors.accidentalAndSlur.slurIdle,
+        bounds: slurPath.getBounds(),
+        playheadX: playheadX,
+        metrics: metrics,
+      );
       canvas.drawPath(slurPath, baseSlurPaint);
 
       if (judgedSlurColor != score.colors.accidentalAndSlur.slurIdle) {

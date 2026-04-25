@@ -105,15 +105,11 @@ class _PrecomputedScoreRenderData {
     required this.notes,
     required this.beamGroupsByScoreIndex,
     required this.beamAnchorAdjustedHitMsByScoreIndex,
-    required this.beamLastAdjustedHitMsByScoreIndex,
-    required this.maxBeamLookbackMs,
   });
 
   final List<_PrecomputedRenderNote> notes;
   final List<List<int>> beamGroupsByScoreIndex;
   final List<int?> beamAnchorAdjustedHitMsByScoreIndex;
-  final List<int?> beamLastAdjustedHitMsByScoreIndex;
-  final int maxBeamLookbackMs;
 }
 
 enum _NoteJudge { pending, pass, miss }

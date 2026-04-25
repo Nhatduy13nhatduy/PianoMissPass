@@ -12,12 +12,6 @@ class GameKeyboardPainter {
   static const int _endMidi = 88; // E6
   static const int _middleCMidi = 60; // C4
   static const double _blackKeyStrokeWidth = 0.8;
-  static final List<int> _midiRange = <int>[
-    for (var midi = _startMidi; midi <= _endMidi; midi++) midi,
-  ];
-  static final List<int> _whiteMidis = _midiRange
-      .where((midi) => !_isBlackStatic(midi))
-      .toList(growable: false);
 
   void paintKeyboard(
     Canvas canvas,
@@ -31,7 +25,12 @@ class GameKeyboardPainter {
     required double keyboardTop,
     required NotationMetrics metrics,
   }) {
-    final whiteWidth = size.width / math.max(_whiteMidis.length, 1);
+    final midiRange = <int>[
+      for (var midi = _startMidi; midi <= _endMidi; midi++) midi,
+    ];
+    final whiteMidis = midiRange.where((m) => !_isBlack(m)).toList();
+
+    final whiteWidth = size.width / math.max(whiteMidis.length, 1);
     final whiteHeight = metrics.keyboardWhiteHeight;
     final whiteVisualHeight = whiteHeight + metrics.keyboardBedBottomInset;
     final blackHeight = whiteHeight * metrics.keyboardBlackHeightRatio;
@@ -63,11 +62,10 @@ class GameKeyboardPainter {
       }
     }
     final userPressed = Set<int>.from(activeInputMidis);
-    final validTargets = <int>{...active, ...passed};
-    final userPassed = userPressed.intersection(validTargets);
+    final userPassed = userPressed.intersection({...active, ...passed});
     final userMissed = inputMode == GameInputMode.microphone
         ? <int>{}
-        : userPressed.difference(validTargets);
+        : userPressed.difference({...active, ...passed});
 
     final bedRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
@@ -81,7 +79,7 @@ class GameKeyboardPainter {
     canvas.drawRRect(bedRect, Paint()..color = score.colors.keyboard.black);
 
     var whiteIndex = 0;
-    for (final midi in _midiRange) {
+    for (final midi in midiRange) {
       if (_isBlack(midi)) {
         continue;
       }
@@ -164,7 +162,7 @@ class GameKeyboardPainter {
     }
 
     whiteIndex = 0;
-    for (final midi in _midiRange) {
+    for (final midi in midiRange) {
       if (_isBlack(midi)) {
         final x = whiteIndex * whiteWidth - blackWidth / 2;
         final keyState = _resolveKeyState(
@@ -263,10 +261,6 @@ class GameKeyboardPainter {
   }
 
   bool _isBlack(int midi) {
-    return _isBlackStatic(midi);
-  }
-
-  static bool _isBlackStatic(int midi) {
     final pc = midi % 12;
     return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
   }
