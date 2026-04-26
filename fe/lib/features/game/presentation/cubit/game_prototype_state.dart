@@ -9,6 +9,23 @@ enum GameVisibleStaffMode { upperOnly, lowerOnly, both }
 
 enum GameInputMode { wiredMidi, bluetoothMidi, microphone }
 
+enum GamePlayMode { scrolling, step }
+
+enum GameNoteJudgeOutcome { pass, miss }
+
+class GameNoteJudgeAnimation extends Equatable {
+  const GameNoteJudgeAnimation({
+    required this.outcome,
+    required this.startMs,
+  });
+
+  final GameNoteJudgeOutcome outcome;
+  final int startMs;
+
+  @override
+  List<Object?> get props => [outcome, startMs];
+}
+
 class GameMicrophoneDebugData extends Equatable {
   const GameMicrophoneDebugData({
     required this.rms,
@@ -43,6 +60,7 @@ class GamePrototypeState extends Equatable {
     this.inputMode = GameInputMode.wiredMidi,
     this.audioStaffMode = GameAudioStaffMode.both,
     this.visibleStaffMode = GameVisibleStaffMode.both,
+    this.gameplayMode = GamePlayMode.scrolling,
     this.isSoundfontReady = false,
     this.isMicrophoneActive = false,
     this.inputDeviceName,
@@ -62,6 +80,7 @@ class GamePrototypeState extends Equatable {
   final GameInputMode inputMode;
   final GameAudioStaffMode audioStaffMode;
   final GameVisibleStaffMode visibleStaffMode;
+  final GamePlayMode gameplayMode;
   final bool isSoundfontReady;
   final bool isMicrophoneActive;
   final String? inputDeviceName;
@@ -81,6 +100,7 @@ class GamePrototypeState extends Equatable {
     GameInputMode? inputMode,
     GameAudioStaffMode? audioStaffMode,
     GameVisibleStaffMode? visibleStaffMode,
+    GamePlayMode? gameplayMode,
     bool? isSoundfontReady,
     bool? isMicrophoneActive,
     String? inputDeviceName,
@@ -103,6 +123,7 @@ class GamePrototypeState extends Equatable {
       inputMode: inputMode ?? this.inputMode,
       audioStaffMode: audioStaffMode ?? this.audioStaffMode,
       visibleStaffMode: visibleStaffMode ?? this.visibleStaffMode,
+      gameplayMode: gameplayMode ?? this.gameplayMode,
       isSoundfontReady: isSoundfontReady ?? this.isSoundfontReady,
       isMicrophoneActive: isMicrophoneActive ?? this.isMicrophoneActive,
       inputDeviceName: clearInputDeviceName
@@ -129,6 +150,7 @@ class GamePrototypeState extends Equatable {
     inputMode,
     audioStaffMode,
     visibleStaffMode,
+    gameplayMode,
     isSoundfontReady,
     isMicrophoneActive,
     inputDeviceName,

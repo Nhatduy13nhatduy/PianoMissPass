@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:pianomisspass_fe/features/game/presentation/cubit/game_prototype_cubit.dart';
 
 import '../../domain/game_score.dart';
 import '../../domain/note_timing.dart';
@@ -71,19 +72,23 @@ class GameNotePainter {
     Size size, {
     required ScoreData score,
     required int currentMs,
+    required int animationClockMs,
     required Set<int> passedNoteIndexes,
     required Set<int> missedNoteIndexes,
-    required Map<int, int> passAnimationStartMsByNoteIndex,
+    required Map<int, GameNoteJudgeAnimation> judgeAnimationByNoteIndex,
     required double playheadX,
     required double trebleTop,
     required double bassTop,
     required GameVisibleStaffMode visibleStaffMode,
+    required GamePlayMode gameplayMode,
     required NotationMetrics metrics,
     required double notePxPerMs,
   }) {
     final lineSpacing = metrics.staffSpace;
     final timelineMapper = NoteTiming.visualTimelineForScore(score);
-    final currentVisualMs = timelineMapper.visualTimeForRealMs(currentMs).round();
+    final currentVisualMs = timelineMapper
+        .visualTimeForRealMs(currentMs)
+        .round();
     final precomputedScore = _getPrecomputedScoreRenderData(score);
     final precomputedNotes = precomputedScore.notes;
     final maxBeamLookbackMs = precomputedScore
@@ -100,13 +105,16 @@ class GameNotePainter {
           return delta > currentMax ? delta : currentMax;
         });
     final beamLastAdjustedHitMsByScoreIndex = <int, int>{};
+    final beamGroupFullyPassedByScoreIndex = <int, bool>{};
     for (final group in precomputedScore.beamGroupsByScoreIndex) {
       if (group.isEmpty) {
         continue;
       }
       final lastAdjustedHitMs = precomputedNotes[group.last].adjustedHitMs;
+      final groupFullyPassed = group.every(passedNoteIndexes.contains);
       for (final scoreIndex in group) {
         beamLastAdjustedHitMsByScoreIndex[scoreIndex] = lastAdjustedHitMs;
+        beamGroupFullyPassedByScoreIndex[scoreIndex] = groupFullyPassed;
       }
     }
     final measureMs = timelineMapper.visualMeasureDurationAtRealMs(currentMs);
@@ -152,14 +160,20 @@ class GameNotePainter {
           ? _NoteJudge.pass
           : missedNoteIndexes.contains(i)
           ? _NoteJudge.miss
+          : _activeJudgeAnimationOutcomeForNote(
+                  i,
+                  animationClockMs: animationClockMs,
+                  judgeAnimationByNoteIndex: judgeAnimationByNoteIndex,
+                ) ==
+                GameNoteJudgeOutcome.miss
+          ? _NoteJudge.miss
           : _NoteJudge.pending;
       final x = playheadX + (adjustedHitMs - currentVisualMs) * notePxPerMs;
       final leftCullX = -(leftInvisibleMeasurePx + metrics.staffSpace * 2.0);
       final beamLastAdjustedHitMs = beamLastAdjustedHitMsByScoreIndex[i];
       final beamLastX = beamLastAdjustedHitMs == null
           ? null
-          : playheadX +
-                (beamLastAdjustedHitMs - currentVisualMs) * notePxPerMs;
+          : playheadX + (beamLastAdjustedHitMs - currentVisualMs) * notePxPerMs;
       final keepForBeam = beamLastX != null && beamLastX >= leftCullX;
       if (((x < leftCullX) && !keepForBeam) ||
           x > size.width + preRenderRightPx) {
@@ -416,8 +430,13 @@ class GameNotePainter {
         isActive,
         colors: score.colors,
       );
-      final fadeHoldDistanceMultiplier = _fadeHoldDistanceMultiplierForJudge(
-        item.status,
+      final beamGroupFullyPassed =
+          beamGroupFullyPassedByScoreIndex[item.index] ?? true;
+      final fadeHoldDistanceMultiplier = _fadeHoldDistanceMultiplierForNote(
+        judge: item.status,
+        gameplayMode: gameplayMode,
+        isBeamed: beamLastAdjustedHitMsByScoreIndex.containsKey(item.index),
+        beamGroupFullyPassed: beamGroupFullyPassed,
       );
       final noteColor = _notePainterApplyOpacity(
         baseNoteColor,
@@ -430,8 +449,8 @@ class GameNotePainter {
       );
       final passPulseScale = _passPulseScaleForNote(
         item,
-        currentMs: currentMs,
-        passAnimationStartMsByNoteIndex: passAnimationStartMsByNoteIndex,
+        animationClockMs: animationClockMs,
+        judgeAnimationByNoteIndex: judgeAnimationByNoteIndex,
       );
       item.passPulseScale = passPulseScale;
       final layoutStemDirection =
@@ -509,8 +528,9 @@ class GameNotePainter {
           center: center,
           direction: effectiveStemDirection,
           xAxisDirection: stemXAxisDirection,
-          spacing: lineSpacing,
-          extraOppositeStemHeight: chordOppositeStemHeight,
+          spacing: lineSpacing * passPulseScale,
+          extraOppositeStemHeight:
+              chordOppositeStemHeight * passPulseScale,
           stemXOverride: stemXOverride,
         );
         beamStemStartByVisibleIndex[visibleIndex] = stemStart;
@@ -637,14 +657,14 @@ class GameNotePainter {
           isTreble: referenceItem.isTreble,
           color: _notePainterApplyOpacity(
             baseNoteColor,
-             _notePainterLeftFadeOpacityAtX(
-               referenceCenter.dx,
-               playheadX,
-               metrics,
-               holdDistanceMultiplier: fadeHoldDistanceMultiplier,
-             ),
-           ),
-         ));
+            _notePainterLeftFadeOpacityAtX(
+              referenceCenter.dx,
+              playheadX,
+              metrics,
+              holdDistanceMultiplier: fadeHoldDistanceMultiplier,
+            ),
+          ),
+        ));
       }
 
       final fingering = item.note.fingering;
@@ -1788,19 +1808,33 @@ class GameNotePainter {
     );
   }
 
+  GameNoteJudgeOutcome? _activeJudgeAnimationOutcomeForNote(
+    int noteIndex, {
+    required int animationClockMs,
+    required Map<int, GameNoteJudgeAnimation> judgeAnimationByNoteIndex,
+  }) {
+    final animation = judgeAnimationByNoteIndex[noteIndex];
+    if (animation == null) {
+      return null;
+    }
+    final elapsedMs = animationClockMs - animation.startMs;
+    if (elapsedMs < 0 ||
+        elapsedMs > GamePrototypeCubit.judgeAnimationDurationMs) {
+      return null;
+    }
+    return animation.outcome;
+  }
+
   double _passPulseScaleForNote(
     _RenderNote note, {
-    required int currentMs,
-    required Map<int, int> passAnimationStartMsByNoteIndex,
+    required int animationClockMs,
+    required Map<int, GameNoteJudgeAnimation> judgeAnimationByNoteIndex,
   }) {
-    if (note.status != _NoteJudge.pass) {
+    final animation = judgeAnimationByNoteIndex[note.index];
+    if (animation == null) {
       return 1.0;
     }
-    final startMs = passAnimationStartMsByNoteIndex[note.index];
-    if (startMs == null) {
-      return 1.0;
-    }
-    final elapsedMs = currentMs - startMs;
+    final elapsedMs = animationClockMs - animation.startMs;
     if (elapsedMs < 0 || elapsedMs > _passPulseDurationMs) {
       return 1.0;
     }
@@ -2240,7 +2274,15 @@ class GameNotePainter {
     };
   }
 
-  double _fadeHoldDistanceMultiplierForJudge(_NoteJudge judge) {
+  double _fadeHoldDistanceMultiplierForNote({
+    required _NoteJudge judge,
+    required GamePlayMode gameplayMode,
+    required bool isBeamed,
+    required bool beamGroupFullyPassed,
+  }) {
+    if (gameplayMode == GamePlayMode.step && isBeamed && !beamGroupFullyPassed) {
+      return 1000.0;
+    }
     return switch (judge) {
       _NoteJudge.pass || _NoteJudge.miss || _NoteJudge.pending => 3.6,
     };

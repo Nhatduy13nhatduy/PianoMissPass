@@ -22,6 +22,7 @@ class GameKeyboardPainter {
     required Set<int> activeInputMidis,
     required Set<int> passedNoteIndexes,
     required Set<int> missedNoteIndexes,
+    required GameVisibleStaffMode visibleStaffMode,
     required double keyboardTop,
     required NotationMetrics metrics,
   }) {
@@ -45,17 +46,23 @@ class GameKeyboardPainter {
 
     final active = <int>{};
     final passed = <int>{};
+    final missed = <int>{};
     final startTime = currentMs - _keyboardLookbackMs;
     final endTime = currentMs + _keyboardLookaheadMs;
     final startIndex = _lowerBoundHitTime(score.notes, startTime);
     final endIndex = _upperBoundHitTime(score.notes, endTime);
     for (var i = startIndex; i < endIndex; i++) {
       final note = score.notes[i];
+      if (!_isStaffVisible(note.staffNumber, visibleStaffMode)) {
+        continue;
+      }
       final adjustedHitMs = NoteTiming.adjustedHitTimeMs(note);
       final noteEndMs = adjustedHitMs + math.max(note.holdMs, _minimumHoldMs);
       if (adjustedHitMs <= currentMs && currentMs <= noteEndMs) {
         if (passedNoteIndexes.contains(i)) {
           passed.add(note.midi);
+        } else if (missedNoteIndexes.contains(i)) {
+          missed.add(note.midi);
         } else {
           active.add(note.midi);
         }
@@ -89,6 +96,7 @@ class GameKeyboardPainter {
         midi,
         active: active,
         passed: passed,
+        missed: missed,
         userPassed: userPassed,
         userMissed: userMissed,
         userPressed: userPressed,
@@ -169,6 +177,7 @@ class GameKeyboardPainter {
           midi,
           active: active,
           passed: passed,
+          missed: missed,
           userPassed: userPassed,
           userMissed: userMissed,
           userPressed: userPressed,
@@ -265,6 +274,18 @@ class GameKeyboardPainter {
     return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
   }
 
+  bool _isStaffVisible(
+    int? staffNumber,
+    GameVisibleStaffMode visibleStaffMode,
+  ) {
+    final resolvedStaff = staffNumber ?? 1;
+    return switch (visibleStaffMode) {
+      GameVisibleStaffMode.upperOnly => resolvedStaff == 1,
+      GameVisibleStaffMode.lowerOnly => resolvedStaff == 2,
+      GameVisibleStaffMode.both => true,
+    };
+  }
+
   void _paintMiddleCLabel(
     Canvas canvas, {
     required Rect keyRect,
@@ -290,6 +311,7 @@ class GameKeyboardPainter {
     int midi, {
     required Set<int> active,
     required Set<int> passed,
+    required Set<int> missed,
     required Set<int> userPassed,
     required Set<int> userMissed,
     required Set<int> userPressed,
@@ -297,7 +319,7 @@ class GameKeyboardPainter {
     if (userPassed.contains(midi) || passed.contains(midi)) {
       return _KeyboardKeyState.pass;
     }
-    if (userMissed.contains(midi)) {
+    if (userMissed.contains(midi) || missed.contains(midi)) {
       return _KeyboardKeyState.miss;
     }
     if (active.contains(midi) || userPressed.contains(midi)) {

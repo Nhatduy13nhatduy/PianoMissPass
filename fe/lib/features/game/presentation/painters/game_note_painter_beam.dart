@@ -329,16 +329,11 @@ void _notePainterDrawBeamGroup(
 
   final direction = first.stemDirection;
   final resolvedBeamColor = colors.note.idle;
-  final groupPulseScale = indexes.fold<double>(
-    1.0,
-    (maxScale, idx) => math.max(maxScale, visible[idx].passPulseScale),
-  );
   final beamPaint = Paint()
     ..color = resolvedBeamColor
     ..style = PaintingStyle.fill
     ..isAntiAlias = true;
-  final scaledLineSpacing = lineSpacing * groupPulseScale;
-  final beamThickness = math.max(scaledLineSpacing * 0.48, 3.0);
+  final beamThickness = math.max(lineSpacing * 0.48, 3.0);
   final primaryBeamThickness = beamThickness * 1.6;
   final hasThirtySecondInGroup = indexes.any(
     (idx) => visible[idx].durationType == _DurationType.thirtySecond,

@@ -26,6 +26,7 @@ class GamePrototypeSettingWidget extends StatelessWidget {
   final String? songTitle;
   final bool hasCompletedSong;
   final int completionScore;
+
   final VoidCallback onRepeat;
   final VoidCallback onBack;
   final VoidCallback onPlay;
@@ -48,6 +49,7 @@ class GamePrototypeSettingWidget extends StatelessWidget {
         inputMode: state.inputMode,
         audioStaffMode: state.audioStaffMode,
         visibleStaffMode: state.visibleStaffMode,
+        gameplayMode: state.gameplayMode,
         isSoundfontReady: state.isSoundfontReady,
         isMicrophoneActive: state.isMicrophoneActive,
         inputDeviceName: state.inputDeviceName,
@@ -57,6 +59,7 @@ class GamePrototypeSettingWidget extends StatelessWidget {
         onSelectInputMode: cubit.setInputMode,
         onSelectAudioStaffMode: cubit.setAudioStaffMode,
         onSelectVisibleStaffMode: cubit.setVisibleStaffMode,
+        onSelectGameplayMode: cubit.setGameplayMode,
         onDecreaseScale: settings.decreaseStaffHeightScale,
         onIncreaseScale: settings.increaseStaffHeightScale,
         onDecreaseSpeed: () {
@@ -100,8 +103,7 @@ class GamePrototypeSettingWidget extends StatelessWidget {
             GamePrototypeSettingsProvider.keyboardWhiteOptions,
         keyboardActiveOptions:
             GamePrototypeSettingsProvider.keyboardActiveOptions,
-        neutralGlyphOptions:
-            GamePrototypeSettingsProvider.neutralGlyphOptions,
+        neutralGlyphOptions: GamePrototypeSettingsProvider.neutralGlyphOptions,
         passAccentOptions: GamePrototypeSettingsProvider.passAccentOptions,
         missAccentOptions: GamePrototypeSettingsProvider.missAccentOptions,
         backgroundOptions: settings.backgroundPresets,
@@ -134,6 +136,7 @@ class _GameLayoutControls extends StatelessWidget {
     required this.inputMode,
     required this.audioStaffMode,
     required this.visibleStaffMode,
+    required this.gameplayMode,
     required this.isSoundfontReady,
     required this.isMicrophoneActive,
     required this.inputDeviceName,
@@ -143,6 +146,7 @@ class _GameLayoutControls extends StatelessWidget {
     required this.onSelectInputMode,
     required this.onSelectAudioStaffMode,
     required this.onSelectVisibleStaffMode,
+    required this.onSelectGameplayMode,
     required this.onDecreaseScale,
     required this.onIncreaseScale,
     required this.onDecreaseSpeed,
@@ -157,6 +161,7 @@ class _GameLayoutControls extends StatelessWidget {
   final GameInputMode inputMode;
   final GameAudioStaffMode audioStaffMode;
   final GameVisibleStaffMode visibleStaffMode;
+  final GamePlayMode gameplayMode;
   final bool isSoundfontReady;
   final bool isMicrophoneActive;
   final String? inputDeviceName;
@@ -166,6 +171,7 @@ class _GameLayoutControls extends StatelessWidget {
   final ValueChanged<GameInputMode> onSelectInputMode;
   final ValueChanged<GameAudioStaffMode> onSelectAudioStaffMode;
   final ValueChanged<GameVisibleStaffMode> onSelectVisibleStaffMode;
+  final ValueChanged<GamePlayMode> onSelectGameplayMode;
   final VoidCallback onDecreaseScale;
   final VoidCallback onIncreaseScale;
   final VoidCallback onDecreaseSpeed;
@@ -274,14 +280,30 @@ class _GameLayoutControls extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
+          _ModeRow<GamePlayMode>(
+            label: 'Mode',
+            selected: gameplayMode,
+            onSelected: onSelectGameplayMode,
+            options: const [
+              (GamePlayMode.scrolling, 'Classic'),
+              (GamePlayMode.step, 'Step'),
+            ],
+          ),
+          const SizedBox(height: 6),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Staff', style: labelStyle),
               const SizedBox(width: 10),
-              _MiniIconButton(icon: Icons.remove_rounded, onTap: onDecreaseScale),
+              _MiniIconButton(
+                icon: Icons.remove_rounded,
+                onTap: onDecreaseScale,
+              ),
               const SizedBox(width: 8),
-              Text('${staffHeightScale.toStringAsFixed(1)}x', style: labelStyle),
+              Text(
+                '${staffHeightScale.toStringAsFixed(1)}x',
+                style: labelStyle,
+              ),
               const SizedBox(width: 8),
               _MiniIconButton(icon: Icons.add_rounded, onTap: onIncreaseScale),
             ],
@@ -292,7 +314,10 @@ class _GameLayoutControls extends StatelessWidget {
             children: [
               const Text('Speed', style: labelStyle),
               const SizedBox(width: 10),
-              _MiniIconButton(icon: Icons.remove_rounded, onTap: onDecreaseSpeed),
+              _MiniIconButton(
+                icon: Icons.remove_rounded,
+                onTap: onDecreaseSpeed,
+              ),
               const SizedBox(width: 8),
               Text('${playbackSpeed.toStringAsFixed(1)}x', style: labelStyle),
               const SizedBox(width: 8),
@@ -445,7 +470,8 @@ class _GameSettingsOverlay extends StatelessWidget {
                             Expanded(
                               child: SingleChildScrollView(
                                 key: ValueKey(selectedTab),
-                                child: selectedTab ==
+                                child:
+                                    selectedTab ==
                                         GamePrototypeSettingsTab.gameplay
                                     ? gameplayControls
                                     : colorControls,

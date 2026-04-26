@@ -20,6 +20,8 @@ class GameNoteJudgeEngine {
   final int earlyHitWindowMs;
   List<TimedExpectedChord> _expectedChords = const <TimedExpectedChord>[];
 
+  List<TimedExpectedChord> get expectedChords => _expectedChords;
+
   void loadScore(ScoreData score) {
     final chords = <TimedExpectedChord>[];
     var i = 0;

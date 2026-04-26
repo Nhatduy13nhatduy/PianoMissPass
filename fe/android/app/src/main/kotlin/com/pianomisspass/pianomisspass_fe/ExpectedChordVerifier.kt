@@ -9,7 +9,7 @@ import kotlin.math.sqrt
 class ExpectedChordVerifier(
     private val groupingWindowMs: Long = 130L,
     private val minimumGroupedFrames: Int = 2,
-    private val rmsGate: Double = 0.02,
+    private val rmsGate: Double = 0.03,
     private val absoluteScoreThreshold: Double = 0.12,
     private val relativeScoreThreshold: Double = 0.58,
     private val peakRatioThreshold: Double = 1.16,

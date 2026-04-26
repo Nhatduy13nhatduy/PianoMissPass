@@ -28,6 +28,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       'assets/soundfonts/GeneralUser-GS.sf2';
 
   static const int initialLeadInMs = 3000;
+  static const int judgeAnimationDurationMs = 260;
   static const int lateHitWindowMs = 160;
   static const int earlyHitWindowMs = 240;
   static const int missWindowMs = 240;
@@ -62,12 +63,16 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   late final Ticker _ticker;
   final Stopwatch _stopwatch = Stopwatch();
   final ValueNotifier<int> _elapsedMsNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> _animationClockNotifier = ValueNotifier<int>(0);
   final ValueNotifier<Set<int>> _passedNoteIndexesNotifier =
       ValueNotifier<Set<int>>(const <int>{});
   final ValueNotifier<Set<int>> _missedNoteIndexesNotifier =
       ValueNotifier<Set<int>>(const <int>{});
-  final ValueNotifier<Map<int, int>> _passAnimationStartMsByNoteIndexNotifier =
-      ValueNotifier<Map<int, int>>(const <int, int>{});
+  final ValueNotifier<Map<int, GameNoteJudgeAnimation>>
+  _judgeAnimationByNoteIndexNotifier =
+      ValueNotifier<Map<int, GameNoteJudgeAnimation>>(
+        const <int, GameNoteJudgeAnimation>{},
+      );
   final List<_ScheduledMidiEvent> _scheduledSongEvents =
       <_ScheduledMidiEvent>[];
 
@@ -80,7 +85,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   int _nextMissScanIndex = 0;
   int _nextSongPlaybackEventIndex = 0;
   int _inputConfigurationGeneration = 0;
+  int _currentStepChordIndex = 0;
   int _maxDurationMs = 10000;
+  int? _stepTransitionTargetMs;
   bool _isSynthReady = false;
   bool _isSynthLoading = false;
   bool _isInputReady = false;
@@ -92,6 +99,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     final audioStaffMode = state.audioStaffMode;
     final visibleStaffMode = state.visibleStaffMode;
     final inputMode = state.inputMode;
+    final gameplayMode = state.gameplayMode;
 
     _ticker.stop();
     _stopSongPlaybackScheduler();
@@ -102,12 +110,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _stopwatch
       ..stop()
       ..reset();
-    _baseElapsedMs = -initialLeadInMs;
-    _elapsedMsNotifier.value = _baseElapsedMs;
+    _resetTimingForMode(gameplayMode);
+    _animationClockNotifier.value = _animationClockMs();
     _passedNoteIndexesNotifier.value = const <int>{};
     _missedNoteIndexesNotifier.value = const <int>{};
-    _passAnimationStartMsByNoteIndexNotifier.value = const <int, int>{};
     _nextMissScanIndex = 0;
+    _currentStepChordIndex = 0;
     _isInputReady = false;
     _inputStatusLabel = null;
     _latestDetectedInputMidis = const <int>{};
@@ -120,6 +128,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         timelineMsPerDurationDivision: timelineMsPerDurationDivision,
         audioStaffMode: audioStaffMode,
         visibleStaffMode: visibleStaffMode,
+        gameplayMode: gameplayMode,
         isSoundfontReady: _isSynthReady,
         activeInputMidis: const <int>{},
       ),
@@ -228,10 +237,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
           if (score == null) {
             return const <int>{};
           }
+          if (_isStepMode) {
+            return _stepModeCandidateMidis(score);
+          }
           return _judgeEngine.candidateExpectedMidisAroundTime(
             currentMs: currentMs + _microphoneLatencyMs,
             score: score,
-            passedNoteIndexes: state.passedNoteIndexes,
+            passedNoteIndexes: _effectivePassedNoteIndexesForJudging(score),
             missedNoteIndexes: state.missedNoteIndexes,
           );
         },
@@ -273,7 +285,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    if (_isSongAudioEnabled) {
+    if (_isSongAudioEnabled && _canRunSongAudioTimeline) {
       _restartSongPlaybackFromCurrentPosition();
       return;
     }
@@ -377,10 +389,13 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
         state.inputMode == GameInputMode.microphone) {
       return;
     }
+    if (_isStepMode && _stepTransitionTargetMs != null) {
+      return;
+    }
 
     final targetChord = _judgeEngine.nearestUnresolvedChordWithinWindow(
       currentMs: currentMs,
-      passedNoteIndexes: state.passedNoteIndexes,
+      passedNoteIndexes: _effectivePassedNoteIndexesForJudging(score),
       missedNoteIndexes: state.missedNoteIndexes,
     );
     if (targetChord == null) {
@@ -389,7 +404,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
 
     final heldContinuationMidis = <int>{};
     for (final noteIndex in targetChord.noteIndexes) {
-      if (state.passedNoteIndexes.contains(noteIndex) ||
+      if (!_isNoteIndexJudgeable(score, noteIndex) ||
+          state.passedNoteIndexes.contains(noteIndex) ||
           state.missedNoteIndexes.contains(noteIndex)) {
         continue;
       }
@@ -436,13 +452,24 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     required int currentMs,
     required ScoreData score,
   }) {
+    if (_isStepMode) {
+      _judgeDetectedInputMidisStepMode(
+        detectedMidis: detectedMidis,
+        currentMs: currentMs,
+        score: score,
+      );
+      return;
+    }
     final judgeCurrentMs = state.inputMode == GameInputMode.microphone
         ? currentMs + _microphoneLatencyMs
         : currentMs;
+    final effectivePassedNoteIndexes = _effectivePassedNoteIndexesForJudging(
+      score,
+    );
     final updatedPassed = _judgeEngine.judgeDetectedNotes(
       currentMs: judgeCurrentMs,
       score: score,
-      passedNoteIndexes: state.passedNoteIndexes,
+      passedNoteIndexes: effectivePassedNoteIndexes,
       missedNoteIndexes: state.missedNoteIndexes,
       detectedMidis: detectedMidis,
     );
@@ -450,27 +477,93 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    final newlyPassedNoteIndexes = updatedPassed.difference(
+    final visibleUpdatedPassed = updatedPassed
+        .where((noteIndex) => _isNoteIndexJudgeable(score, noteIndex))
+        .toSet();
+    final newlyPassedNoteIndexes = visibleUpdatedPassed.difference(
       state.passedNoteIndexes,
     );
-    if (newlyPassedNoteIndexes.isNotEmpty) {
-      final passAnimationStartMsByNoteIndex = Map<int, int>.from(
-        _passAnimationStartMsByNoteIndexNotifier.value,
-      );
-      for (final noteIndex in newlyPassedNoteIndexes) {
-        passAnimationStartMsByNoteIndex[noteIndex] = currentMs;
-      }
-      _passAnimationStartMsByNoteIndexNotifier.value =
-          Map<int, int>.unmodifiable(passAnimationStartMsByNoteIndex);
-    }
+    _triggerJudgeAnimation(
+      newlyPassedNoteIndexes,
+      outcome: GameNoteJudgeOutcome.pass,
+    );
 
     _emitState(
-      _applyInputStatus(state.copyWith(passedNoteIndexes: updatedPassed)),
+      _applyInputStatus(
+        state.copyWith(passedNoteIndexes: visibleUpdatedPassed),
+      ),
     );
   }
 
+  void _judgeDetectedInputMidisStepMode({
+    required Set<int> detectedMidis,
+    required int currentMs,
+    required ScoreData score,
+  }) {
+    if (_stepTransitionTargetMs != null) {
+      return;
+    }
+    final chord = _currentStepChord;
+    if (chord == null) {
+      return;
+    }
+
+    final unresolvedNoteIndexes = chord.noteIndexes
+        .where(
+          (index) =>
+              _isNoteIndexJudgeable(score, index) &&
+              !state.passedNoteIndexes.contains(index),
+        )
+        .toList(growable: false);
+    if (unresolvedNoteIndexes.isEmpty) {
+      _advanceStepChordIfReady(currentMs);
+      return;
+    }
+
+    final matchingNoteIndexes = unresolvedNoteIndexes
+        .where((index) => detectedMidis.contains(score.notes[index].midi))
+        .toSet();
+
+    if (matchingNoteIndexes.isEmpty) {
+      final updatedMissed = Set<int>.from(state.missedNoteIndexes)
+        ..addAll(unresolvedNoteIndexes);
+      _triggerJudgeAnimation(
+        unresolvedNoteIndexes,
+        outcome: GameNoteJudgeOutcome.miss,
+      );
+      _emitState(
+        _applyInputStatus(state.copyWith(missedNoteIndexes: updatedMissed)),
+      );
+      return;
+    }
+
+    final updatedPassed = Set<int>.from(state.passedNoteIndexes)
+      ..addAll(matchingNoteIndexes);
+    final updatedMissed = Set<int>.from(state.missedNoteIndexes)
+      ..removeAll(matchingNoteIndexes);
+    _triggerJudgeAnimation(
+      matchingNoteIndexes,
+      outcome: GameNoteJudgeOutcome.pass,
+    );
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          passedNoteIndexes: updatedPassed,
+          missedNoteIndexes: updatedMissed,
+        ),
+      ),
+    );
+
+    final chordPassed = chord.noteIndexes.every(updatedPassed.contains);
+    if (chordPassed) {
+      _advanceStepChordIfReady(currentMs);
+    }
+  }
+
   Future<void> _syncInputPreviewNotes(Set<int> detectedMidis) async {
-    if (state.inputMode == GameInputMode.microphone || !_isSynthReady) {
+    if (_isStepMode ||
+        state.inputMode == GameInputMode.microphone ||
+        !_isSynthReady) {
       await _silenceInputNotes();
       return;
     }
@@ -630,7 +723,12 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..start();
     _ticker.start();
     _emitState(_applyInputStatus(state.copyWith(isPlaying: true)));
-    _restartSongPlaybackFromCurrentPosition();
+    if (_canRunSongAudioTimeline) {
+      _restartSongPlaybackFromCurrentPosition();
+    } else {
+      _stopSongPlaybackScheduler();
+      unawaited(_silenceSongPlaybackNotes());
+    }
   }
 
   void play() => _play();
@@ -642,11 +740,9 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     _ticker.stop();
     _stopSongPlaybackScheduler();
     unawaited(_silenceSongPlaybackNotes());
-    _baseElapsedMs = -initialLeadInMs;
-    _elapsedMsNotifier.value = _baseElapsedMs;
+    _resetTimingForMode(state.gameplayMode);
     _nextMissScanIndex = 0;
     _nextSongPlaybackEventIndex = 0;
-    _passAnimationStartMsByNoteIndexNotifier.value = const <int, int>{};
     _emitState(
       _applyInputStatus(
         state.copyWith(
@@ -707,8 +803,10 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return;
     }
 
-    if (state.isPlaying) {
+    if (state.isPlaying && _canRunSongAudioTimeline) {
       _restartSongPlaybackFromCurrentPosition();
+    } else {
+      unawaited(_silenceSongPlaybackNotes());
     }
   }
 
@@ -718,6 +816,33 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     _emitState(_applyInputStatus(state.copyWith(visibleStaffMode: mode)));
+  }
+
+  void setGameplayMode(GamePlayMode mode) {
+    if (mode == state.gameplayMode) {
+      return;
+    }
+
+    _stopwatch
+      ..stop()
+      ..reset();
+    _ticker.stop();
+    _stopSongPlaybackScheduler();
+    unawaited(_silenceSongPlaybackNotes());
+    unawaited(_silenceInputNotes());
+    _resetTimingForMode(mode);
+    _nextMissScanIndex = 0;
+    _nextSongPlaybackEventIndex = 0;
+    _emitState(
+      _applyInputStatus(
+        state.copyWith(
+          gameplayMode: mode,
+          isPlaying: false,
+          passedNoteIndexes: const <int>{},
+          missedNoteIndexes: const <int>{},
+        ),
+      ),
+    );
   }
 
   void setPlaybackSpeed(double value) {
@@ -735,7 +860,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     _emitState(_applyInputStatus(state.copyWith(playbackSpeed: clamped)));
-    if (state.isPlaying && _isSongAudioEnabled) {
+    if (state.isPlaying && _isSongAudioEnabled && _canRunSongAudioTimeline) {
       _restartSongPlaybackFromCurrentPosition();
     }
   }
@@ -760,11 +885,26 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
     }
 
     final current = currentMs;
-    if (_isSongAudioEnabled) {
+    _animationClockNotifier.value = _animationClockMs();
+    if (_isSongAudioEnabled && _canRunSongAudioTimeline) {
       _pumpSongPlayback(current);
+    } else if (_activeSongPlaybackTokenByMidi.isNotEmpty) {
+      unawaited(_silenceSongPlaybackNotes());
     }
     _judgeLatestHeldInputNotes(current);
-    final updatedMisses = _updateMissesIncremental(current);
+    if (_isStepMode) {
+      _advanceStepChordIfReady(current);
+      if (_stepTransitionTargetMs != null && current >= _stepTransitionTargetMs!) {
+        _finishStepTransition();
+      }
+      if (_currentStepChord == null &&
+          state.passedNoteIndexes.isNotEmpty &&
+          current >= maxDurationMs) {
+        _completePlayback();
+        return;
+      }
+    }
+    final updatedMisses = _isStepMode ? null : _updateMissesIncremental(current);
 
     if (current >= maxDurationMs) {
       _completePlayback();
@@ -823,7 +963,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       }
 
       if (!state.passedNoteIndexes.contains(_nextMissScanIndex) &&
-          !missed.contains(_nextMissScanIndex)) {
+          !missed.contains(_nextMissScanIndex) &&
+          _isNoteIndexJudgeable(score, _nextMissScanIndex)) {
         missed.add(_nextMissScanIndex);
         changed = true;
       }
@@ -839,18 +980,29 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       return _baseElapsedMs;
     }
 
+    if (_isStepMode) {
+      final targetMs = _stepTransitionTargetMs;
+      if (targetMs == null) {
+        return _baseElapsedMs;
+      }
+      final advancedMs =
+          _baseElapsedMs +
+          (_stopwatch.elapsedMilliseconds * state.playbackSpeed).round();
+      return advancedMs >= targetMs ? targetMs : advancedMs;
+    }
+
     return _baseElapsedMs +
         (_stopwatch.elapsedMilliseconds * state.playbackSpeed).round();
   }
 
   ValueListenable<int> get elapsedMsListenable => _elapsedMsNotifier;
+  ValueListenable<int> get animationClockListenable => _animationClockNotifier;
   ValueListenable<Set<int>> get passedNoteIndexesListenable =>
       _passedNoteIndexesNotifier;
   ValueListenable<Set<int>> get missedNoteIndexesListenable =>
       _missedNoteIndexesNotifier;
-  ValueListenable<Map<int, int>>
-  get passAnimationStartMsByNoteIndexListenable =>
-      _passAnimationStartMsByNoteIndexNotifier;
+  ValueListenable<Map<int, GameNoteJudgeAnimation>>
+  get judgeAnimationByNoteIndexListenable => _judgeAnimationByNoteIndexNotifier;
 
   int get maxDurationMs => _maxDurationMs;
 
@@ -961,6 +1113,7 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   void _restartSongPlaybackFromCurrentPosition() {
     if (!state.isPlaying ||
         !_isSongAudioEnabled ||
+        !_canRunSongAudioTimeline ||
         state.score == null ||
         !_isSynthReady) {
       return;
@@ -1096,6 +1249,8 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
   bool get _isSongAudioEnabled =>
       state.audioStaffMode != GameAudioStaffMode.off;
 
+  bool get _canRunSongAudioTimeline => !_isStepMode;
+
   bool _shouldPlayAudioStaff(int? staffNumber) {
     final resolvedStaff = staffNumber ?? 1;
     return switch (state.audioStaffMode) {
@@ -1142,11 +1297,180 @@ class GamePrototypeCubit extends Cubit<GamePrototypeState> {
       ..stop()
       ..reset();
     _elapsedMsNotifier.dispose();
+    _animationClockNotifier.dispose();
     _passedNoteIndexesNotifier.dispose();
     _missedNoteIndexesNotifier.dispose();
-    _passAnimationStartMsByNoteIndexNotifier.dispose();
+    _judgeAnimationByNoteIndexNotifier.dispose();
     return super.close();
   }
+
+  bool get _isStepMode => state.gameplayMode == GamePlayMode.step;
+
+  TimedExpectedChord? get _currentStepChord {
+    final chords = _judgeEngine.expectedChords;
+    if (_currentStepChordIndex < 0 || _currentStepChordIndex >= chords.length) {
+      return null;
+    }
+    return chords[_currentStepChordIndex];
+  }
+
+  Set<int> _stepModeCandidateMidis(ScoreData score) {
+    if (_stepTransitionTargetMs != null) {
+      return const <int>{};
+    }
+    final chord = _currentStepChord;
+    if (chord == null) {
+      return const <int>{};
+    }
+    final midis = <int>{};
+    for (final noteIndex in chord.noteIndexes) {
+      if (_isNoteIndexJudgeable(score, noteIndex) &&
+          !state.passedNoteIndexes.contains(noteIndex)) {
+        midis.add(score.notes[noteIndex].midi);
+      }
+    }
+    return midis;
+  }
+
+  Set<int> _effectivePassedNoteIndexesForJudging(ScoreData score) {
+    final effectivePassed = Set<int>.from(state.passedNoteIndexes);
+    for (var i = 0; i < score.notes.length; i++) {
+      if (!_isNoteIndexJudgeable(score, i)) {
+        effectivePassed.add(i);
+      }
+    }
+    return effectivePassed;
+  }
+
+  bool _isNoteIndexJudgeable(ScoreData score, int noteIndex) {
+    if (noteIndex < 0 || noteIndex >= score.notes.length) {
+      return false;
+    }
+    return _isStaffVisibleForJudging(score.notes[noteIndex].staffNumber);
+  }
+
+  bool _isStaffVisibleForJudging(int? staffNumber) {
+    final resolvedStaff = staffNumber ?? 1;
+    return switch (state.visibleStaffMode) {
+      GameVisibleStaffMode.upperOnly => resolvedStaff == 1,
+      GameVisibleStaffMode.lowerOnly => resolvedStaff == 2,
+      GameVisibleStaffMode.both => true,
+    };
+  }
+
+  void _resetTimingForMode(GamePlayMode mode) {
+    _stepTransitionTargetMs = null;
+    _currentStepChordIndex = 0;
+    _judgeAnimationByNoteIndexNotifier.value =
+        const <int, GameNoteJudgeAnimation>{};
+    _animationClockNotifier.value = _animationClockMs();
+    _baseElapsedMs = mode == GamePlayMode.step ? 0 : -initialLeadInMs;
+    _elapsedMsNotifier.value = _baseElapsedMs;
+  }
+
+  void _triggerJudgeAnimation(
+    Iterable<int> noteIndexes, {
+    required GameNoteJudgeOutcome outcome,
+  }) {
+    if (noteIndexes.isEmpty) {
+      return;
+    }
+
+    final animationClockNow = _animationClockMs();
+    final updatedAnimations = Map<int, GameNoteJudgeAnimation>.from(
+      _judgeAnimationByNoteIndexNotifier.value,
+    );
+    var hasChange = false;
+    for (final noteIndex in noteIndexes) {
+      final previous = updatedAnimations[noteIndex];
+      if (previous != null &&
+          previous.outcome == outcome &&
+          animationClockNow - previous.startMs <
+              judgeAnimationDurationMs ~/ 2) {
+        continue;
+      }
+      updatedAnimations[noteIndex] = GameNoteJudgeAnimation(
+        outcome: outcome,
+        startMs: animationClockNow,
+      );
+      hasChange = true;
+    }
+    if (!hasChange) {
+      return;
+    }
+    _judgeAnimationByNoteIndexNotifier.value = Map<int,
+        GameNoteJudgeAnimation>.unmodifiable(updatedAnimations);
+  }
+
+  void _advanceStepChordIfReady(int currentMs) {
+    final score = state.score;
+    final chord = _currentStepChord;
+    if (score == null) {
+      return;
+    }
+    if (chord == null) {
+      return;
+    }
+    final judgeableNoteIndexes = chord.noteIndexes
+        .where((noteIndex) => _isNoteIndexJudgeable(score, noteIndex))
+        .toList(growable: false);
+    final isChordResolved =
+        judgeableNoteIndexes.isEmpty ||
+        judgeableNoteIndexes.every(state.passedNoteIndexes.contains);
+    if (!isChordResolved) {
+      return;
+    }
+
+    final nextChordIndex = _nextJudgeableStepChordIndex(
+      score,
+      _currentStepChordIndex + 1,
+    );
+    if (nextChordIndex == null) {
+      _completePlayback();
+      return;
+    }
+
+    _currentStepChordIndex = nextChordIndex;
+    _baseElapsedMs = currentMs;
+    _elapsedMsNotifier.value = currentMs;
+    _stepTransitionTargetMs = _judgeEngine.expectedChords[nextChordIndex].hitTimeMs;
+    _stopwatch
+      ..reset()
+      ..start();
+    if (_isSongAudioEnabled) {
+      _restartSongPlaybackFromCurrentPosition();
+    }
+  }
+
+  int? _nextJudgeableStepChordIndex(ScoreData score, int startIndex) {
+    final chords = _judgeEngine.expectedChords;
+    for (var i = startIndex; i < chords.length; i++) {
+      final hasJudgeableNotes = chords[i].noteIndexes.any(
+        (noteIndex) => _isNoteIndexJudgeable(score, noteIndex),
+      );
+      if (hasJudgeableNotes) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  void _finishStepTransition() {
+    final targetMs = _stepTransitionTargetMs;
+    if (targetMs == null) {
+      return;
+    }
+
+    _baseElapsedMs = targetMs;
+    _elapsedMsNotifier.value = targetMs;
+    _stepTransitionTargetMs = null;
+    _stopwatch
+      ..stop()
+      ..reset();
+    unawaited(_silenceSongPlaybackNotes());
+  }
+
+  int _animationClockMs() => DateTime.now().millisecondsSinceEpoch;
 }
 
 enum _ScheduledMidiEventType { noteOn, noteOff }

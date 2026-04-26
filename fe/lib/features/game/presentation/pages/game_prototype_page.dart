@@ -106,6 +106,7 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                     previous.inputMode != current.inputMode ||
                     previous.audioStaffMode != current.audioStaffMode ||
                     previous.visibleStaffMode != current.visibleStaffMode ||
+                    previous.gameplayMode != current.gameplayMode ||
                     previous.isSoundfontReady != current.isSoundfontReady ||
                     previous.isMicrophoneActive != current.isMicrophoneActive ||
                     previous.inputDeviceName != current.inputDeviceName ||
@@ -153,15 +154,18 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                           inputMode: state.inputMode,
                           activeInputMidis: state.activeInputMidis,
                           elapsedMsListenable: cubit.elapsedMsListenable,
+                          animationClockListenable:
+                              cubit.animationClockListenable,
                           passedNoteIndexesListenable:
                               cubit.passedNoteIndexesListenable,
                           missedNoteIndexesListenable:
                               cubit.missedNoteIndexesListenable,
-                          passAnimationStartMsByNoteIndexListenable:
-                              cubit.passAnimationStartMsByNoteIndexListenable,
+                          judgeAnimationByNoteIndexListenable:
+                              cubit.judgeAnimationByNoteIndexListenable,
                           showKeyboard: settings.showKeyboard,
                           staffHeightScale: settings.staffHeightScale,
                           visibleStaffMode: state.visibleStaffMode,
+                          gameplayMode: state.gameplayMode,
                           timelineMsPerDurationDivision:
                               state.timelineMsPerDurationDivision,
                         ),
@@ -202,11 +206,13 @@ class _GamePrototypeChromeScopeState extends State<_GamePrototypeChromeScope> {
                             child: ValueListenableBuilder<int>(
                               valueListenable: cubit.elapsedMsListenable,
                               builder: (context, elapsedMs, _) {
-                                if (elapsedMs >= 0) {
+                                if (state.gameplayMode == GamePlayMode.step ||
+                                    elapsedMs >= 0) {
                                   return const SizedBox.shrink();
                                 }
-                                final countdown =
-                                    ((-elapsedMs) / 1000).ceil().clamp(1, 3);
+                                final countdown = ((-elapsedMs) / 1000)
+                                    .ceil()
+                                    .clamp(1, 3);
                                 return Center(
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
@@ -462,19 +468,22 @@ class _StaffScrollerPainter extends CustomPainter {
     required this.inputMode,
     required this.activeInputMidis,
     required this.elapsedMsListenable,
+    required this.animationClockListenable,
     required this.passedNoteIndexesListenable,
     required this.missedNoteIndexesListenable,
-    required this.passAnimationStartMsByNoteIndexListenable,
+    required this.judgeAnimationByNoteIndexListenable,
     required this.showKeyboard,
     required this.staffHeightScale,
     required this.visibleStaffMode,
+    required this.gameplayMode,
     required this.timelineMsPerDurationDivision,
   }) : super(
          repaint: Listenable.merge([
            elapsedMsListenable,
+           animationClockListenable,
            passedNoteIndexesListenable,
            missedNoteIndexesListenable,
-           passAnimationStartMsByNoteIndexListenable,
+           judgeAnimationByNoteIndexListenable,
          ]),
        );
 
@@ -482,13 +491,15 @@ class _StaffScrollerPainter extends CustomPainter {
   final GameInputMode inputMode;
   final Set<int> activeInputMidis;
   final ValueListenable<int> elapsedMsListenable;
+  final ValueListenable<int> animationClockListenable;
   final ValueListenable<Set<int>> passedNoteIndexesListenable;
   final ValueListenable<Set<int>> missedNoteIndexesListenable;
-  final ValueListenable<Map<int, int>>
-  passAnimationStartMsByNoteIndexListenable;
+  final ValueListenable<Map<int, GameNoteJudgeAnimation>>
+  judgeAnimationByNoteIndexListenable;
   final bool showKeyboard;
   final double staffHeightScale;
   final GameVisibleStaffMode visibleStaffMode;
+  final GamePlayMode gameplayMode;
   final int timelineMsPerDurationDivision;
 
   final GameStaffPainter _staffPainter = GameStaffPainter();
@@ -499,17 +510,19 @@ class _StaffScrollerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final currentMs = elapsedMsListenable.value;
+    final currentAnimationClockMs = animationClockListenable.value;
     final passedNoteIndexes = passedNoteIndexesListenable.value;
     final missedNoteIndexes = missedNoteIndexesListenable.value;
-    final passAnimationStartMsByNoteIndex =
-        passAnimationStartMsByNoteIndexListenable.value;
+    final judgeAnimationByNoteIndex = judgeAnimationByNoteIndexListenable.value;
     final visuals = _getPrecomputedScoreVisuals(score);
     final timelineMapper = NoteTiming.visualTimelineForScore(score);
     final baseMetrics = NotationMetrics.fromCanvasSize(size);
     final notePxPerMs = NoteTiming.notePxPerMsForTimeline(
       timelineMsPerDurationDivision: timelineMsPerDurationDivision,
     );
-    final currentVisualMs = timelineMapper.visualTimeForRealMs(currentMs).round();
+    final currentVisualMs = timelineMapper
+        .visualTimeForRealMs(currentMs)
+        .round();
     final keyboardHeight = showKeyboard ? baseMetrics.keyboardTotalHeight : 0.0;
     final staffRegionHeight = (size.height - keyboardHeight).clamp(
       0.0,
@@ -624,7 +637,8 @@ class _StaffScrollerPainter extends CustomPainter {
         opacity: keySignatureTransition.toOpacity,
       );
     }
-    if (keySignatureTransition.timeSignatureOpacity > 0.0) {
+    if (gameplayMode != GamePlayMode.step &&
+        keySignatureTransition.timeSignatureOpacity > 0.0) {
       _paintTimeSignature(
         canvas,
         top: score.beatsPerMeasure,
@@ -648,7 +662,9 @@ class _StaffScrollerPainter extends CustomPainter {
     final measureLinePaint = Paint()
       ..color = score.colors.staff.measureLine
       ..strokeWidth = metrics.measureLineStrokeWidth;
-    final measureLineOffsetX = metrics.measureLineOffsetX;
+    final measureLineOffsetX =
+        metrics.measureLineOffsetX +
+        (gameplayMode == GamePlayMode.step ? metrics.staffSpace * 1.6 : 0.0);
 
     final trebleActiveClef = _mainClefSignForStaffAtAnchor(
       visuals.clefEventsByStaff[1] ?? const <_ClefSymbolEvent>[],
@@ -705,8 +721,8 @@ class _StaffScrollerPainter extends CustomPainter {
 
     final visibleStartTime = (currentVisualMs - GameNotePainter.cleanupWindowMs)
         .floor();
-    final visibleEndTime =
-        (currentVisualMs + GameNotePainter.previewWindowMs).ceil();
+    final visibleEndTime = (currentVisualMs + GameNotePainter.previewWindowMs)
+        .ceil();
     final visibleStartIndex = _lowerBoundPreparedSymbols(
       visuals.timedSymbols,
       visibleStartTime,
@@ -887,53 +903,57 @@ class _StaffScrollerPainter extends CustomPainter {
       size,
       score: score,
       currentMs: currentMs,
+      animationClockMs: currentAnimationClockMs,
       passedNoteIndexes: passedNoteIndexes,
       missedNoteIndexes: missedNoteIndexes,
-      passAnimationStartMsByNoteIndex: passAnimationStartMsByNoteIndex,
+      judgeAnimationByNoteIndex: judgeAnimationByNoteIndex,
       playheadX: playheadX,
       trebleTop: trebleTop,
       bassTop: effectiveBassTop,
       visibleStaffMode: visibleStaffMode,
+      gameplayMode: gameplayMode,
       metrics: metrics,
       notePxPerMs: notePxPerMs,
     );
 
-    final checkLineHeight = metrics.staffSpace * 17.0;
-    final checkLineCenterY = (playheadTopY + stavesBottomY) / 2.0;
-    final checkLineTopY = math.max(
-      0.0,
-      checkLineCenterY - checkLineHeight / 2.0,
-    );
-    final checkLineBottomY = math.min(
-      size.height,
-      checkLineCenterY + checkLineHeight / 2.0,
-    );
-    final checkLineTrailWidth = metrics.staffSpace * 3.2;
-    final checkLineTrailVerticalInset = symbolPaint.strokeWidth * 0.5;
-    final checkLineTrailRect = Rect.fromLTRB(
-      playheadX - checkLineTrailWidth,
-      math.max(0.0, checkLineTopY - checkLineTrailVerticalInset),
-      playheadX,
-      math.min(size.height, checkLineBottomY + checkLineTrailVerticalInset),
-    );
-    final checkLineTrailPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.centerRight,
-        end: Alignment.centerLeft,
-        colors: [
-          checkLineColor.withAlpha(186),
-          checkLineColor.withAlpha(118),
-          checkLineColor.withAlpha(52),
-          checkLineColor.withAlpha(0),
-        ],
-        stops: [0.0, 0.16, 0.52, 1.0],
-      ).createShader(checkLineTrailRect);
-    canvas.drawRect(checkLineTrailRect, checkLineTrailPaint);
-    canvas.drawLine(
-      Offset(playheadX, checkLineTopY),
-      Offset(playheadX, checkLineBottomY),
-      symbolPaint,
-    );
+    if (gameplayMode == GamePlayMode.scrolling) {
+      final checkLineHeight = metrics.staffSpace * 17.0;
+      final checkLineCenterY = (playheadTopY + stavesBottomY) / 2.0;
+      final checkLineTopY = math.max(
+        0.0,
+        checkLineCenterY - checkLineHeight / 2.0,
+      );
+      final checkLineBottomY = math.min(
+        size.height,
+        checkLineCenterY + checkLineHeight / 2.0,
+      );
+      final checkLineTrailWidth = metrics.staffSpace * 3.2;
+      final checkLineTrailVerticalInset = symbolPaint.strokeWidth * 0.5;
+      final checkLineTrailRect = Rect.fromLTRB(
+        playheadX - checkLineTrailWidth,
+        math.max(0.0, checkLineTopY - checkLineTrailVerticalInset),
+        playheadX,
+        math.min(size.height, checkLineBottomY + checkLineTrailVerticalInset),
+      );
+      final checkLineTrailPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [
+            checkLineColor.withAlpha(186),
+            checkLineColor.withAlpha(118),
+            checkLineColor.withAlpha(52),
+            checkLineColor.withAlpha(0),
+          ],
+          stops: [0.0, 0.16, 0.52, 1.0],
+        ).createShader(checkLineTrailRect);
+      canvas.drawRect(checkLineTrailRect, checkLineTrailPaint);
+      canvas.drawLine(
+        Offset(playheadX, checkLineTopY),
+        Offset(playheadX, checkLineBottomY),
+        symbolPaint,
+      );
+    }
 
     if (showKeyboard) {
       _keyboardPainter.paintKeyboard(
@@ -945,6 +965,7 @@ class _StaffScrollerPainter extends CustomPainter {
         activeInputMidis: activeInputMidis,
         passedNoteIndexes: passedNoteIndexes,
         missedNoteIndexes: missedNoteIndexes,
+        visibleStaffMode: visibleStaffMode,
         keyboardTop: keyboardTop,
         metrics: metrics,
       );
@@ -957,15 +978,17 @@ class _StaffScrollerPainter extends CustomPainter {
         oldDelegate.inputMode != inputMode ||
         oldDelegate.activeInputMidis != activeInputMidis ||
         oldDelegate.elapsedMsListenable != elapsedMsListenable ||
+        oldDelegate.animationClockListenable != animationClockListenable ||
         oldDelegate.passedNoteIndexesListenable !=
             passedNoteIndexesListenable ||
         oldDelegate.missedNoteIndexesListenable !=
             missedNoteIndexesListenable ||
-        oldDelegate.passAnimationStartMsByNoteIndexListenable !=
-            passAnimationStartMsByNoteIndexListenable ||
+        oldDelegate.judgeAnimationByNoteIndexListenable !=
+            judgeAnimationByNoteIndexListenable ||
         oldDelegate.showKeyboard != showKeyboard ||
         oldDelegate.staffHeightScale != staffHeightScale ||
         oldDelegate.visibleStaffMode != visibleStaffMode ||
+        oldDelegate.gameplayMode != gameplayMode ||
         oldDelegate.timelineMsPerDurationDivision !=
             timelineMsPerDurationDivision;
   }
@@ -1070,7 +1093,9 @@ class _StaffScrollerPainter extends CustomPainter {
     }
 
     final transitionStartMs = _transitionStartMsForKeyChange(
-      changeTimeMs: timelineMapper.visualTimeForRealMs(nextChange.timeMs).round(),
+      changeTimeMs: timelineMapper
+          .visualTimeForRealMs(nextChange.timeMs)
+          .round(),
       measureStartTimes: visuals.measureStartTimes,
       score: score,
       timelineMapper: timelineMapper,
@@ -1103,8 +1128,7 @@ class _StaffScrollerPainter extends CustomPainter {
     final nextChangeVisualMs = timelineMapper.visualTimeForRealMs(
       nextChange.timeMs,
     );
-    final transitionDurationMs =
-        (nextChangeVisualMs - transitionStartMs).abs();
+    final transitionDurationMs = (nextChangeVisualMs - transitionStartMs).abs();
     final progress = transitionDurationMs <= 0
         ? 1.0
         : ((currentMs - transitionStartMs) / transitionDurationMs)
@@ -1142,10 +1166,9 @@ class _StaffScrollerPainter extends CustomPainter {
         return measureStart;
       }
     }
-    final measureMs =
-        score.measureSpans.isEmpty
-            ? NoteTiming.defaultTimelineMsPerDurationDivision.toDouble()
-            : timelineMapper.visualMeasureDurationMs(score.measureSpans.first);
+    final measureMs = score.measureSpans.isEmpty
+        ? NoteTiming.defaultTimelineMsPerDurationDivision.toDouble()
+        : timelineMapper.visualMeasureDurationMs(score.measureSpans.first);
     return changeTimeMs - measureMs.round();
   }
 
@@ -1167,7 +1190,8 @@ class _StaffScrollerPainter extends CustomPainter {
 
     for (final symbol in score.symbols) {
       final label = symbol.label;
-      final visualTimeMs = timelineMapper.visualTimeForRealMs(symbol.timeMs)
+      final visualTimeMs = timelineMapper
+          .visualTimeForRealMs(symbol.timeMs)
           .round();
       if (label == '|') {
         if (symbol.measureIndex != null &&
